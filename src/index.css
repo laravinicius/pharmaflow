@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar discreta */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e4e4e7; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+
+/* Seleção de texto na cor da marca */
+::selection { background: #FECDD3; color: #881337; }

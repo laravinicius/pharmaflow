@@ -1,0 +1,56 @@
+{
+  "name": "pharmaflow",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.pharmaflow.app",
+    "productName": "PIX Farma",
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "dist",
+      "dist-electron"
+    ],
+    "mac": {
+      "category": "public.app-category.medical"
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
+  },
+  "dependencies": {
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "mysql2": "^3.18.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "electron": "^33.0.0",
+    "electron-builder": "^26.8.1",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  }
+}
