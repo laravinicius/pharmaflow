@@ -2,13 +2,15 @@
   "name": "pharmaflow",
   "private": true,
   "version": "0.0.0",
+  "description": "Desktop app for pharmaceutical workflow management.",
+  "author": "Vinicius",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build --configLoader native && electron-builder",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "node -e \"const fs=require('fs'); for (const dir of ['dist','dist-electron','release']) fs.rmSync(dir, { recursive: true, force: true });\"",
     "lint": "tsc --noEmit"
   },
   "build": {

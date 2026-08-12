@@ -6,7 +6,7 @@ Aplicacao desktop para operacao de fluxo farmaceutico, com frontend em React e r
 
 - `src/`: frontend React.
 - `electron/`: processo principal e preload do Electron.
-- `database/`: documentacao e convencoes do banco.
+- `migrations/`: legado historico; nao faz parte do fluxo oficial de schema.
 - `index.html`, `vite.config.ts`, `tsconfig.json`, `package.json`: arquivos base de build/configuracao.
 - `att.txt`, `db.txt`: arquivos locais de apoio (nao versionados).
 - `database.sql`: unico script SQL mantido para criacao do schema.
@@ -16,6 +16,8 @@ Aplicacao desktop para operacao de fluxo farmaceutico, com frontend em React e r
 Manter na raiz apenas arquivos de configuracao/entrada do projeto e o snapshot `database.sql`.
 
 Arquivos locais de apoio (`att.txt` e `db.txt`) podem existir no disco, mas devem permanecer fora do versionamento.
+
+`migrations/` fica apenas como referencia historica. O fluxo oficial de schema nao usa essa pasta.
 
 Artefatos gerados por build nao devem ser versionados:
 

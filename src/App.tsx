@@ -424,7 +424,7 @@ function CrossIcon({ size = 22 }: { size?: number }) {
   );
 }
 
-// Coloque sua logo em public/logo.png — se não existir usa o ícone padrão
+// Logo opcional em /logo.png; se não existir, o app usa o ícone padrão
 const LOGO_SRC = '/logo.png';
 
 function LogoImage({ sizePx, rounded = 'rounded-xl' }: { sizePx: number; rounded?: string }) {

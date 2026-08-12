@@ -127,7 +127,6 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
     },
-    icon: path.join(__dirname, '../public/favicon.ico'),
   });
 
   // Envia status de sync para o renderer sempre que mudar
