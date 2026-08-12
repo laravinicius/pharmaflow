@@ -79,7 +79,6 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-  const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
@@ -112,7 +111,7 @@ export default function App() {
       if (res.success) {
         setUser(res.user);
         setSetupMode(res.setupMode === true);
-        setActiveTab(res.setupMode ? 'settings' : 'dashboard');
+        setActiveTab('dashboard');
       } else {
         setLoginError(res.error ?? 'Erro ao fazer login.');
       }
@@ -123,28 +122,10 @@ export default function App() {
     }
   };
 
-  const handleBootstrapLocal = async () => {
-    setBootstrapLoading(true);
-    setLoginError('');
-    try {
-      const res = await db.auth.bootstrapLocal(
-        loginForm.username,
-        loginForm.password,
-        loginForm.username
-      );
-      if (res.success) {
-        setUser(res.user);
-        setSetupMode(false);
-        setActiveTab('dashboard');
-        showToast('Acesso local criado. O sistema seguirá offline até o servidor voltar.', 'info');
-      } else {
-        setLoginError(res.error ?? 'Não foi possível criar o acesso local.');
-      }
-    } catch {
-      setLoginError('Erro ao criar acesso local.');
-    } finally {
-      setBootstrapLoading(false);
-    }
+  const handleLogout = () => {
+    setUser(null);
+    setSetupMode(false);
+    setActiveTab('dashboard');
   };
 
   if (!user) {
@@ -185,17 +166,8 @@ export default function App() {
             {loginError.includes('Servidor indisponível') && (
               <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="text-sm text-amber-900">
-                  O servidor não respondeu. Se este for o primeiro acesso desta instalação, você pode criar um acesso local agora.
+                  O servidor não respondeu. Este computador só entra offline se este usuário já tiver feito login online antes.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleBootstrapLocal}
-                  disabled={bootstrapLoading || loginLoading}
-                  className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg, #1F3164, #18274f)' }}
-                >
-                  {bootstrapLoading ? 'Criando acesso local...' : 'Criar acesso local'}
-                </button>
               </div>
             )}
             <button type="submit" disabled={loginLoading}
@@ -207,6 +179,26 @@ export default function App() {
           </form>
           </div>
         </motion.div>
+      </div>
+    );
+  }
+
+  if (setupMode) {
+    return (
+      <div className="min-h-screen flex flex-col bg-zinc-50">
+        <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-8 shrink-0">
+          <PixFarmaLogo size="md" />
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sair
+          </button>
+        </header>
+        <main className="flex-1 overflow-auto p-8">
+          <SettingsManager />
+        </main>
       </div>
     );
   }
@@ -298,9 +290,6 @@ export default function App() {
                 <NavItem icon={<Users />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
               </>
             )}
-            {(setupMode || user.role === 'admin') && (
-              <NavItem icon={<Settings />} label="Configuração" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} collapsed={!isSidebarOpen} />
-            )}
           </nav>
 
           <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -316,7 +305,7 @@ export default function App() {
                   <p className="text-xs opacity-50 text-white capitalize">{user.role === 'admin' ? 'Administrador' : 'Funcionário'}</p>
                 </div>
               )}
-              <button onClick={() => { setUser(null); setSetupMode(false); setActiveTab('dashboard'); }}
+              <button onClick={handleLogout}
                 className="transition-colors text-white opacity-40 hover:opacity-100">
                 <LogOut className="w-5 h-5" />
               </button>
@@ -346,7 +335,6 @@ export default function App() {
               {activeTab === 'admin' && <AdminPanel user={user} />}
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={() => { setTemplateFormula(null); setActiveTab('queue'); }} />}
               {activeTab === 'queue' && <FormulaQueue user={user} onRepeat={f => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
-              {activeTab === 'settings' && <SettingsManager />}
             </AnimatePresence>
           </div>
         </main>

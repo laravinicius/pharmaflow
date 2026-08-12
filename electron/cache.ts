@@ -295,47 +295,6 @@ export class CacheManager {
     return { success: false, error: 'Servidor indisponível. Nenhum login em cache para este usuário.' };
   }
 
-  async bootstrapLocalUser(
-    username: string,
-    password: string,
-    name?: string
-  ): Promise<{ success: boolean; user?: any; offline?: boolean; error?: string; }> {
-    const hashed = hash(password);
-    const displayName = (name ?? username).trim() || username;
-
-    try {
-      if (this.pool) {
-        await this.qServer('SELECT 1');
-        return { success: false, error: 'O servidor está disponível. Use o login normal.' };
-      }
-    } catch (_) {
-      // servidor indisponível — continua com o bootstrap local
-    }
-
-    const existingLocalUser = this.queryOne<{ c: number }>(
-      `SELECT COUNT(*) AS c FROM users`
-    );
-    if ((existingLocalUser?.c ?? 0) > 0) {
-      return { success: false, error: 'Já existe um acesso local. Use o login normal.' };
-    }
-
-    this.exec(
-      `INSERT INTO users (name, username, password, role, sync_status, updated_at)
-       VALUES (?, ?, ?, 'admin', 'pending', datetime('now'))`,
-      [displayName, username, hashed]
-    );
-    const id = this.lastId();
-    this.save();
-    this.wasOffline = true;
-    this.emit('offline');
-
-    return {
-      success: true,
-      offline: true,
-      user: { id, name: displayName, username, role: 'admin' },
-    };
-  }
-
   private cacheUser(user: any, hashedPwd: string) {
     this.exec(`
       INSERT INTO users (server_id, name, username, password, role, sync_status)

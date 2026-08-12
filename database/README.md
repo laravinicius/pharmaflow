@@ -1,20 +1,15 @@
 # Database workflow
 
-This project keeps two SQL sources in sync:
+The project keeps a single SQL source of truth:
 
-- `database.sql` (root): full schema snapshot used for fresh setup.
-- `migrations/`: incremental SQL files for each database change.
+- `database.sql` (root): updated schema used for fresh setup.
 
 ## Rule for every DB update
 
-1. Create a new migration file in `migrations/` using sequential numbering:
-   - `0002_add_orders_table.sql`
-   - `0003_alter_users_add_last_login.sql`
-2. Apply only the delta change in the migration file.
-3. Update `database.sql` to the new full schema version.
+1. Update `database.sql`.
+2. Keep it aligned with the schema used by the app.
 
 ## Naming convention
 
-- Use 4-digit sequence prefix.
-- Use snake_case description.
-- Keep one logical change set per migration file.
+- Keep the file at the repository root.
+- Use clear, short SQL comments only when needed.

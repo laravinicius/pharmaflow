@@ -7,10 +7,9 @@ Aplicacao desktop para operacao de fluxo farmaceutico, com frontend em React e r
 - `src/`: frontend React.
 - `electron/`: processo principal e preload do Electron.
 - `database/`: documentacao e convencoes do banco.
-- `migrations/`: migracoes incrementais de SQL.
 - `index.html`, `vite.config.ts`, `tsconfig.json`, `package.json`: arquivos base de build/configuracao.
 - `att.txt`, `db.txt`: arquivos locais de apoio (nao versionados).
-- `database.sql`: snapshot completo mais recente do schema.
+- `database.sql`: unico script SQL mantido para criacao do schema.
 
 ## Convencao da Raiz
 
@@ -26,30 +25,22 @@ Artefatos gerados por build nao devem ser versionados:
 
 ## Fluxo de Banco de Dados
 
-Este projeto usa dois formatos em paralelo:
+Este projeto usa apenas um arquivo SQL para criacao do banco:
 
-- `database.sql` na raiz: versao completa mais recente do schema.
-- `migrations/*.sql`: alteracoes incrementais por mudanca.
+- `database.sql` na raiz: script unico e atualizado do schema.
 
 Regra para toda alteracao no banco:
 
-1. Criar uma nova migration numerada em `migrations/`.
-2. Aplicar apenas o delta na migration.
-3. Atualizar `database.sql` com a versao completa atualizada.
-
-Baseline inicial:
-
-- `migrations/0001_initial_schema.sql`
+1. Atualizar somente `database.sql`.
+2. Manter o arquivo alinhado com o schema usado pelo app.
 
 ## Executar Localmente
 
 Pre-requisito: Node.js 20+
 
-0. Configurar variaveis de ambiente (base em `.env.example`), principalmente:
-   - `SETUP_MASTER_USERNAME`
-   - `SETUP_MASTER_PASSWORD`
-   - A conexao com o banco nao usa `DB_*` no ambiente; ela e salva no desktop
-     via tela de configuracao e persistida no `userData/config.json`.
+0. A conexao com o banco nao usa `DB_*` no ambiente; ela e salva no desktop
+   via tela de configuracao e persistida no `userData/config.json`.
+   - O acesso especial para abrir essa tela usa o login fixo `admin / admin123`.
 
 1. Instalar dependencias:
    `npm install`

@@ -3,8 +3,8 @@
 ## Project Structure & Module Organization
 - `src/` contains the React frontend (`App.tsx`, `main.tsx`, shared styles, and client-side services).
 - `electron/` contains the Electron main process, preload bridge, and desktop-specific helpers.
-- `migrations/` stores incremental SQL migrations; `migrations/0001_initial_schema.sql` is the baseline.
-- `database.sql` is the full current schema snapshot. Keep it in sync with new migrations.
+- `database.sql` is the single source of truth for the server schema.
+- The `migrations/` folder is not used for schema evolution in this repo.
 - `database/` holds database notes and operational documentation.
 
 ## Build, Test, and Development Commands
@@ -33,4 +33,4 @@
 ## Security & Configuration Tips
 - Copy `.env.example` to `.env` and set the required setup credentials before running locally.
 - Do not commit generated artifacts such as `dist/`, `dist-electron/`, or `release/`.
-- Keep `database.sql` and the migration files aligned whenever schema changes are made.
+- Keep `database.sql` aligned with the app whenever schema changes are made.

@@ -1,7 +1,6 @@
--- ============================================================
---  PharmaFlow — Script de criação do banco (MariaDB / MySQL)
---  Senha padrão do admin: admin123
--- ============================================================
+-- PharmaFlow
+-- Single source of truth for the server database schema.
+-- Default admin password: admin123
 
 CREATE DATABASE IF NOT EXISTS pharmaflow
   CHARACTER SET utf8mb4
@@ -55,12 +54,11 @@ CREATE TABLE IF NOT EXISTS formula_items (
   FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- Índices para o sync (consultas por updated_at)
-CREATE INDEX IF NOT EXISTS idx_users_updated     ON users(updated_at);
-CREATE INDEX IF NOT EXISTS idx_customers_updated ON customers(updated_at);
-CREATE INDEX IF NOT EXISTS idx_materials_updated ON materials(updated_at);
-CREATE INDEX IF NOT EXISTS idx_formulas_updated  ON formulas(updated_at);
+CREATE INDEX idx_users_updated     ON users(updated_at);
+CREATE INDEX idx_customers_updated ON customers(updated_at);
+CREATE INDEX idx_materials_updated ON materials(updated_at);
+CREATE INDEX idx_formulas_updated  ON formulas(updated_at);
 
--- Admin padrão (senha: admin123)
+-- Default admin user (password: admin123)
 INSERT IGNORE INTO users (name, username, password, role)
 VALUES ('Administrador', 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'admin');

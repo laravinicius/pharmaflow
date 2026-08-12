@@ -9,9 +9,9 @@ import { formatDbError } from './dbError';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Master key (modo setup offline) ─────────────────────────────────────────
-const MASTER_USERNAME = process.env.SETUP_MASTER_USERNAME;
-const MASTER_PASSWORD = process.env.SETUP_MASTER_PASSWORD;
-const hasMasterSetupCredentials = Boolean(MASTER_USERNAME && MASTER_PASSWORD);
+const MASTER_USERNAME = 'admin';
+const MASTER_PASSWORD = 'admin123';
+const hasMasterSetupCredentials = true;
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -57,10 +57,6 @@ ipcMain.handle('auth:login', async (_, username: string, password: string) => {
     };
   }
   return await cache.login(username, password);
-});
-
-ipcMain.handle('auth:bootstrap-local', async (_, username: string, password: string, name?: string) => {
-  return await cache.bootstrapLocalUser(username, password, name);
 });
 
 // ─── IPC: Usuários ────────────────────────────────────────────────────────────

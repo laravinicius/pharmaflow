@@ -4,7 +4,6 @@ declare global {
   interface Window {
     electronAPI: {
       login: (u: string, p: string) => Promise<{ success: boolean; user?: any; offline?: boolean; setupMode?: boolean; error?: string }>;
-      bootstrapLocal: (u: string, p: string, n?: string) => Promise<{ success: boolean; user?: any; offline?: boolean; error?: string }>;
       listUsers: () => Promise<any[]>;
       addUser: (u: any) => Promise<any>;
       updateUser: (id: number, u: any) => Promise<any>;
@@ -35,7 +34,6 @@ const api = () => window.electronAPI;
 export const db = {
   auth:      {
     login: (u: string, p: string) => api().login(u, p),
-    bootstrapLocal: (u: string, p: string, n?: string) => api().bootstrapLocal(u, p, n),
   },
   users:     {
     list:   ()                    => api().listUsers(),
