@@ -79,6 +79,7 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
@@ -122,6 +123,30 @@ export default function App() {
     }
   };
 
+  const handleBootstrapLocal = async () => {
+    setBootstrapLoading(true);
+    setLoginError('');
+    try {
+      const res = await db.auth.bootstrapLocal(
+        loginForm.username,
+        loginForm.password,
+        loginForm.username
+      );
+      if (res.success) {
+        setUser(res.user);
+        setSetupMode(false);
+        setActiveTab('dashboard');
+        showToast('Acesso local criado. O sistema seguirá offline até o servidor voltar.', 'info');
+      } else {
+        setLoginError(res.error ?? 'Não foi possível criar o acesso local.');
+      }
+    } catch {
+      setLoginError('Erro ao criar acesso local.');
+    } finally {
+      setBootstrapLoading(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
@@ -155,6 +180,22 @@ export default function App() {
             {loginError && (
               <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">
                 <AlertCircle className="w-4 h-4 shrink-0" />{loginError}
+              </div>
+            )}
+            {loginError.includes('Servidor indisponível') && (
+              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm text-amber-900">
+                  O servidor não respondeu. Se este for o primeiro acesso desta instalação, você pode criar um acesso local agora.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleBootstrapLocal}
+                  disabled={bootstrapLoading || loginLoading}
+                  className="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #1F3164, #18274f)' }}
+                >
+                  {bootstrapLoading ? 'Criando acesso local...' : 'Criar acesso local'}
+                </button>
               </div>
             )}
             <button type="submit" disabled={loginLoading}

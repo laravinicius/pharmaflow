@@ -6,7 +6,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build && electron-builder",
+    "build": "vite build --configLoader native && electron-builder",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
@@ -14,6 +14,7 @@
   "build": {
     "appId": "com.pharmaflow.app",
     "productName": "PIX Farma",
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release/${version}"
     },
@@ -25,7 +26,8 @@
       "category": "public.app-category.medical"
     },
     "win": {
-      "target": ["nsis"]
+      "target": ["dir"],
+      "signAndEditExecutable": false
     },
     "linux": {
       "target": ["AppImage"]

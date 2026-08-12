@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Auth
   login: (username: string, password: string) =>
     ipcRenderer.invoke('auth:login', username, password),
+  bootstrapLocal: (username: string, password: string, name?: string) =>
+    ipcRenderer.invoke('auth:bootstrap-local', username, password, name),
 
   // Usuários
   listUsers:   ()    => ipcRenderer.invoke('users:list'),

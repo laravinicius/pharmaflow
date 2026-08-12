@@ -48,6 +48,8 @@ Pre-requisito: Node.js 20+
 0. Configurar variaveis de ambiente (base em `.env.example`), principalmente:
    - `SETUP_MASTER_USERNAME`
    - `SETUP_MASTER_PASSWORD`
+   - A conexao com o banco nao usa `DB_*` no ambiente; ela e salva no desktop
+     via tela de configuracao e persistida no `userData/config.json`.
 
 1. Instalar dependencias:
    `npm install`
@@ -59,3 +61,6 @@ Pre-requisito: Node.js 20+
 Gerar pacote de producao:
 
 `npm run build`
+
+Observacao: no Windows, o build gera um pacote `dir` offline-friendly em vez de
+um instalador NSIS, para evitar downloads de binarios externos durante o empacotamento.

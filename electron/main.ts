@@ -59,6 +59,10 @@ ipcMain.handle('auth:login', async (_, username: string, password: string) => {
   return await cache.login(username, password);
 });
 
+ipcMain.handle('auth:bootstrap-local', async (_, username: string, password: string, name?: string) => {
+  return await cache.bootstrapLocalUser(username, password, name);
+});
+
 // ─── IPC: Usuários ────────────────────────────────────────────────────────────
 
 ipcMain.handle('users:list',   ()          => cache.listUsers());
