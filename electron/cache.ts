@@ -119,8 +119,7 @@ export class CacheManager {
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id   INTEGER UNIQUE,
         name        TEXT NOT NULL,
-        cpf         TEXT NOT NULL UNIQUE,
-        phone       TEXT,
+        phone       TEXT NOT NULL UNIQUE,
         sync_status TEXT NOT NULL DEFAULT 'pending',
         updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -165,6 +164,29 @@ export class CacheManager {
     ];
     for (const sql of migrations) {
       try { this.db.exec(sql); } catch (_) { /* coluna já existe — ignorar */ }
+    }
+
+    // ── Migração: customers sem cpf, phone único ─────────────────────────────
+    const custCols = this.db.exec(`PRAGMA table_info(customers)`)[0]?.values ?? [];
+    const hasCpf = custCols.some((row: any[]) => row[1] === 'cpf');
+    if (hasCpf) {
+      // SQLite não permite DROP COLUMN de coluna com UNIQUE — recria a tabela
+      this.exec(`UPDATE customers SET phone = '' WHERE phone IS NULL OR phone = ''`);
+      this.db.exec(`
+        CREATE TABLE customers_new (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          server_id   INTEGER UNIQUE,
+          name        TEXT NOT NULL,
+          phone       TEXT NOT NULL UNIQUE,
+          sync_status TEXT NOT NULL DEFAULT 'pending',
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO customers_new (id, server_id, name, phone, sync_status, updated_at)
+          SELECT id, server_id, name, phone, sync_status, updated_at FROM customers;
+        DROP TABLE customers;
+        ALTER TABLE customers_new RENAME TO customers;
+      `);
+      this.save();
     }
   }
 
@@ -354,20 +376,20 @@ export class CacheManager {
   // ── Clientes ──────────────────────────────────────────────────────────────────
 
   listCustomers() {
-    return this.query(`SELECT id, server_id, name, cpf, phone FROM customers WHERE sync_status != 'deleted' ORDER BY name`);
+    return this.query(`SELECT id, server_id, name, phone FROM customers WHERE sync_status != 'deleted' ORDER BY name`);
   }
 
-  addCustomer(c: { name: string; cpf: string; phone: string }) {
-    this.exec(`INSERT INTO customers (name, cpf, phone, sync_status, updated_at)
-      VALUES (?, ?, ?, 'pending', datetime('now'))`, [c.name, c.cpf, c.phone]);
+  addCustomer(c: { name: string; phone: string }) {
+    this.exec(`INSERT INTO customers (name, phone, sync_status, updated_at)
+      VALUES (?, ?, 'pending', datetime('now'))`, [c.name, c.phone]);
     const id = this.lastId();
     this.save();
     return { success: true, id };
   }
 
-  updateCustomer(id: number, c: { name: string; cpf: string; phone: string }) {
-    this.exec(`UPDATE customers SET name=?, cpf=?, phone=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
-      [c.name, c.cpf, c.phone, id]);
+  updateCustomer(id: number, c: { name: string; phone: string }) {
+    this.exec(`UPDATE customers SET name=?, phone=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
+      [c.name, c.phone, id]);
     this.save();
     return { success: true };
   }
@@ -657,11 +679,17 @@ export class CacheManager {
 
     await this.pushTable('customers', async (c) => {
       if (!c.server_id) {
-        const r = await this.qServer<any>('INSERT IGNORE INTO customers (name,cpf,phone) VALUES (?,?,?)',
-          [c.name, c.cpf, c.phone]);
-        if (r.insertId) this.exec(`UPDATE customers SET server_id=?, sync_status='synced' WHERE id=?`, [r.insertId, c.id]);
+        const r = await this.qServer<any>('INSERT IGNORE INTO customers (name,phone) VALUES (?,?)',
+          [c.name, c.phone]);
+        if (r.insertId) {
+          this.exec(`UPDATE customers SET server_id=?, sync_status='synced' WHERE id=?`, [r.insertId, c.id]);
+        } else {
+          // Celular já existe no servidor — vincula ao registro existente
+          const existing = await this.qServer<any[]>('SELECT id FROM customers WHERE phone=?', [c.phone]);
+          if (existing.length > 0) this.exec(`UPDATE customers SET server_id=?, sync_status='synced' WHERE id=?`, [existing[0].id, c.id]);
+        }
       } else {
-        await this.qServer('UPDATE customers SET name=?,cpf=?,phone=? WHERE id=?', [c.name, c.cpf, c.phone, c.server_id]);
+        await this.qServer('UPDATE customers SET name=?,phone=? WHERE id=?', [c.name, c.phone, c.server_id]);
         this.exec(`UPDATE customers SET sync_status='synced' WHERE id=?`, [c.id]);
       }
     }, async (c) => {
@@ -778,16 +806,16 @@ export class CacheManager {
     }
 
     const customers = await this.qServer<any[]>(
-      `SELECT id,name,cpf,phone FROM customers ${dateFilter}`, dateParam
+      `SELECT id,name,phone FROM customers ${dateFilter}`, dateParam
     );
     for (const c of customers) {
       const exists = this.queryOne('SELECT id FROM customers WHERE server_id=?', [c.id]);
       if (exists) {
-        this.exec(`UPDATE customers SET name=?,cpf=?,phone=?,sync_status='synced' WHERE server_id=?`,
-          [c.name, c.cpf, c.phone, c.id]);
+        this.exec(`UPDATE customers SET name=?,phone=?,sync_status='synced' WHERE server_id=?`,
+          [c.name, c.phone, c.id]);
       } else {
-        try { this.exec(`INSERT INTO customers (server_id,name,cpf,phone,sync_status) VALUES (?,?,?,?,'synced')`,
-          [c.id, c.name, c.cpf, c.phone]); } catch (_) {}
+        try { this.exec(`INSERT INTO customers (server_id,name,phone,sync_status) VALUES (?,?,?,'synced')`,
+          [c.id, c.name, c.phone]); } catch (_) {}
       }
     }
 

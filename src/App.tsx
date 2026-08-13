@@ -11,7 +11,7 @@ import { db } from './services/lanDatabase';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface User { id: number; name: string; username: string; role: 'admin' | 'employee' }
-interface Customer { id: number; name: string; cpf: string; phone: string }
+interface Customer { id: number; name: string; phone: string }
 interface Material { id: number; name: string }
 interface FormulaItem { material_id: number; material_name: string; quantity: number }
 interface Formula {
@@ -26,29 +26,24 @@ interface SyncStatus {
   error?: string;
 }
 
-// ─── CPF Utilities ────────────────────────────────────────────────────────────
+// ─── Phone Utilities ─────────────────────────────────────────────────────────
 
-function formatCPF(value: string): string {
-  return value.replace(/\D/g, '')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
-    .slice(0, 14);
+// Formata em tempo de digitação: DDD entre parênteses após 2 dígitos,
+// aceita fixo (00) 0000-0000 (10 dígitos) ou celular (00) 00000-0000 (11 dígitos)
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (digits.length === 10) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  if (rest.length <= 5) return `(${ddd}) ${rest}`;
+  return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
 }
 
-function validateCPF(cpf: string): boolean {
-  const nums = cpf.replace(/\D/g, '');
-  if (nums.length !== 11 || /^(\d)\1+$/.test(nums)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(nums[i]) * (10 - i);
-  let rest = (sum * 10) % 11;
-  if (rest === 10 || rest === 11) rest = 0;
-  if (rest !== parseInt(nums[9])) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(nums[i]) * (11 - i);
-  rest = (sum * 10) % 11;
-  if (rest === 10 || rest === 11) rest = 0;
-  return rest === parseInt(nums[10]);
+function isValidPhone(value: string): boolean {
+  const len = value.replace(/\D/g, '').length;
+  return len === 10 || len === 11;
 }
 
 // ─── Hook: dados com reload ───────────────────────────────────────────────────
@@ -607,34 +602,33 @@ function AdminPanel({ user }: { user: User }) {
 
 function CustomerManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (c: Customer) => void } = {}) {
   const { data: customers, loading, error, reload } = useData(() => db.customers.list());
-  const [form, setForm] = useState({ name: '', cpf: '', phone: '' });
+  const [form, setForm] = useState({ name: '', phone: '' });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const cpfValid = form.cpf.replace(/\D/g,'').length === 11 ? validateCPF(form.cpf) : null;
 
-  const reset = () => { setForm({ name: '', cpf: '', phone: '' }); setEditingId(null); setFormError(''); };
+  const reset = () => { setForm({ name: '', phone: '' }); setEditingId(null); setFormError(''); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateCPF(form.cpf)) { setFormError('CPF inválido. Verifique os dígitos.'); return; }
-    const rawCPF = form.cpf.replace(/\D/g,'');
-    const formatted = formatCPF(rawCPF);
+    if (!isValidPhone(form.phone)) { setFormError('Informe o celular completo, com DDD.'); return; }
+    const rawPhone = form.phone.replace(/\D/g, '');
+    const formatted = formatPhone(form.phone);
     // Verificação de duplicata local
     if (!editingId) {
-      const dup = (customers as Customer[])?.find(c => c.cpf.replace(/\D/g,'') === rawCPF);
-      if (dup) { setFormError(`CPF já cadastrado para: ${dup.name}`); return; }
+      const dup = (customers as Customer[])?.find(c => c.phone.replace(/\D/g,'') === rawPhone);
+      if (dup) { setFormError(`Celular já cadastrado para: ${dup.name}`); return; }
     }
     setSaving(true); setFormError('');
     try {
-      const payload = { ...form, cpf: formatted };
+      const payload = { name: form.name, phone: formatted };
       if (editingId) {
         await db.customers.update(editingId, payload);
         reset(); reload();
       } else {
         const res: any = await db.customers.add(payload);
         if (res?.error?.includes('UNIQUE') || res?.error?.includes('unique')) {
-          setFormError('CPF já cadastrado no servidor.');
+          setFormError('Celular já cadastrado no servidor.');
         } else {
           if (onCreated) onCreated({ id: res.id, ...payload });
           reset(); reload();
@@ -657,24 +651,13 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
       </div>
       <div>
-        <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">CPF</label>
-        <div className="relative">
-          <input required className={`w-full px-3 py-2 rounded-lg border outline-none focus:ring-2 focus:ring-red-500 pr-8 ${cpfValid === false ? 'border-red-400 bg-red-50' : cpfValid === true ? 'border-emerald-400' : 'border-zinc-300'}`}
-            value={form.cpf}
-            onChange={e => { setFormError(''); setForm({ ...form, cpf: formatCPF(e.target.value) }); }}
-            placeholder="000.000.000-00" maxLength={14} />
-          {cpfValid === true && <span className="absolute right-2 top-2.5 text-emerald-500 text-xs">✓</span>}
-          {cpfValid === false && <span className="absolute right-2 top-2.5 text-red-500 text-xs">✗</span>}
-        </div>
-      </div>
-      <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Celular</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(00) 00000-0000" />
+        <input required inputMode="numeric" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => { setFormError(''); setForm({ ...form, phone: formatPhone(e.target.value) }); }} placeholder="(00) 00000-0000" maxLength={15} />
       </div>
       <div className="space-y-1">
         {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
         <div className="flex gap-2">
-          <button type="submit" disabled={saving || cpfValid === false} style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }} className="flex-1 text-white py-2 px-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
+          <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }} className="flex-1 text-white py-2 px-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
             {saving ? '...' : editingId ? 'Atualizar' : 'Adicionar'}
           </button>
           {editingId && <button type="button" onClick={reset} className="px-3 py-2 rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-100 text-sm">✕</button>}
@@ -694,16 +677,15 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead><tr className="border-b border-zinc-100 text-zinc-400 text-xs uppercase font-semibold">
-              <th className="px-4 py-3">Nome</th><th className="px-4 py-3">CPF</th><th className="px-4 py-3">Celular</th><th className="px-4 py-3 text-right">Ações</th>
+              <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Celular</th><th className="px-4 py-3 text-right">Ações</th>
             </tr></thead>
             <tbody className="divide-y divide-zinc-50">
               {(customers as Customer[])?.map(c => (
                 <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-zinc-900">{c.name}</td>
-                  <td className="px-4 py-3 text-zinc-600 font-mono text-sm">{c.cpf}</td>
                   <td className="px-4 py-3 text-zinc-600">{c.phone}</td>
                   <td className="px-4 py-3 text-right space-x-3">
-                    <button onClick={() => { setForm({ name: c.name, cpf: c.cpf, phone: c.phone }); setEditingId(c.id); setFormError(''); }} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
+                    <button onClick={() => { setForm({ name: c.name, phone: c.phone }); setEditingId(c.id); setFormError(''); }} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
                     <button onClick={() => handleDelete(c.id)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
@@ -1087,7 +1069,7 @@ function RecipeForm({ user, template, onComplete }: { user: User; template?: For
             <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm"
               value={selectedCustomerId} onChange={e => setSelectedCustomerId(Number(e.target.value))}>
               <option value="">Selecione um cliente...</option>
-              {(customers as Customer[])?.map(c => <option key={c.id} value={c.id}>{c.name} — {c.cpf}</option>)}
+              {(customers as Customer[])?.map(c => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
             </select>
           </div>
 

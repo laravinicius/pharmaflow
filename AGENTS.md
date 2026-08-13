@@ -3,8 +3,8 @@
 ## Project Structure & Module Organization
 - `src/` contains the React frontend (`App.tsx`, `main.tsx`, shared styles, and client-side services).
 - `electron/` contains the Electron main process, preload bridge, and desktop-specific helpers.
-- `database.sql` is the single source of truth for the server schema.
-- The `migrations/` folder is not used for schema evolution in this repo.
+- `database.sql` is the single source of truth for the server schema and must always contain the complete schema, so the database can be recreated from scratch at any time.
+- `migrations/` holds incremental SQL files applied on top of an existing database. Every schema change requires two files: a new migration (zero-padded prefix, for example `0002_add_patient_table.sql`) applied to existing databases, and an update to `database.sql` reflecting the same change. To update an existing database, run only the new migration; to recreate the database, run `database.sql`.
 - `database/` holds database notes and operational documentation.
 
 ## Build, Test, and Development Commands
@@ -28,7 +28,7 @@
 ## Commit & Pull Request Guidelines
 - The Git history currently shows only `initial commit`, so there is no established commit-message convention yet.
 - Use short, imperative commit messages, for example `add patient search filter`.
-- Pull requests should describe the change, mention database updates when applicable, and include screenshots for UI changes.
+- Pull requests should describe the change, mention database updates when applicable (including the new `migrations/` file and the `database.sql` update), and include screenshots for UI changes.
 
 ## Security & Configuration Tips
 - Copy `.env.example` to `.env` and set the required setup credentials before running locally.
