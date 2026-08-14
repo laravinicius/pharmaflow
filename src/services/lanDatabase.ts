@@ -17,6 +17,7 @@ declare global {
       deleteMaterial: (id: number) => Promise<any>;
       listFormulas: () => Promise<any[]>;
       addFormula: (f: any) => Promise<any>;
+      updateFormula: (id: number, f: any) => Promise<any>;
       updateFormulaStatus: (id: number, s: string) => Promise<any>;
       deleteFormula: (id: number) => Promise<any>;
       syncNow: () => Promise<any>;
@@ -43,7 +44,7 @@ export const db = {
   },
   customers: { list: () => api().listCustomers(), add: (c: any) => api().addCustomer(c), update: (id: number, c: any) => api().updateCustomer(id, c), remove: (id: number) => api().deleteCustomer(id) },
   materials: { list: () => api().listMaterials(), add: (n: string) => api().addMaterial(n), remove: (id: number) => api().deleteMaterial(id) },
-  formulas:  { list: () => api().listFormulas(), add: (f: any) => api().addFormula(f), updateStatus: (id: number, s: string) => api().updateFormulaStatus(id, s), remove: (id: number) => api().deleteFormula(id) },
+  formulas:  { list: () => api().listFormulas(), add: (f: any) => api().addFormula(f), update: (id: number, f: any) => api().updateFormula(id, f), updateStatus: (id: number, s: string) => api().updateFormulaStatus(id, s), remove: (id: number) => api().deleteFormula(id) },
   sync:      { now: () => api().syncNow(), status: () => api().syncStatus(), onUpdate: (cb: (s: any) => void) => api().onSyncStatusUpdate(cb) },
   config:    { get: () => api().getConfig(), save: (c: any) => api().saveConfig(c), test: () => api().testConnection() },
 };

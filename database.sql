@@ -38,7 +38,14 @@ CREATE TABLE IF NOT EXISTS formulas (
   customer_id     INT NOT NULL,
   customer_phone  VARCHAR(20)  NOT NULL DEFAULT '',
   pharmacist_name VARCHAR(255) NOT NULL DEFAULT '',
-  status          ENUM('pending','completed') NOT NULL DEFAULT 'pending',
+  budget_number   VARCHAR(6)   NOT NULL DEFAULT '',
+  attendant_name  VARCHAR(255) NOT NULL DEFAULT '',
+  delivery_date   DATE         NULL,
+  payment_status  VARCHAR(20)  NOT NULL DEFAULT '',
+  payment_method  VARCHAR(20)  NULL,
+  delivery_status VARCHAR(20)  NOT NULL DEFAULT '',
+  cancel_reason   TEXT         NULL,
+  status          ENUM('pending','completed','saved','confirmed','cancelled','delivered') NOT NULL DEFAULT 'saved',
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
@@ -48,9 +55,19 @@ CREATE TABLE IF NOT EXISTS formula_items (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   formula_id  INT           NOT NULL,
   material_id INT           NOT NULL,
-  quantity    DECIMAL(10,3) NOT NULL COMMENT 'em mg',
+  quantity    DECIMAL(10,3) NOT NULL COMMENT 'quantidade',
+  unit        VARCHAR(5)    NOT NULL DEFAULT 'mg' COMMENT 'g, mcg, ui, mg',
   FOREIGN KEY (formula_id)  REFERENCES formulas(id)  ON DELETE CASCADE,
   FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS formula_budget_items (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  formula_id INT            NOT NULL,
+  quantity   DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
+  unit       VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, ml, g',
+  value      DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
+  FOREIGN KEY (formula_id) REFERENCES formulas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_users_updated     ON users(updated_at);

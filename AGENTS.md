@@ -1,36 +1,34 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
-- `src/` contains the React frontend (`App.tsx`, `main.tsx`, shared styles, and client-side services).
-- `electron/` contains the Electron main process, preload bridge, and desktop-specific helpers.
-- `database.sql` is the single source of truth for the server schema and must always contain the complete schema, so the database can be recreated from scratch at any time.
-- `migrations/` holds incremental SQL files applied on top of an existing database. Every schema change requires two files: a new migration (zero-padded prefix, for example `0002_add_patient_table.sql`) applied to existing databases, and an update to `database.sql` reflecting the same change. To update an existing database, run only the new migration; to recreate the database, run `database.sql`.
-- `database/` holds database notes and operational documentation.
+PharmaFlow is an offline-first desktop app (Electron + Vite + React 19 + Tailwind CSS v4) for pharmacy compounding workflow. The UI and code comments are in Brazilian Portuguese.
 
-## Build, Test, and Development Commands
-- `npm install` installs dependencies.
-- `npm run dev` starts the Vite dev server on port `3000` and binds to `0.0.0.0` for Electron/local testing.
-- `npm run build` builds the web app and packages the Electron app with `electron-builder`.
-- `npm run preview` serves the production Vite build locally.
-- `npm run lint` runs TypeScript type-checking with `tsc --noEmit`.
+## Architecture & data flow
 
-## Coding Style & Naming Conventions
-- Use TypeScript and React function components.
-- Keep formatting consistent with the existing codebase: ASCII text, short functions, and minimal abstraction.
-- Use `PascalCase` for React components, `camelCase` for variables/functions, and `UPPER_SNAKE_CASE` only for true constants.
-- Name migration files with zero-padded prefixes, for example `0002_add_patient_table.sql`.
+- The renderer (`src/`) never touches the database. All data access flows through Electron IPC; adding a data feature requires touching all three layers:
+  1. `electron/main.ts` — IPC handlers (`ipcMain.handle`)
+  2. `electron/preload.ts` — bridge exposed as `window.electronAPI`
+  3. `src/services/lanDatabase.ts` — typed client (`db.*`) plus the `Window.electronAPI` type declaration
+- `electron/cache.ts` (`CacheManager`) is the core: a local SQLite cache (sql.js, `userData/cache.db`) that syncs to a MariaDB server. Writes go to the cache with `sync_status='pending'`; `syncNow()` runs a push/pull loop (full sync every 10 min, health check every 30s).
+- Almost all frontend UI lives in one large file: `src/App.tsx` (~1500 lines).
+- The `@/*` alias resolves to the repo **root**, not `src/` (`tsconfig.json` + `vite.config.ts`).
 
-## Testing Guidelines
-- There is no automated test framework currently configured.
-- Use `npm run lint` as the primary verification step for code changes.
-- If you add tests later, place them near the code they cover or in a dedicated `tests/` directory, and document the command in `package.json`.
+## Database schema changes
 
-## Commit & Pull Request Guidelines
-- The Git history currently shows only `initial commit`, so there is no established commit-message convention yet.
-- Use short, imperative commit messages, for example `add patient search filter`.
-- Pull requests should describe the change, mention database updates when applicable (including the new `migrations/` file and the `database.sql` update), and include screenshots for UI changes.
+- `database.sql` is the single source of truth for the server schema. **Always** update it so it stays current for a future full implementation and fresh installs.
+- Existing production databases are already created, so each change also needs a numbered migration under `migrations/` (e.g. `0003_*.sql`) to update the running DB. Always do **both**: update `database.sql` AND create the migration.
+- The app additionally auto-migrates the server schema at runtime in `CacheManager.migrateServer()` (`electron/cache.ts`): it ensures `updated_at`/`created_at` columns, `server_meta`/`instance_id`, `formulas.customer_phone`/`pharmacist_name`, and `formula_items.unit`. Any new column existing installs need must be added there too.
+- The SQLite cache schema lives in `CacheManager.initSchema()` (`electron/cache.ts`) with ad-hoc `ALTER TABLE` migrations. Quirk: sql.js `run()` cannot execute multiple statements in one call — use `db.exec()`.
+- Passwords are SHA-256 hex (`hash()` in `electron/cache.ts`) on both server and cache. Roles are `admin` / `employee`.
 
-## Security & Configuration Tips
-- Copy `.env.example` to `.env` and set the required setup credentials before running locally.
-- Do not commit generated artifacts such as `dist/`, `dist-electron/`, or `release/`.
-- Keep `database.sql` aligned with the app whenever schema changes are made.
+## Setup & dev commands
+
+- No `.env` needed: the MariaDB connection is configured in the app's Settings screen — reachable only via the setup login `admin` / `admin123` (hardcoded in `electron/main.ts`) — and persisted to `userData/config.json`. MariaDB Windows/GSSAPI auth (`auth_gssapi_client`) is unsupported.
+- `npm run dev` starts Vite on port 3000 bound to `0.0.0.0` (for Electron). Production loads `dist/index.html` (`base: './'`); `package.json` `main` points to `dist-electron/main.js`.
+- `npm run build` = `vite build --configLoader native && electron-builder`. On Windows it produces a `dir` package (no NSIS installer) and uses local `node_modules/electron/dist`.
+- `npm run lint` = `tsc --noEmit`. There is no test framework; lint is the only verification.
+- `npm run clean` removes `dist/`, `dist-electron/`, `release/`.
+
+## Conventions
+
+- Keep UI strings and new code comments in Brazilian Portuguese.
+- Never commit `dist/`, `dist-electron/`, `release/`, or the local `att.txt` / `db.txt` files.

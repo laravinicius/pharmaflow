@@ -121,7 +121,8 @@ export class CacheManager {
         name        TEXT NOT NULL,
         phone       TEXT NOT NULL UNIQUE,
         sync_status TEXT NOT NULL DEFAULT 'pending',
-        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS materials (
@@ -139,6 +140,13 @@ export class CacheManager {
         customer_name   TEXT NOT NULL,
         customer_phone  TEXT,
         pharmacist_name TEXT,
+        budget_number   TEXT NOT NULL DEFAULT '',
+        attendant_name  TEXT NOT NULL DEFAULT '',
+        delivery_date   TEXT,
+        payment_status  TEXT NOT NULL DEFAULT '',
+        payment_method  TEXT,
+        delivery_status TEXT NOT NULL DEFAULT '',
+        cancel_reason   TEXT,
         status          TEXT NOT NULL DEFAULT 'pending',
         sync_status     TEXT NOT NULL DEFAULT 'pending',
         updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
@@ -150,7 +158,16 @@ export class CacheManager {
         formula_id    INTEGER NOT NULL,
         material_id   INTEGER,
         material_name TEXT NOT NULL,
-        quantity      REAL NOT NULL
+        quantity      REAL NOT NULL,
+        unit          TEXT NOT NULL DEFAULT 'mg'
+      );
+
+      CREATE TABLE IF NOT EXISTS formula_budget_items (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        formula_id INTEGER NOT NULL,
+        quantity   REAL NOT NULL,
+        unit       TEXT NOT NULL DEFAULT 'caps',
+        value      REAL NOT NULL DEFAULT 0
       );
     `;
 
@@ -161,6 +178,15 @@ export class CacheManager {
     const migrations = [
       `ALTER TABLE formulas ADD COLUMN customer_phone  TEXT NOT NULL DEFAULT ''`,
       `ALTER TABLE formulas ADD COLUMN pharmacist_name TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE customers ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))`,
+      `ALTER TABLE formula_items ADD COLUMN unit TEXT NOT NULL DEFAULT 'mg'`,
+      `ALTER TABLE formulas ADD COLUMN budget_number TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE formulas ADD COLUMN attendant_name TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE formulas ADD COLUMN delivery_date TEXT`,
+      `ALTER TABLE formulas ADD COLUMN payment_status TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE formulas ADD COLUMN payment_method TEXT`,
+      `ALTER TABLE formulas ADD COLUMN delivery_status TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE formulas ADD COLUMN cancel_reason TEXT`,
     ];
     for (const sql of migrations) {
       try { this.db.exec(sql); } catch (_) { /* coluna já existe — ignorar */ }
@@ -179,10 +205,11 @@ export class CacheManager {
           name        TEXT NOT NULL,
           phone       TEXT NOT NULL UNIQUE,
           sync_status TEXT NOT NULL DEFAULT 'pending',
-          updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
-        INSERT OR IGNORE INTO customers_new (id, server_id, name, phone, sync_status, updated_at)
-          SELECT id, server_id, name, phone, sync_status, updated_at FROM customers;
+        INSERT OR IGNORE INTO customers_new (id, server_id, name, phone, sync_status, updated_at, created_at)
+          SELECT id, server_id, name, phone, sync_status, updated_at, created_at FROM customers;
         DROP TABLE customers;
         ALTER TABLE customers_new RENAME TO customers;
       `);
@@ -376,12 +403,12 @@ export class CacheManager {
   // ── Clientes ──────────────────────────────────────────────────────────────────
 
   listCustomers() {
-    return this.query(`SELECT id, server_id, name, phone FROM customers WHERE sync_status != 'deleted' ORDER BY name`);
+    return this.query(`SELECT id, server_id, name, phone, created_at FROM customers WHERE sync_status != 'deleted' ORDER BY name`);
   }
 
   addCustomer(c: { name: string; phone: string }) {
-    this.exec(`INSERT INTO customers (name, phone, sync_status, updated_at)
-      VALUES (?, ?, 'pending', datetime('now'))`, [c.name, c.phone]);
+    this.exec(`INSERT INTO customers (name, phone, sync_status, updated_at, created_at)
+      VALUES (?, ?, 'pending', datetime('now'), datetime('now'))`, [c.name, c.phone]);
     const id = this.lastId();
     this.save();
     return { success: true, id };
@@ -434,13 +461,16 @@ export class CacheManager {
   listFormulas() {
     const formulas = this.query<any>(`
       SELECT id, server_id, customer_id, customer_name, customer_phone, pharmacist_name,
-             status, sync_status, created_at
+             budget_number, attendant_name, delivery_date, payment_status, payment_method, delivery_status, cancel_reason, status, sync_status, created_at
       FROM formulas WHERE sync_status != 'deleted'
       ORDER BY created_at DESC
     `);
     for (const f of formulas) {
       f.items = this.query(
-        `SELECT material_id, material_name, quantity FROM formula_items WHERE formula_id=?`, [f.id]
+        `SELECT material_id, material_name, quantity, unit FROM formula_items WHERE formula_id=?`, [f.id]
+      );
+      f.budget_items = this.query(
+        `SELECT quantity, unit, value FROM formula_budget_items WHERE formula_id=?`, [f.id]
       );
     }
     return formulas;
@@ -449,24 +479,81 @@ export class CacheManager {
   addFormula(formula: {
     customer_id: number;
     pharmacist_name: string;
-    items: Array<{ material_id: number; quantity: number }>;
+    items: Array<{ material_id: number; quantity: number; unit?: string }>;
+    budget_number?: string;
+    budget_items?: Array<{ quantity: number; unit: string; value: number }>;
+    attendant_name?: string;
+    delivery_date?: string | null;
+    payment_status?: string;
+    payment_method?: string | null;
+    delivery_status?: string;
+    cancel_reason?: string | null;
+    status?: string;
   }) {
     const customer = this.queryOne<any>('SELECT name, phone FROM customers WHERE id=?', [formula.customer_id]);
     if (!customer) throw new Error('Cliente não encontrado');
 
-    this.exec(`INSERT INTO formulas (customer_id, customer_name, customer_phone, pharmacist_name, status, sync_status, updated_at, created_at)
-      VALUES (?, ?, ?, ?, 'pending', 'pending', datetime('now'), datetime('now'))`,
-      [formula.customer_id, customer.name, customer.phone ?? '', formula.pharmacist_name]);
+    this.exec(`INSERT INTO formulas (customer_id, customer_name, customer_phone, pharmacist_name, budget_number, attendant_name, delivery_date, payment_status, payment_method, delivery_status, cancel_reason, status, sync_status, updated_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'))`,
+      [formula.customer_id, customer.name, customer.phone ?? '', formula.pharmacist_name,
+       formula.budget_number ?? '', formula.attendant_name ?? '', formula.delivery_date ?? null,
+       formula.payment_status ?? '', formula.payment_method ?? null, formula.delivery_status ?? '',
+       formula.cancel_reason ?? null, formula.status ?? 'saved']);
     const formulaId = this.lastId();
 
     for (const item of formula.items) {
       const mat = this.queryOne<any>('SELECT name FROM materials WHERE id=?', [item.material_id]);
-      this.exec(`INSERT INTO formula_items (formula_id, material_id, material_name, quantity) VALUES (?,?,?,?)`,
-        [formulaId, item.material_id, mat?.name ?? 'N/A', item.quantity]);
+      this.exec(`INSERT INTO formula_items (formula_id, material_id, material_name, quantity, unit) VALUES (?,?,?,?,?)`,
+        [formulaId, item.material_id, mat?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
+    }
+
+    for (const bi of formula.budget_items ?? []) {
+      this.exec(`INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)`,
+        [formulaId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
     }
 
     this.save();
     return { success: true, id: formulaId };
+  }
+
+  updateFormula(id: number, formula: {
+    customer_id: number;
+    pharmacist_name: string;
+    items: Array<{ material_id: number; quantity: number; unit?: string }>;
+    budget_number?: string;
+    budget_items?: Array<{ quantity: number; unit: string; value: number }>;
+    attendant_name?: string;
+    delivery_date?: string | null;
+    payment_status?: string;
+    payment_method?: string | null;
+    delivery_status?: string;
+    cancel_reason?: string | null;
+    status?: string;
+  }) {
+    const customer = this.queryOne<any>('SELECT name, phone FROM customers WHERE id=?', [formula.customer_id]);
+    if (!customer) throw new Error('Cliente não encontrado');
+
+    this.exec(`UPDATE formulas SET customer_id=?, customer_name=?, customer_phone=?, pharmacist_name=?, budget_number=?, attendant_name=?, delivery_date=?, payment_status=?, payment_method=?, delivery_status=?, cancel_reason=?, status=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
+      [formula.customer_id, customer.name, customer.phone ?? '', formula.pharmacist_name,
+       formula.budget_number ?? '', formula.attendant_name ?? '', formula.delivery_date ?? null,
+       formula.payment_status ?? '', formula.payment_method ?? null, formula.delivery_status ?? '',
+       formula.cancel_reason ?? null, formula.status ?? 'saved', id]);
+
+    this.exec(`DELETE FROM formula_items WHERE formula_id=?`, [id]);
+    for (const item of formula.items) {
+      const mat = this.queryOne<any>('SELECT name FROM materials WHERE id=?', [item.material_id]);
+      this.exec(`INSERT INTO formula_items (formula_id, material_id, material_name, quantity, unit) VALUES (?,?,?,?,?)`,
+        [id, item.material_id, mat?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
+    }
+
+    this.exec(`DELETE FROM formula_budget_items WHERE formula_id=?`, [id]);
+    for (const bi of formula.budget_items ?? []) {
+      this.exec(`INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)`,
+        [id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
+    }
+
+    this.save();
+    return { success: true };
   }
 
   updateFormulaStatus(id: number, status: string) {
@@ -569,6 +656,13 @@ export class CacheManager {
     const newCols = [
       ['customer_phone', 'VARCHAR(20) DEFAULT ""'],
       ['pharmacist_name', 'VARCHAR(255) DEFAULT ""'],
+      ['budget_number', 'VARCHAR(6) DEFAULT ""'],
+      ['attendant_name', 'VARCHAR(255) DEFAULT ""'],
+      ['delivery_date', 'DATE NULL'],
+      ['payment_status', 'VARCHAR(20) DEFAULT ""'],
+      ['payment_method', 'VARCHAR(20) NULL'],
+      ['delivery_status', 'VARCHAR(20) DEFAULT ""'],
+      ['cancel_reason', 'TEXT NULL'],
     ];
     for (const [col, def] of newCols) {
       try {
@@ -577,6 +671,25 @@ export class CacheManager {
         try { await this.qServer(`ALTER TABLE formulas ADD COLUMN ${col} ${def}`); } catch (_) {}
       }
     }
+    // Novos valores no ENUM de status (cancelled, delivered)
+    await this.qServer(`ALTER TABLE formulas MODIFY COLUMN status ENUM('pending','completed','saved','confirmed','cancelled','delivered') NOT NULL DEFAULT 'saved'`).catch(() => {});
+    // Unidade de medida dos itens (g, mcg, ui, mg)
+    try {
+      await this.qServer('SELECT unit FROM formula_items LIMIT 1');
+    } catch (_) {
+      try { await this.qServer(`ALTER TABLE formula_items ADD COLUMN unit VARCHAR(5) NOT NULL DEFAULT 'mg'`); } catch (_) {}
+    }
+    // Tabela de itens de orçamento (quantidade, unidade caps/ml/g, valor)
+    await this.qServer(`
+      CREATE TABLE IF NOT EXISTS formula_budget_items (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        formula_id INT            NOT NULL,
+        quantity   DECIMAL(10,3)  NOT NULL,
+        unit       VARCHAR(5)     NOT NULL DEFAULT 'caps',
+        value      DECIMAL(10,2)  NOT NULL DEFAULT 0,
+        FOREIGN KEY (formula_id) REFERENCES formulas(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB
+    `).catch(() => {});
   }
 
   // Retorna o instance_id atual do servidor
@@ -679,8 +792,11 @@ export class CacheManager {
 
     await this.pushTable('customers', async (c) => {
       if (!c.server_id) {
-        const r = await this.qServer<any>('INSERT IGNORE INTO customers (name,phone) VALUES (?,?)',
-          [c.name, c.phone]);
+        const r = c.created_at
+          ? await this.qServer<any>('INSERT IGNORE INTO customers (name,phone,created_at) VALUES (?,?,?)',
+              [c.name, c.phone, c.created_at])
+          : await this.qServer<any>('INSERT IGNORE INTO customers (name,phone) VALUES (?,?)',
+              [c.name, c.phone]);
         if (r.insertId) {
           this.exec(`UPDATE customers SET server_id=?, sync_status='synced' WHERE id=?`, [r.insertId, c.id]);
         } else {
@@ -735,6 +851,7 @@ export class CacheManager {
     for (const f of pending) {
       try {
         const items = this.query('SELECT * FROM formula_items WHERE formula_id=?', [f.id]);
+        const budgetItems = this.query('SELECT * FROM formula_budget_items WHERE formula_id=?', [f.id]);
 
         if (!f.server_id) {
           const cust = this.queryOne<any>('SELECT server_id FROM customers WHERE id=?', [f.customer_id]);
@@ -744,15 +861,23 @@ export class CacheManager {
           try {
             await conn.beginTransaction();
             const [fRes]: any = await conn.query(
-              'INSERT INTO formulas (customer_id, status, created_at, customer_phone, pharmacist_name) VALUES (?,?,?,?,?)',
-              [cust.server_id, f.status, f.created_at, f.customer_phone ?? '', f.pharmacist_name ?? '']
+              'INSERT INTO formulas (customer_id, status, created_at, customer_phone, pharmacist_name, budget_number, attendant_name, delivery_date, payment_status, payment_method, delivery_status, cancel_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+              [cust.server_id, f.status, f.created_at, f.customer_phone ?? '', f.pharmacist_name ?? '',
+               f.budget_number ?? '', f.attendant_name ?? '', f.delivery_date ?? null,
+               f.payment_status ?? '', f.payment_method ?? null, f.delivery_status ?? '', f.cancel_reason ?? null]
             );
             for (const item of items) {
               const mat = this.queryOne<any>('SELECT server_id FROM materials WHERE id=?', [item.material_id]);
               if (!mat?.server_id) continue;
               await conn.query(
-                'INSERT INTO formula_items (formula_id, material_id, quantity) VALUES (?,?,?)',
-                [fRes.insertId, mat.server_id, item.quantity]
+                'INSERT INTO formula_items (formula_id, material_id, quantity, unit) VALUES (?,?,?,?)',
+                [fRes.insertId, mat.server_id, item.quantity, item.unit ?? 'mg']
+              );
+            }
+            for (const bi of budgetItems) {
+              await conn.query(
+                'INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)',
+                [fRes.insertId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]
               );
             }
             await conn.commit();
@@ -763,8 +888,41 @@ export class CacheManager {
             conn.release();
           }
         } else {
-          await this.qServer('UPDATE formulas SET status=? WHERE id=?', [f.status, f.server_id]);
-          this.exec(`UPDATE formulas SET sync_status='synced' WHERE id=?`, [f.id]);
+          // Fórmula já existe no servidor — atualiza a fórmula completa e filhos
+          const cust = this.queryOne<any>('SELECT server_id FROM customers WHERE id=?', [f.customer_id]);
+          const conn = await this.pool!.getConnection();
+          try {
+            await conn.beginTransaction();
+            await conn.query(
+              `UPDATE formulas SET customer_id=?, customer_phone=?, pharmacist_name=?, budget_number=?, attendant_name=?, delivery_date=?, payment_status=?, payment_method=?, delivery_status=?, cancel_reason=?, status=?, updated_at=NOW() WHERE id=?`,
+              [cust?.server_id ?? null, f.customer_phone ?? '', f.pharmacist_name ?? '',
+               f.budget_number ?? '', f.attendant_name ?? '', f.delivery_date ?? null,
+               f.payment_status ?? '', f.payment_method ?? null, f.delivery_status ?? '',
+               f.cancel_reason ?? null, f.status, f.server_id]
+            );
+            await conn.query('DELETE FROM formula_items WHERE formula_id=?', [f.server_id]);
+            for (const item of items) {
+              const mat = this.queryOne<any>('SELECT server_id FROM materials WHERE id=?', [item.material_id]);
+              if (!mat?.server_id) continue;
+              await conn.query(
+                'INSERT INTO formula_items (formula_id, material_id, quantity, unit) VALUES (?,?,?,?)',
+                [f.server_id, mat.server_id, item.quantity, item.unit ?? 'mg']
+              );
+            }
+            await conn.query('DELETE FROM formula_budget_items WHERE formula_id=?', [f.server_id]);
+            for (const bi of budgetItems) {
+              await conn.query(
+                'INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)',
+                [f.server_id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]
+              );
+            }
+            await conn.commit();
+            this.exec(`UPDATE formulas SET sync_status='synced' WHERE id=?`, [f.id]);
+          } catch (e) {
+            await conn.rollback();
+          } finally {
+            conn.release();
+          }
         }
       } catch (_) {}
     }
@@ -806,16 +964,16 @@ export class CacheManager {
     }
 
     const customers = await this.qServer<any[]>(
-      `SELECT id,name,phone FROM customers ${dateFilter}`, dateParam
+      `SELECT id,name,phone,created_at FROM customers ${dateFilter}`, dateParam
     );
     for (const c of customers) {
       const exists = this.queryOne('SELECT id FROM customers WHERE server_id=?', [c.id]);
       if (exists) {
-        this.exec(`UPDATE customers SET name=?,phone=?,sync_status='synced' WHERE server_id=?`,
-          [c.name, c.phone, c.id]);
+        this.exec(`UPDATE customers SET name=?,phone=?,created_at=?,sync_status='synced' WHERE server_id=?`,
+          [c.name, c.phone, c.created_at, c.id]);
       } else {
-        try { this.exec(`INSERT INTO customers (server_id,name,phone,sync_status) VALUES (?,?,?,'synced')`,
-          [c.id, c.name, c.phone]); } catch (_) {}
+        try { this.exec(`INSERT INTO customers (server_id,name,phone,created_at,sync_status) VALUES (?,?,?,?,'synced')`,
+          [c.id, c.name, c.phone, c.created_at]); } catch (_) {}
       }
     }
 
@@ -836,6 +994,13 @@ export class CacheManager {
       SELECT f.id, f.customer_id, f.status, f.created_at,
              COALESCE(f.customer_phone,'') AS customer_phone,
              COALESCE(f.pharmacist_name,'') AS pharmacist_name,
+             COALESCE(f.budget_number,'') AS budget_number,
+             COALESCE(f.attendant_name,'') AS attendant_name,
+             f.delivery_date AS delivery_date,
+             COALESCE(f.payment_status,'') AS payment_status,
+             f.payment_method AS payment_method,
+             COALESCE(f.delivery_status,'') AS delivery_status,
+             f.cancel_reason AS cancel_reason,
              c.name AS customer_name
       FROM formulas f JOIN customers c ON f.customer_id = c.id
       ${formulaFilter}`, dateParam);
@@ -845,24 +1010,60 @@ export class CacheManager {
       const exists = this.queryOne('SELECT id FROM formulas WHERE server_id=?', [f.id]);
 
       if (exists) {
-        this.exec(`UPDATE formulas SET status=?,sync_status='synced' WHERE server_id=?`, [f.status, f.id]);
+        this.exec(`UPDATE formulas SET customer_id=?,customer_name=?,customer_phone=?,pharmacist_name=?,budget_number=?,attendant_name=?,delivery_date=?,payment_status=?,payment_method=?,delivery_status=?,cancel_reason=?,status=?,sync_status='synced' WHERE server_id=?`,
+          [localCust?.id ?? 0, f.customer_name, f.customer_phone ?? '', f.pharmacist_name ?? '',
+           f.budget_number ?? '', f.attendant_name ?? '', f.delivery_date ?? null,
+           f.payment_status ?? '', f.payment_method ?? null, f.delivery_status ?? '',
+           f.cancel_reason ?? null, f.status, f.id]);
+
+        const localFId = exists.id;
+        const items = await this.qServer<any[]>(`
+          SELECT fi.material_id, fi.quantity, fi.unit, m.name AS material_name
+          FROM formula_items fi JOIN materials m ON fi.material_id = m.id
+          WHERE fi.formula_id=?`, [f.id]);
+        this.exec(`DELETE FROM formula_items WHERE formula_id=?`, [localFId]);
+        for (const item of items) {
+          const localMat = this.queryOne<any>('SELECT id FROM materials WHERE server_id=?', [item.material_id]);
+          this.exec(`INSERT INTO formula_items (formula_id,material_id,material_name,quantity,unit) VALUES (?,?,?,?,?)`,
+            [localFId, localMat?.id ?? null, item.material_name, item.quantity, item.unit ?? 'mg']);
+        }
+
+        const budgetItems = await this.qServer<any[]>(
+          `SELECT quantity, unit, value FROM formula_budget_items WHERE formula_id=?`, [f.id]
+        );
+        this.exec(`DELETE FROM formula_budget_items WHERE formula_id=?`, [localFId]);
+        for (const bi of budgetItems) {
+          this.exec(`INSERT INTO formula_budget_items (formula_id,quantity,unit,value) VALUES (?,?,?,?)`,
+            [localFId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
+        }
       } else {
         try {
-          this.exec(`INSERT INTO formulas (server_id,customer_id,customer_name,customer_phone,pharmacist_name,status,sync_status,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,'synced',?,datetime('now'))`,
-            [f.id, localCust?.id ?? 0, f.customer_name, f.customer_phone ?? '', f.pharmacist_name ?? '', f.status, f.created_at]);
+          this.exec(`INSERT INTO formulas (server_id,customer_id,customer_name,customer_phone,pharmacist_name,budget_number,attendant_name,delivery_date,payment_status,payment_method,delivery_status,cancel_reason,status,sync_status,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'synced',?,datetime('now'))`,
+            [f.id, localCust?.id ?? 0, f.customer_name, f.customer_phone ?? '', f.pharmacist_name ?? '',
+             f.budget_number ?? '', f.attendant_name ?? '', f.delivery_date ?? null,
+             f.payment_status ?? '', f.payment_method ?? null, f.delivery_status ?? '',
+             f.cancel_reason ?? null, f.status, f.created_at]);
 
           const localFId = this.queryOne<any>('SELECT id FROM formulas WHERE server_id=?', [f.id])?.id;
           if (localFId) {
             const items = await this.qServer<any[]>(`
-              SELECT fi.material_id, fi.quantity, m.name AS material_name
+              SELECT fi.material_id, fi.quantity, fi.unit, m.name AS material_name
               FROM formula_items fi JOIN materials m ON fi.material_id = m.id
               WHERE fi.formula_id=?`, [f.id]);
 
             for (const item of items) {
               const localMat = this.queryOne<any>('SELECT id FROM materials WHERE server_id=?', [item.material_id]);
-              this.exec(`INSERT INTO formula_items (formula_id,material_id,material_name,quantity) VALUES (?,?,?,?)`,
-                [localFId, localMat?.id ?? null, item.material_name, item.quantity]);
+              this.exec(`INSERT INTO formula_items (formula_id,material_id,material_name,quantity,unit) VALUES (?,?,?,?,?)`,
+                [localFId, localMat?.id ?? null, item.material_name, item.quantity, item.unit ?? 'mg']);
+            }
+
+            const budgetItems = await this.qServer<any[]>(
+              `SELECT quantity, unit, value FROM formula_budget_items WHERE formula_id=?`, [f.id]
+            );
+            for (const bi of budgetItems) {
+              this.exec(`INSERT INTO formula_budget_items (formula_id,quantity,unit,value) VALUES (?,?,?,?)`,
+                [localFId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
             }
           }
         } catch (_) {}

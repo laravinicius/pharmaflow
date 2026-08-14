@@ -83,6 +83,7 @@ ipcMain.handle('materials:delete', (_, id)   => cache.deleteMaterial(id));
 
 ipcMain.handle('formulas:list',          ()              => cache.listFormulas());
 ipcMain.handle('formulas:add',           (_, f)          => cache.addFormula(f));
+ipcMain.handle('formulas:update',        (_, id, f)      => cache.updateFormula(id, f));
 ipcMain.handle('formulas:update-status', (_, id, status) => cache.updateFormulaStatus(id, status));
 ipcMain.handle('formulas:delete',        (_, id)         => cache.deleteFormula(id));
 

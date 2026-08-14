@@ -3,7 +3,7 @@ import {
   Users, Cross, ClipboardList, UserPlus, PlusCircle, LogOut,
   Trash2, CheckCircle2, Clock, FileText, ChevronRight, Search,
   Menu, Settings, RefreshCw, Wifi, WifiOff, AlertCircle, CloudOff,
-  CloudUpload, CheckCircle,
+  CloudUpload, CheckCircle, Calendar, X, History,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
@@ -11,13 +11,17 @@ import { db } from './services/lanDatabase';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface User { id: number; name: string; username: string; role: 'admin' | 'employee' }
-interface Customer { id: number; name: string; phone: string }
+interface Customer { id: number; name: string; phone: string; created_at?: string }
 interface Material { id: number; name: string }
-interface FormulaItem { material_id: number; material_name: string; quantity: number }
+interface FormulaItem { material_id: number; material_name: string; quantity: number; unit?: string }
+interface BudgetItem { quantity: number; unit: string; value: number }
 interface Formula {
   id: number; customer_id: number; customer_name: string; customer_phone: string;
-  pharmacist_name: string; status: 'pending' | 'completed'; sync_status: string;
-  created_at: string; items: FormulaItem[];
+  pharmacist_name: string; status: 'pending' | 'completed' | 'saved' | 'confirmed' | 'cancelled' | 'delivered'; sync_status: string;
+  created_at: string; items: FormulaItem[]; budget_number?: string; budget_items?: BudgetItem[];
+  attendant_name?: string; delivery_date?: string | null;
+  payment_status?: string; payment_method?: string | null;
+  delivery_status?: string; cancel_reason?: string | null;
 }
 interface SyncStatus {
   state: 'idle' | 'syncing' | 'offline' | 'error' | 'connecting';
@@ -46,6 +50,78 @@ function isValidPhone(value: string): boolean {
   return len === 10 || len === 11;
 }
 
+// Máscara de moeda (R$): dígitos digitados viram centavos — ex.: "123456" → "1.234,56"
+function formatCurrency(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 15);
+  if (!digits) return '';
+  const cents = digits.padStart(3, '0');
+  const reais = (cents.slice(0, -2).replace(/^0+/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${reais},${cents.slice(-2)}`;
+}
+
+// Converte texto com máscara de moeda para número (ex.: "1.234,56" → 1234.56)
+function parseCurrency(value: string): number {
+  const digits = value.replace(/\D/g, '');
+  return digits ? Number(digits) / 100 : 0;
+}
+
+// Máscara de data ao digitar (ex.: "15082026" → "15/08/2026")
+function formatDateBR(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (!digits) return '';
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+// Converte "DD/MM/AAAA" (ou "ddmmaaaa") para ISO "AAAA-MM-DD";
+// valida data real (dias do mês e ano bissexto). Retorna null se inválida.
+function parseDateBR(value: string): string | null {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const dd = Number(digits.slice(0, 2));
+  const mm = Number(digits.slice(2, 4));
+  const yyyy = Number(digits.slice(4));
+  if (mm < 1 || mm > 12 || dd < 1) return null;
+  const daysInMonth = new Date(yyyy, mm, 0).getDate();
+  if (dd > daysInMonth) return null;
+  return `${String(yyyy).padStart(4, '0')}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
+
+// Converte ISO "AAAA-MM-DD" para exibição "DD/MM/AAAA"
+function formatDateToBR(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : iso;
+}
+
+// Remove acentos para comparação na busca (ex.: "jose" encontra "José")
+function stripDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+// Destaca o trecho do texto que corresponde à busca (ignora maiúsculas e acentos)
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const q = stripDiacritics(query.trim().toLowerCase());
+  if (!q || !text) return <>{text}</>;
+  const comp: { ch: string; idx: number }[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const base = stripDiacritics(text[i].toLowerCase());
+    for (const b of base) comp.push({ ch: b, idx: i });
+  }
+  const start = comp.map(c => c.ch).join('').indexOf(q);
+  if (start === -1) return <>{text}</>;
+  const end = start + q.length;
+  const textStart = comp[start].idx;
+  const textEnd = comp[end - 1].idx + 1;
+  return (
+    <>
+      {text.slice(0, textStart)}
+      <mark className="bg-red-100 text-red-700 font-semibold rounded-sm px-0.5">{text.slice(textStart, textEnd)}</mark>
+      {text.slice(textEnd)}
+    </>
+  );
+}
+
 // ─── Hook: dados com reload ───────────────────────────────────────────────────
 
 function useData<T>(fetcher: () => Promise<T>, deps: any[] = []) {
@@ -69,7 +145,7 @@ function useData<T>(fetcher: () => Promise<T>, deps: any[] = []) {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setupMode, setSetupMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'queue' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'saved' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
@@ -77,6 +153,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
+  const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
   const prevSyncState = useRef<string | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
@@ -280,9 +357,12 @@ export default function App() {
             {!setupMode && (
               <>
                 <NavItem icon={<ClipboardList />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<PlusCircle />} label="Nova Receita" active={activeTab === 'recipe'} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Clock />} label="Fila de Fórmulas" active={activeTab === 'queue'} onClick={() => setActiveTab('queue')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Users />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<PlusCircle />} label="Nova Fórmula" active={activeTab === 'recipe'} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Clock />} label="Salvas" active={activeTab === 'saved'} onClick={() => setActiveTab('saved')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={activeTab === 'confirmed'} onClick={() => setActiveTab('confirmed')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<History />} label="Histórico" active={activeTab === 'history'} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Users />} label="Clientes" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Settings />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
               </>
             )}
           </nav>
@@ -328,8 +408,14 @@ export default function App() {
             <AnimatePresence mode="wait">
               {activeTab === 'dashboard' && <Dashboard user={user} onNavigate={setActiveTab} />}
               {activeTab === 'admin' && <AdminPanel user={user} />}
-              {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={() => { setTemplateFormula(null); setActiveTab('queue'); }} />}
-              {activeTab === 'queue' && <FormulaQueue user={user} onRepeat={f => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
+              {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
+              {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab(dest); }} />}
+              {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
+              {activeTab === 'saved' && <FormulaList variant="saved" title="Fórmulas Salvas" subtitle="Fórmulas salvas aguardando confirmação" statuses={['saved', 'pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} />}
+              {activeTab === 'confirmed' && <FormulaList variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />}
+              {activeTab === 'history' && <FormulaList variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} />}
+              {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
+              {activeTab === 'customers' && <CustomerManager />}
             </AnimatePresence>
           </div>
         </main>
@@ -519,7 +605,8 @@ function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: any) =>
   const { data: customers } = useData(() => db.customers.list());
   const { data: materials } = useData(() => db.materials.list());
   const { data: formulas } = useData(() => db.formulas.list());
-  const pendingFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'pending').length;
+  const savedFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'saved' || f.status === 'pending').length;
+  const confirmedFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'confirmed' || f.status === 'completed').length;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
@@ -527,17 +614,19 @@ function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: any) =>
         <h2 className="text-3xl font-bold text-zinc-900">Bem-vindo, {user.name}</h2>
         <p className="text-zinc-500">Aqui está o que está acontecendo na farmácia hoje.</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
         <StatCard icon={<ClipboardList className="text-blue-600" />} label="Fórmulas Totais" value={formulas?.length ?? 0} color="bg-blue-50" />
-        <StatCard icon={<Clock className="text-red-600" />} label="Pendentes" value={pendingFormulas} color="bg-red-50" />
+        <StatCard icon={<Clock className="text-red-600" />} label="Salvas" value={savedFormulas} color="bg-red-50" />
+        <StatCard icon={<CheckCircle2 className="text-emerald-600" />} label="Confirmadas" value={confirmedFormulas} color="bg-emerald-50" />
         <StatCard icon={<Users className="text-purple-600" />} label="Clientes" value={customers?.length ?? 0} color="bg-purple-50" />
         <StatCard icon={<Cross className="text-red-700" />} label="Matérias-Primas" value={materials?.length ?? 0} color="bg-red-50" />
       </div>
-      <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm max-w-sm">
+      <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm max-w-2xl">
         <h3 className="text-lg font-semibold mb-4">Ações Rápidas</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <QuickActionButton icon={<PlusCircle />} label="Nova Receita" onClick={() => onNavigate('recipe')} color="pf-orange" />
-          <QuickActionButton icon={<Clock />} label="Ver Fila" onClick={() => onNavigate('queue')} color="bg-zinc-800" />
+        <div className="grid grid-cols-3 gap-4">
+          <QuickActionButton icon={<PlusCircle />} label="Nova Fórmula" onClick={() => onNavigate('recipe')} color="pf-orange" />
+          <QuickActionButton icon={<Clock />} label="Salvas" onClick={() => onNavigate('saved')} color="bg-zinc-800" />
+          <QuickActionButton icon={<CheckCircle2 />} label="Confirmadas" onClick={() => onNavigate('confirmed')} color="bg-zinc-800" />
         </div>
       </div>
     </motion.div>
@@ -568,16 +657,15 @@ function QuickActionButton({ icon, label, onClick, color }: { icon: React.ReactN
 // ─── Admin Panel ───────────────────────────────────────────────────────────────
 
 function AdminPanel({ user }: { user: User }) {
-  const [tab, setTab] = useState<'customers' | 'materials' | 'users'>('customers');
+  const [tab, setTab] = useState<'materials' | 'users'>('materials');
   const allTabs = [
-    { key: 'customers' as const, label: 'Clientes' },
     { key: 'materials' as const, label: 'Matérias-Primas' },
     { key: 'users' as const, label: 'Funcionários', adminOnly: true },
   ];
   const tabs = allTabs.filter(t => !t.adminOnly || user.role === 'admin');
 
-  // Se a aba ativa foi removida (employee tentando acessar users), volta para customers
-  const activeTab = tabs.find(t => t.key === tab) ? tab : 'customers';
+  // Se a aba ativa foi removida (employee tentando acessar users), volta para materials
+  const activeTab = tabs.find(t => t.key === tab) ? tab : 'materials';
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
@@ -590,7 +678,6 @@ function AdminPanel({ user }: { user: User }) {
         ))}
       </div>
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-        {activeTab === 'customers' && <CustomerManager />}
         {activeTab === 'materials' && <MaterialManager />}
         {activeTab === 'users' && user.role === 'admin' && <UserManager />}
       </div>
@@ -604,10 +691,16 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
   const { data: customers, loading, error, reload } = useData(() => db.customers.list());
   const [form, setForm] = useState({ name: '', phone: '' });
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [rowDraft, setRowDraft] = useState({ name: '', phone: '' });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [success, setSuccess] = useState<string | null>(null);
+  const [tab, setTab] = useState<'list' | 'create'>('list');
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<{ key: 'name' | 'phone' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
 
-  const reset = () => { setForm({ name: '', phone: '' }); setEditingId(null); setFormError(''); };
+  const reset = () => { setForm({ name: '', phone: '' }); setEditingId(null); setFormError(''); setSuccess(null); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -619,7 +712,7 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
       const dup = (customers as Customer[])?.find(c => c.phone.replace(/\D/g,'') === rawPhone);
       if (dup) { setFormError(`Celular já cadastrado para: ${dup.name}`); return; }
     }
-    setSaving(true); setFormError('');
+    setSaving(true); setFormError(''); setSuccess(null);
     try {
       const payload = { name: form.name, phone: formatted };
       if (editingId) {
@@ -632,6 +725,7 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
         } else {
           if (onCreated) onCreated({ id: res.id, ...payload });
           reset(); reload();
+          setSuccess('Cliente cadastrado com sucesso!');
         }
       }
     } catch (err: any) {
@@ -644,9 +738,63 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
     await db.customers.remove(id); reload();
   };
 
+  const handleRowSave = async () => {
+    if (editingRow === null) return;
+    if (!isValidPhone(rowDraft.phone)) { setFormError('Informe o celular completo, com DDD.'); return; }
+    const formatted = formatPhone(rowDraft.phone);
+    setSaving(true); setFormError('');
+    try {
+      await db.customers.update(editingRow, { name: rowDraft.name, phone: formatted });
+      setEditingRow(null); setRowDraft({ name: '', phone: '' });
+      reload();
+    } catch (err: any) {
+      setFormError(err.message ?? 'Erro ao salvar.');
+    } finally { setSaving(false); }
+  };
+
+  const available = (customers as Customer[]) ?? [];
+  const q = stripDiacritics(search.trim().toLowerCase());
+  const qDigits = search.replace(/\D/g, '');
+  const list = available
+    .filter(c => {
+      if (!q && !qDigits) return true;
+      const name = stripDiacritics((c.name ?? '').toLowerCase());
+      const matchesName = q && name.includes(q);
+      const matchesPhone = qDigits && (c.phone ?? '').replace(/\D/g, '').includes(qDigits);
+      return matchesName || matchesPhone;
+    })
+    .sort((a, b) => {
+      if (q || qDigits) {
+        // Ordena por relevância quando há busca: início do nome, início do
+        // telefone, depois ocorrências internas; empates por nome (A–Z).
+        const score = (c: Customer) => {
+          const name = stripDiacritics((c.name ?? '').toLowerCase());
+          const phone = (c.phone ?? '').replace(/\D/g, '');
+          let s = 0;
+          if (q && name.startsWith(q)) s += 4;
+          else if (q && name.includes(q)) s += 3;
+          if (qDigits && phone.startsWith(qDigits)) s += 2;
+          else if (qDigits && phone.includes(qDigits)) s += 1;
+          return s;
+        };
+        const diff = score(b) - score(a);
+        if (diff !== 0) return diff;
+        return (a.name ?? '').localeCompare(b.name ?? '');
+      }
+      const dir = sort.dir === 'desc' ? -1 : 1;
+      const av = String(a[sort.key] ?? '').toLowerCase();
+      const bv = String(b[sort.key] ?? '').toLowerCase();
+      return av.localeCompare(bv) * dir;
+    });
+
   const formBlock = (
     <form onSubmit={handleSubmit} className={`grid gap-3 items-end bg-zinc-50 p-4 rounded-xl border border-zinc-100 ${compact ? '' : 'grid-cols-1 md:grid-cols-4'}`}>
-      <div className={compact ? '' : 'md:col-span-1'}>
+        {success && (
+        <p className={`flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 ${compact ? '' : 'md:col-span-4'}`}>
+          <CheckCircle className="w-3.5 h-3.5 shrink-0" /> {success}
+        </p>
+      )}
+        <div className={compact ? '' : 'md:col-span-2'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome</label>
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
       </div>
@@ -669,33 +817,114 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
   if (compact) return formBlock;
 
   return (
-    <div className="p-6 space-y-6">
-      {formBlock}
-      {loading && <LoadingState />}
-      {error && <ErrorState message={error} onRetry={reload} />}
-      {!loading && !error && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead><tr className="border-b border-zinc-100 text-zinc-400 text-xs uppercase font-semibold">
-              <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Celular</th><th className="px-4 py-3 text-right">Ações</th>
-            </tr></thead>
-            <tbody className="divide-y divide-zinc-50">
-              {(customers as Customer[])?.map(c => (
-                <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-zinc-900">{c.name}</td>
-                  <td className="px-4 py-3 text-zinc-600">{c.phone}</td>
-                  <td className="px-4 py-3 text-right space-x-3">
-                    <button onClick={() => { setForm({ name: c.name, phone: c.phone }); setEditingId(c.id); setFormError(''); }} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
-                    <button onClick={() => handleDelete(c.id)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {(customers as Customer[])?.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhum cliente cadastrado.</p>}
-        </div>
-      )}
-    </div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold text-zinc-900">Clientes</h2>
+        <p className="text-zinc-500">Gerencie os clientes da farmácia.</p>
+      </div>
+      <div className="flex items-center gap-4 border-b border-zinc-200">
+        <button onClick={() => { setTab('list'); }} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'list' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
+          Lista de Clientes
+          {tab === 'list' && <motion.div layoutId="activeCust" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+        </button>
+        <button onClick={() => setTab('create')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'create' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
+          Cadastro de cliente
+          {tab === 'create' && <motion.div layoutId="activeCust" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+        </button>
+      </div>
+      <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+        {tab === 'create' ? (
+          <div className="p-6 space-y-6">{formBlock}</div>
+        ) : (
+          <div className="p-6 space-y-6">
+            {loading && <LoadingState />}
+            {error && <ErrorState message={error} onRetry={reload} />}
+            {!loading && !error && (
+              <div className="space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+                    <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm w-full"
+                      placeholder="Buscar por nome ou celular..." value={search} onChange={e => setSearch(e.target.value)} />
+                    {search && (
+                      <button onClick={() => setSearch('')} title="Limpar busca"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <select value={`${sort.key}:${sort.dir}`}
+                    onChange={e => { const [key, dir] = e.target.value.split(':'); setSort({ key: key as any, dir: dir as any }); }}
+                    className="px-3 py-2 rounded-xl border border-zinc-200 text-sm text-zinc-600 bg-white focus:ring-2 focus:ring-red-500 outline-none">
+                    <option value="name:asc">Nome (A–Z)</option>
+                    <option value="name:desc">Nome (Z–A)</option>
+                    <option value="created_at:desc">Cadastro (mais recente)</option>
+                    <option value="created_at:asc">Cadastro (mais antigo)</option>
+                    <option value="phone:asc">Celular</option>
+                  </select>
+                  <span className="text-xs font-semibold text-zinc-500 whitespace-nowrap">
+                    {list.length} de {available.length} {available.length === 1 ? 'cliente' : 'clientes'}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead><tr className="border-b border-zinc-100 text-zinc-400 text-xs uppercase font-semibold">
+                      <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Celular</th><th className="px-4 py-3">Cadastro</th><th className="px-4 py-3 text-right">Ações</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-zinc-50">
+                      {list.map(c => (
+                        <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-zinc-900">
+                            {editingRow === c.id ? (
+                              <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                                value={rowDraft.name} onChange={e => setRowDraft(d => ({ ...d, name: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } }} />
+                            ) : (
+                              <HighlightMatch text={c.name} query={search} />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-zinc-600">
+                            {editingRow === c.id ? (
+                              <div>
+                                <input inputMode="numeric" maxLength={15} placeholder="(00) 00000-0000"
+                                  className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                                  value={rowDraft.phone} onChange={e => setRowDraft(d => ({ ...d, phone: formatPhone(e.target.value) }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } }} />
+                                {formError && <p className="text-xs text-red-600 font-medium mt-1">{formError}</p>}
+                              </div>
+                            ) : (
+                              <HighlightMatch text={c.phone} query={search} />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-zinc-500 text-sm">{c.created_at ? new Date(c.created_at).toLocaleString('pt-BR') : '—'}</td>
+                          <td className="px-4 py-3 text-right space-x-3">
+                            {editingRow === c.id ? (
+                              <>
+                                <button onClick={handleRowSave} disabled={saving} className="text-zinc-400 hover:text-green-700 text-sm font-medium transition-colors disabled:opacity-50">
+                                  {saving ? '...' : 'Salvar'}
+                                </button>
+                                <button onClick={() => { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); }} className="text-zinc-400 hover:text-red-600 text-sm transition-colors">Cancelar</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => { setRowDraft({ name: c.name, phone: c.phone }); setEditingRow(c.id); setFormError(''); }} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
+                                <button onClick={() => handleDelete(c.id)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {available.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhum cliente cadastrado.</p>}
+                  {available.length > 0 && list.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhum resultado encontrado.</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 }
 
@@ -966,22 +1195,62 @@ function UserManager() {
 
 // ─── RecipeForm ────────────────────────────────────────────────────────────────
 
-function RecipeForm({ user, template, onComplete }: { user: User; template?: Formula | null; onComplete: () => void }) {
+function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; onComplete: (dest: 'saved' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
   const { data: materials, reload: reloadMaterials } = useData(() => db.materials.list());
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [items, setItems] = useState<FormulaItem[]>([]);
-  const [current, setCurrent] = useState<{ material_id: number | ''; quantity: number | '' }>({ material_id: '', quantity: '' });
-  const [saving, setSaving] = useState(false);
-  const [itemError, setItemError] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
-  const [showAddMaterial, setShowAddMaterial] = useState(false);
   const [showTemplateBanner, setShowTemplateBanner] = useState(false);
+  const [materialQuery, setMaterialQuery] = useState('');
+  const [selectedMaterialId, setSelectedMaterialId] = useState<number | ''>('');
+  const [quantity, setQuantity] = useState('');
+  const [unit, setUnit] = useState('mg');
+  const [showAddMaterial, setShowAddMaterial] = useState(false);
+  const [itemError, setItemError] = useState('');
+  const [budgetNumber, setBudgetNumber] = useState('');
+  const [bQty, setBQty] = useState('');
+  const [bUnit, setBUnit] = useState('caps');
+  const [bValue, setBValue] = useState('');
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
+  const [budgetError, setBudgetError] = useState('');
+  const [attendantName, setAttendantName] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [locked, setLocked] = useState(Boolean(formula));
+  const [deliveryStatus, setDeliveryStatus] = useState('');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (formula) {
+      setSelectedCustomerId(formula.customer_id);
+      setItems(formula.items.map(i => ({ ...i })));
+      setBudgetNumber(formula.budget_number ?? '');
+      setBudgetItems((formula.budget_items ?? []).map(bi => ({ ...bi })));
+      setAttendantName(formula.attendant_name ?? '');
+      setDeliveryDate(formula.delivery_date ? formatDateToBR(formula.delivery_date) : '');
+      setPaymentStatus(formula.payment_status ?? '');
+      setPaymentMethod(formula.payment_method ?? '');
+      setDeliveryStatus(formula.delivery_status ?? '');
+      setLocked(true);
+    }
+  }, [formula]);
 
   useEffect(() => {
     if (template) {
       setSelectedCustomerId(template.customer_id);
       setItems(template.items.map(i => ({ ...i })));
+      setBudgetNumber(template.budget_number ?? '');
+      setBudgetItems((template.budget_items ?? []).map(bi => ({ ...bi })));
+      setAttendantName(template.attendant_name ?? '');
+      setDeliveryDate(template.delivery_date ? formatDateToBR(template.delivery_date) : '');
+      setPaymentStatus(template.payment_status ?? '');
+      setPaymentMethod(template.payment_method ?? '');
       setShowTemplateBanner(true);
     }
   }, [template]);
@@ -989,55 +1258,191 @@ function RecipeForm({ user, template, onComplete }: { user: User; template?: For
   const clearForm = () => {
     setSelectedCustomerId('');
     setItems([]);
-    setCurrent({ material_id: '', quantity: '' });
-    setItemError('');
+    setCustomerQuery('');
     setShowAddCustomer(false);
-    setShowAddMaterial(false);
     setShowTemplateBanner(false);
+    setMaterialQuery('');
+    setSelectedMaterialId('');
+    setQuantity('');
+    setUnit('mg');
+    setShowAddMaterial(false);
+    setItemError('');
+    setBudgetNumber('');
+    setBQty('');
+    setBUnit('caps');
+    setBValue('');
+    setBudgetItems([]);
+    setBudgetError('');
+    setAttendantName('');
+    setDeliveryDate('');
+    setPaymentStatus('');
+    setPaymentMethod('');
   };
 
-  const addItem = () => {
-    if (!current.material_id || !current.quantity) return;
-    if (items.find(i => i.material_id === Number(current.material_id))) {
+  const allMaterials = (materials as Material[]) ?? [];
+  const selectedMaterial = allMaterials.find(m => m.id === selectedMaterialId) ?? null;
+  const mq = stripDiacritics(materialQuery.trim().toLowerCase());
+  const filteredMaterials = mq
+    ? allMaterials
+        .filter(m => stripDiacritics((m.name ?? '').toLowerCase()).includes(mq))
+        .sort((a, b) => {
+          const nameA = stripDiacritics((a.name ?? '').toLowerCase());
+          const nameB = stripDiacritics((b.name ?? '').toLowerCase());
+          const diff = (nameB.startsWith(mq) ? 1 : 0) - (nameA.startsWith(mq) ? 1 : 0);
+          if (diff !== 0) return diff;
+          return nameA.localeCompare(nameB);
+        })
+    : [];
+
+  const addIngredient = () => {
+    if (!selectedMaterialId || !quantity) return;
+    if (items.find(i => i.material_id === Number(selectedMaterialId))) {
       setItemError('Esta matéria-prima já foi adicionada à fórmula.');
       return;
     }
-    const mat = (materials as Material[])?.find(m => m.id === Number(current.material_id));
-    setItems([...items, { material_id: Number(current.material_id), material_name: mat?.name ?? '', quantity: Number(current.quantity) }]);
-    setCurrent({ material_id: '', quantity: '' });
+    setItems([...items, { material_id: Number(selectedMaterialId), material_name: selectedMaterial?.name ?? '', quantity: Number(quantity), unit }]);
+    setSelectedMaterialId('');
+    setMaterialQuery('');
+    setQuantity('');
     setItemError('');
   };
 
-  const handleSubmit = async () => {
-    if (!selectedCustomerId || items.length === 0) return;
+  const addBudgetItem = () => {
+    if (!bQty || !bValue) return;
+    setBudgetItems([...budgetItems, { quantity: Number(bQty), unit: bUnit, value: parseCurrency(bValue) }]);
+    setBQty('');
+    setBValue('');
+    setBudgetError('');
+  };
+
+  const canSave = !!selectedCustomerId && items.length > 0;
+  const canConfirm = canSave &&
+    !!budgetNumber && budgetItems.length > 0 &&
+    !!attendantName && !!parseDateBR(deliveryDate) &&
+    !!paymentStatus;
+
+  const buildPayload = (status: string) => ({
+    customer_id: selectedCustomerId as number,
+    pharmacist_name: user.name,
+    items: items.map(i => ({ material_id: i.material_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
+    budget_number: budgetNumber || undefined,
+    budget_items: budgetItems.length > 0 ? budgetItems : undefined,
+    attendant_name: attendantName || undefined,
+    delivery_date: parseDateBR(deliveryDate),
+    payment_status: paymentStatus || undefined,
+    payment_method: paymentMethod || null,
+    delivery_status: deliveryStatus,
+    status,
+  });
+
+  const handleSave = async () => {
+    if (!canSave) return;
     setSaving(true);
     try {
-      await db.formulas.add({
-        customer_id: selectedCustomerId as number,
-        pharmacist_name: user.name,
-        items: items.map(i => ({ material_id: i.material_id, quantity: i.quantity })),
-      });
-      onComplete();
+      if (formula) await db.formulas.update(formula.id, buildPayload('saved'));
+      else await db.formulas.add(buildPayload('saved'));
+      onComplete('saved');
     } finally { setSaving(false); }
   };
+
+  const handleConfirm = async () => {
+    if (!canConfirm) return;
+    setSaving(true);
+    try {
+      if (formula) await db.formulas.update(formula.id, buildPayload('confirmed'));
+      else await db.formulas.add(buildPayload('confirmed'));
+      onComplete('confirmed');
+    } finally { setSaving(false); }
+  };
+
+  const handleSaveConfirmed = async () => {
+    if (!formula) return;
+    setSaving(true);
+    try {
+      await db.formulas.update(formula.id, buildPayload(
+        deliveryStatus === 'entregue' ? 'delivered' : 'confirmed'
+      ));
+      onComplete('confirmed');
+    } finally { setSaving(false); }
+  };
+
+  const handleCancelFormula = async () => {
+    if (!formula || !cancelReason.trim()) return;
+    setSaving(true);
+    try {
+      await db.formulas.update(formula.id, {
+        ...buildPayload('cancelled'),
+        cancel_reason: cancelReason.trim(),
+        payment_status: paymentStatus || undefined,
+        payment_method: paymentMethod || null,
+      });
+      onComplete('confirmed');
+    } finally { setSaving(false); }
+  };
+
+  const allCustomers = (customers as Customer[]) ?? [];
+  const selectedCustomer = allCustomers.find(c => c.id === selectedCustomerId) ?? null;
+  const q = stripDiacritics(customerQuery.trim().toLowerCase());
+  const qDigits = customerQuery.replace(/\D/g, '');
+  const filteredCustomers = (q || qDigits)
+    ? allCustomers
+        .filter(c => {
+          const name = stripDiacritics((c.name ?? '').toLowerCase());
+          const matchesName = q && name.includes(q);
+          const matchesPhone = qDigits && (c.phone ?? '').replace(/\D/g, '').includes(qDigits);
+          return matchesName || matchesPhone;
+        })
+        .sort((a, b) => {
+          const score = (c: Customer) => {
+            const name = stripDiacritics((c.name ?? '').toLowerCase());
+            const phone = (c.phone ?? '').replace(/\D/g, '');
+            let s = 0;
+            if (q && name.startsWith(q)) s += 4;
+            else if (q && name.includes(q)) s += 3;
+            if (qDigits && phone.startsWith(qDigits)) s += 2;
+            else if (qDigits && phone.includes(qDigits)) s += 1;
+            return s;
+          };
+          const diff = score(b) - score(a);
+          if (diff !== 0) return diff;
+          return (a.name ?? '').localeCompare(b.name ?? '');
+        })
+    : [];
 
   return (
     <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">
-            {template ? 'Repetir Receita' : 'Nova Receita'}
+            {formula ? `Fórmula #${formula.id}` : template ? 'Repetir Fórmula' : 'Nova Fórmula'}
           </h2>
           <p className="text-zinc-500 text-sm">Farmacêutico: <strong>{user.name}</strong></p>
         </div>
         <div className="flex items-center gap-3">
-          {(items.length > 0 || selectedCustomerId) && (
-            <button type="button" onClick={clearForm}
-              className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-xl border border-zinc-300 text-zinc-500 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition-all">
-              <Trash2 className="w-3.5 h-3.5" /> Limpar
+          {formula && locked && !confirmed && !readOnly && (
+            <button type="button" onClick={() => setLocked(false)}
+              className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md"
+              style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+              <RefreshCw className="w-3.5 h-3.5" /> Editar
             </button>
           )}
-          <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><PlusCircle className="w-6 h-6 text-red-700" /></div>
+          {formula && confirmed && (
+            <button type="button" disabled={saving} onClick={() => setShowCancelModal(true)}
+              className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+              <X className="w-3.5 h-3.5" /> Cancelar
+            </button>
+          )}
+          {!formula && (
+            <>
+              {(items.length > 0 || selectedCustomerId || budgetItems.length > 0 || budgetNumber || attendantName || deliveryDate || paymentStatus || paymentMethod) && (
+                <button type="button" onClick={clearForm}
+                  className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-xl border border-zinc-300 text-zinc-500 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition-all">
+                  <Trash2 className="w-3.5 h-3.5" /> Limpar
+                </button>
+              )}
+              <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><PlusCircle className="w-6 h-6 text-red-700" /></div>
+            </>
+          )}
         </div>
       </div>
 
@@ -1049,297 +1454,622 @@ function RecipeForm({ user, template, onComplete }: { user: User; template?: For
           Verifique e ajuste antes de finalizar.
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 space-y-4">
-          {/* Cliente */}
-          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-zinc-900 text-sm">1. Cliente</h3>
-              <button type="button" onClick={() => setShowAddCustomer(!showAddCustomer)}
-                className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
-                style={{ color: showAddCustomer ? '#C41E3C' : '#1F3164', background: showAddCustomer ? '#fff0f3' : '#f0f4ff' }}>
-                <PlusCircle className="w-3 h-3" />{showAddCustomer ? 'Fechar' : 'Novo cliente'}
-              </button>
+      {formula && locked && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
+          style={{ background: '#fff0f3', border: '1px solid #fecaca', color: '#C41E3C' }}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {readOnly ? 'Fórmula no histórico — visualização somente leitura.' : confirmed ? 'Fórmula confirmada — apenas pagamento, forma de pagamento e andamento podem ser alterados.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
+        </div>
+      )}
+      {/* Linha 1 — Seleção do Cliente */}
+      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-zinc-900 text-sm">1. Cliente</h3>
+          {!locked && (
+            <button type="button" onClick={() => setShowAddCustomer(!showAddCustomer)}
+              className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
+              style={{ color: showAddCustomer ? '#C41E3C' : '#1F3164', background: showAddCustomer ? '#fff0f3' : '#f0f4ff' }}>
+              <PlusCircle className="w-3 h-3" />{showAddCustomer ? 'Fechar' : '+ Novo cliente'}
+            </button>
+          )}
+        </div>
+
+        {showAddCustomer && (
+          <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
+            <CustomerManager compact onCreated={(c: Customer) => { reloadCustomers(); setSelectedCustomerId(c.id); setShowAddCustomer(false); setCustomerQuery(''); }} />
+          </div>
+        )}
+
+        {selectedCustomer ? (
+          <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 bg-zinc-50">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4 text-red-700" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-zinc-900 text-sm truncate">{selectedCustomer.name}</p>
+                <p className="text-xs text-zinc-500">📱 {selectedCustomer.phone}</p>
+              </div>
             </div>
-            {showAddCustomer && (
-              <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden">
-                <CustomerManager compact onCreated={(c: Customer) => { reloadCustomers(); setSelectedCustomerId(c.id); setShowAddCustomer(false); }} />
+            {!locked && (
+              <button type="button" onClick={() => { setSelectedCustomerId(''); setCustomerQuery(''); }}
+                className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar cliente">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+            <input
+              className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder="Buscar cliente por nome ou telefone..."
+              value={customerQuery}
+              disabled={locked}
+              onChange={e => setCustomerQuery(e.target.value)}
+            />
+            {customerQuery && (
+              <button onClick={() => setCustomerQuery('')} title="Limpar busca"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            {filteredCustomers.length > 0 && (
+              <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+                {filteredCustomers.map(c => (
+                  <button key={c.id} type="button" onClick={() => { setSelectedCustomerId(c.id); setCustomerQuery(''); }}
+                    className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="text-sm text-zinc-800 truncate flex-1">{c.name}</span>
+                    <span className="text-xs text-zinc-400 shrink-0">{c.phone}</span>
+                  </button>
+                ))}
               </div>
             )}
-            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm"
-              value={selectedCustomerId} onChange={e => setSelectedCustomerId(Number(e.target.value))}>
-              <option value="">Selecione um cliente...</option>
-              {(customers as Customer[])?.map(c => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
+            {q || qDigits ? (
+              filteredCustomers.length === 0 && (
+                <p className="text-xs text-zinc-400 mt-1 px-1">Nenhum cliente encontrado.</p>
+              )
+            ) : (
+              <p className="text-xs text-zinc-400 mt-1 px-1">Digite para buscar por nome ou telefone.</p>
+            )}
+          </div>
+        )}
+      </div>
+      {/* Linha 2 — Ingrediente */}
+      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-zinc-900 text-sm">2. Ingrediente</h3>
+          {!locked && (
+            <button type="button" onClick={() => setShowAddMaterial(!showAddMaterial)}
+              className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
+              style={{ color: showAddMaterial ? '#C41E3C' : '#1F3164', background: showAddMaterial ? '#fff0f3' : '#f0f4ff' }}>
+              <PlusCircle className="w-3 h-3" />{showAddMaterial ? 'Fechar' : '+ Novo ingrediente'}
+            </button>
+          )}
+        </div>
+
+        {showAddMaterial && (
+          <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
+            <MaterialManager compact onCreated={(m: Material) => { reloadMaterials(); setSelectedMaterialId(m.id); setShowAddMaterial(false); setMaterialQuery(''); }} />
+          </div>
+        )}
+
+        {selectedMaterial ? (
+          <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 bg-zinc-50 mb-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                <ClipboardList className="w-4 h-4 text-red-700" />
+              </div>
+              <p className="font-semibold text-zinc-900 text-sm truncate">{selectedMaterial.name}</p>
+            </div>
+            {!locked && (
+              <button type="button" onClick={() => { setSelectedMaterialId(''); setMaterialQuery(''); }}
+                className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar ingrediente">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+            <input
+              className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder="Buscar ingrediente por nome..."
+              value={materialQuery}
+              disabled={locked}
+              onChange={e => setMaterialQuery(e.target.value)}
+            />
+            {materialQuery && (
+              <button onClick={() => setMaterialQuery('')} title="Limpar busca"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            {filteredMaterials.length > 0 && (
+              <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+                {filteredMaterials.map(m => (
+                  <button key={m.id} type="button" onClick={() => { setSelectedMaterialId(m.id); setMaterialQuery(''); }}
+                    className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
+                    <ClipboardList className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="text-sm text-zinc-800 truncate flex-1">{m.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {mq && filteredMaterials.length === 0 && (
+              <p className="text-xs text-zinc-400 mt-1 px-1">Nenhum ingrediente encontrado.</p>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="sm:w-32">
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
+            <input
+              inputMode="numeric"
+              maxLength={4}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder="0–9999"
+              value={quantity}
+              disabled={locked}
+              onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            />
+          </div>
+          <div className="sm:w-36">
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
+            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              value={unit} disabled={locked} onChange={e => setUnit(e.target.value)}>
+              <option value="g">g</option>
+              <option value="mcg">mcg</option>
+              <option value="ui">ui</option>
+              <option value="mg">mg</option>
             </select>
           </div>
-
-          {/* Matéria-prima */}
-          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-zinc-900 text-sm">2. Ingrediente</h3>
-              <button type="button" onClick={() => setShowAddMaterial(!showAddMaterial)}
-                className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
-                style={{ color: showAddMaterial ? '#C41E3C' : '#1F3164', background: showAddMaterial ? '#fff0f3' : '#f0f4ff' }}>
-                <PlusCircle className="w-3 h-3" />{showAddMaterial ? 'Fechar' : 'Nova matéria-prima'}
-              </button>
-            </div>
-            {showAddMaterial && (
-              <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden">
-                <MaterialManager compact onCreated={(m: Material) => { reloadMaterials(); setCurrent({ ...current, material_id: m.id }); setShowAddMaterial(false); }} />
-              </div>
-            )}
-            <div className="space-y-2">
-              <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm"
-                value={current.material_id}
-                onChange={e => { setCurrent({ ...current, material_id: Number(e.target.value) }); setItemError(''); }}>
-                <option value="">Selecione...</option>
-                {(materials as Material[])?.map(m => (
-                  <option key={m.id} value={m.id} disabled={!!items.find(i => i.material_id === m.id)}>
-                    {m.name}{items.find(i => i.material_id === m.id) ? ' ✓ (já adicionado)' : ''}
-                  </option>
-                ))}
-              </select>
-              <input type="number" min="0.001" step="0.001" placeholder="Quantidade (mg)"
-                className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                value={current.quantity}
-                onChange={e => setCurrent({ ...current, quantity: Number(e.target.value) })}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } }} />
-              {itemError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{itemError}</p>}
-              <button type="button" onClick={addItem}
-                className="w-full text-white py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all"
+          <div className="flex-1 space-y-1">
+            {itemError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{itemError}</p>}
+            {!locked && (
+              <button type="button" disabled={!selectedMaterialId || !quantity} onClick={addIngredient}
+                className="w-full text-white py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
                 + Adicionar à fórmula
               </button>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Composição */}
-        <div className="md:col-span-2">
-          <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm min-h-[420px] flex flex-col">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-semibold text-zinc-900">Composição da Fórmula</h3>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0f4ff', color: '#1F3164' }}>
-                {items.length} {items.length === 1 ? 'ingrediente' : 'ingredientes'}
-              </span>
-            </div>
-            <div className="flex-1 space-y-2 overflow-y-auto">
-              {items.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-zinc-300 gap-2 py-12">
-                  <FileText className="w-14 h-14 opacity-30" /><p className="text-sm">Nenhum ingrediente adicionado.</p>
-                </div>
-              ) : items.map((item, idx) => (
+        <div className="mt-4 pt-3 border-t border-zinc-100">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Ingredientes adicionados</h4>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff0f3', color: '#C41E3C' }}>
+              {items.length} {items.length === 1 ? 'ingrediente' : 'ingredientes'}
+            </span>
+          </div>
+
+          {items.length === 0 ? (
+            <p className="text-sm text-zinc-400">Nenhum ingrediente adicionado ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {items.map((item, idx) => (
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={item.material_id}
                   className="flex items-center justify-between p-3 rounded-xl border border-zinc-100"
                   style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
-                  <div>
-                    <p className="font-semibold text-zinc-900 text-sm">{item.material_name}</p>
-                    <p className="text-xs text-zinc-400">{item.quantity} mg</p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-zinc-900 text-sm truncate">{item.material_name}</p>
+                    <p className="text-xs text-zinc-400">{item.quantity}{item.unit ?? 'mg'}</p>
                   </div>
-                  <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setItemError(''); }}
-                    className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {!locked && (
+                    <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setItemError(''); }}
+                      className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover ingrediente">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </motion.div>
               ))}
             </div>
-            <div className="mt-6 pt-5 border-t border-zinc-100 space-y-2">
-              <button type="button" disabled={!selectedCustomerId || items.length === 0 || saving} onClick={handleSubmit}
-                className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #C41E3C, #1F3164)' }}>
-                {saving ? 'Salvando...' : '✓ Finalizar e Enviar para Fila'}
-              </button>
-              {(!selectedCustomerId || items.length === 0) && (
-                <p className="text-center text-xs text-zinc-400">
-                  {!selectedCustomerId ? 'Selecione um cliente para continuar' : 'Adicione ao menos um ingrediente'}
-                </p>
-              )}
+          )}
+        </div>
+      </div>
+
+      {/* Linha 3 — Orçamento */}
+      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+        <h3 className="font-semibold text-zinc-900 text-sm mb-4">3. Orçamento</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Número de orçamento</label>
+            <input
+              inputMode="numeric"
+              maxLength={6}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder="000000"
+              value={budgetNumber}
+              disabled={locked}
+              onChange={e => setBudgetNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            />
+          </div>
+
+          <div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="sm:w-28">
+                <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
+                <input
+                  inputMode="numeric"
+                  maxLength={3}
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
+                  placeholder="0–999"
+                  value={bQty}
+                  disabled={locked}
+                  onChange={e => { setBudgetError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 3)); }}
+                />
+              </div>
+              <div className="sm:w-24">
+                <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
+                <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  value={bUnit} disabled={locked} onChange={e => setBUnit(e.target.value)}>
+                  <option value="caps">caps</option>
+                  <option value="ml">ml</option>
+                  <option value="g">g</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
+                <input
+                  inputMode="numeric"
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
+                  placeholder="0,00"
+                  value={bValue}
+                  disabled={locked}
+                  onChange={e => { setBudgetError(''); setBValue(formatCurrency(e.target.value)); }}
+                />
+              </div>
+              <div className="space-y-1">
+                {!locked && (
+                  <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
+                    className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+                    + Adicionar
+                  </button>
+                )}
+                {budgetError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{budgetError}</p>}
+              </div>
             </div>
+
+            {budgetItems.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {budgetItems.map((bi, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-zinc-100"
+                    style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
+                    <p className="text-sm text-zinc-700">
+                      <strong>{bi.quantity}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </p>
+                    {!locked && (
+                      <button type="button" onClick={() => setBudgetItems(budgetItems.filter((_, i) => i !== idx))}
+                        className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover item do orçamento">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Bloco 4 — Informações */}
+      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+        <h3 className="font-semibold text-zinc-900 text-sm mb-4">4. Informações</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Atendente da PM</label>
+            <input
+              type="text"
+              maxLength={100}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder="Nome do atendente..."
+              value={attendantName}
+              disabled={locked}
+              onChange={e => setAttendantName(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Data de entrega</label>
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="DD/MM/AAAA"
+                className="w-full pr-10 px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                value={deliveryDate}
+                disabled={locked}
+                onChange={e => {
+                  const masked = formatDateBR(e.target.value);
+                  setDeliveryDate(masked);
+                  if (dateInputRef.current) dateInputRef.current.value = parseDateBR(masked) ?? '';
+                }}
+              />
+              {!locked && deliveryDate && (
+                <button type="button" onClick={() => { setDeliveryDate(''); if (dateInputRef.current) dateInputRef.current.value = ''; }}
+                  className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors" title="Limpar data">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <button type="button" onClick={() => dateInputRef.current?.showPicker()} disabled={locked}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-red-700 transition-colors rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed" title="Abrir calendário">
+                <Calendar className="w-4 h-4" />
+              </button>
+            </div>
+            <input
+              ref={dateInputRef}
+              type="date"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={e => setDeliveryDate(e.target.value ? formatDateToBR(e.target.value) : '')}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bloco 5 — Finalizar */}
+      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+        <h3 className="font-semibold text-zinc-900 text-sm mb-4">5. Finalizar</h3>
+        <div className={(confirmed || readOnly) ? 'grid grid-cols-1 gap-6 md:grid-cols-3' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
+            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              value={paymentStatus} disabled={locked && !confirmed} onChange={e => setPaymentStatus(e.target.value)}>
+              <option value="">Selecione...</option>
+              <option value="pago">Pago</option>
+              <option value="parcial">Parcial</option>
+              <option value="nao_pago">Não Pago</option>
+              <option value="pagar_na_retirada">Pagar na retirada</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Forma de pagamento</label>
+            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              value={paymentMethod} disabled={locked && !confirmed} onChange={e => setPaymentMethod(e.target.value)}>
+              <option value="">Selecione (opcional)...</option>
+              <option value="cartao">Cartão</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="pix">Pix</option>
+            </select>
+          </div>
+          {confirmed && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Andamento</label>
+              <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                value={deliveryStatus} disabled={(locked && !confirmed) || paymentStatus !== 'pago'} onChange={e => setDeliveryStatus(e.target.value)}>
+                <option value="">Selecione...</option>
+                <option value="em_producao">Em produção</option>
+                <option value="aguardando_retirada">Aguardando retirada</option>
+                <option value="aguardando_envio">Aguardando envio</option>
+                <option value="entregue">Entregue</option>
+              </select>
+            </div>
+          )}
+          {readOnly && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Andamento</label>
+              <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                value={deliveryStatus} disabled>
+                <option value="">Não definido</option>
+                <option value="em_producao">Em produção</option>
+                <option value="aguardando_retirada">Aguardando retirada</option>
+                <option value="aguardando_envio">Aguardando envio</option>
+                <option value="entregue">Entregue</option>
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bloco 6 — Ações */}
+      {!locked && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <button type="button" disabled={!canSave || saving} onClick={handleSave}
+              className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+              {saving ? 'Salvando...' : '💾 Salvar'}
+            </button>
+            <p className="text-center text-xs text-zinc-400 mt-2">
+              {canSave ? 'Precisa de cliente e pelo menos 1 ingrediente' : 'Preencha o cliente e ao menos 1 ingrediente (blocos 1 e 2)'}
+            </p>
+          </div>
+          <div>
+            <button type="button" disabled={!canConfirm || saving} onClick={handleConfirm}
+              className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+              {saving ? 'Salvando...' : '✓ Confirmar'}
+            </button>
+            <p className="text-center text-xs text-zinc-400 mt-2">
+              {canConfirm
+                ? 'Pronto para confirmar'
+                : 'Preencha cliente, ingredientes, orçamento, informações e o pagamento (blocos 1 a 5)'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {formula && confirmed && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="md:col-span-2">
+            <button type="button" disabled={saving} onClick={handleSaveConfirmed}
+              className="w-full text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+              {saving ? 'Salvando...' : '💾 Salvar alterações'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { if (!saving) setShowCancelModal(false); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <X className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-zinc-900 text-lg">Cancelar fórmula</h3>
+                <p className="text-xs text-zinc-500">A fórmula sairá da fila de confirmadas.</p>
+              </div>
+            </div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Justificativa (obrigatória)</label>
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm min-h-[90px] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder="Informe o motivo do cancelamento..."
+              value={cancelReason} disabled={saving}
+              onChange={e => setCancelReason(e.target.value)} />
+            <div className="flex gap-3 mt-4">
+              <button type="button" disabled={saving} onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-300 text-zinc-600 font-semibold text-sm hover:bg-zinc-50 transition-all disabled:opacity-50">
+                Voltar
+              </button>
+              <button type="button" disabled={!cancelReason.trim() || saving} onClick={handleCancelFormula}
+                className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+                {saving ? 'Cancelando...' : 'Confirmar cancelamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
 
-// ─── FormulaQueue ──────────────────────────────────────────────────────────────
+// ─── FormulaList ─────────────────────────────────────────────────────────────────
 
-function FormulaQueue({ user, onRepeat }: { user: User; onRepeat: (f: Formula) => void }) {
+function FormulaList({ title, subtitle, statuses, variant = 'saved', statusFilterOptions, onSelect }: { title: string; subtitle: string; statuses: string[]; variant?: 'saved' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; onSelect?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
-
-  const updateStatus = async (id: number, status: 'pending' | 'completed') => {
-    await db.formulas.updateStatus(id, status); reload();
-  };
-
-  const handleDelete = async (id: number) => {
-    if (user.role !== 'admin') return;
-    if (!confirm('Excluir esta fórmula? Esta ação não pode ser desfeita.')) return;
-    await db.formulas.remove(id); reload();
-  };
-
-  const downloadReport = (f: Formula) => {
-    const content = [
-      `FÓRMULA #${f.id} — PIX FARMA`,
-      `═══════════════════════════════`,
-      `Cliente:     ${f.customer_name}`,
-      `Celular:     ${f.customer_phone || '—'}`,
-      `Farmacêutico: ${f.pharmacist_name || '—'}`,
-      `Data:        ${new Date(f.created_at).toLocaleString('pt-BR')}`,
-      `Status:      ${f.status === 'completed' ? 'Concluído' : 'Pendente'}`,
-      ``,
-      `INGREDIENTES`,
-      `───────────────────────────────`,
-      ...f.items.map(i => `  ${i.material_name.padEnd(25)} ${i.quantity} mg`),
-    ].join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-    a.download = `formula_${f.id}_${f.customer_name.replace(/\s+/g,'_')}.txt`;
-    a.click();
-  };
+  const [statusFilter, setStatusFilter] = useState('');
 
   const all = (formulas as Formula[]) ?? [];
   const filtered = all
-    .filter(f => f.status === activeTab)
+    .filter(f => statuses.includes(f.status))
+    .filter(f => !statusFilter || f.status === statusFilter)
     .filter(f =>
       f.customer_name.toLowerCase().includes(search.toLowerCase()) ||
       (f.pharmacist_name || '').toLowerCase().includes(search.toLowerCase()) ||
       String(f.id).includes(search)
     );
 
-  const pendingCount = all.filter(f => f.status === 'pending').length;
-  const completedCount = all.filter(f => f.status === 'completed').length;
+  const paymentTint: Record<string, string> = {
+    pago: 'bg-emerald-50 border-emerald-200',
+    parcial: 'bg-amber-50 border-amber-200',
+    nao_pago: 'bg-red-50 border-red-200',
+    pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
+  };
+  const gridCols = 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-900">Fila de Produção</h2>
-          <p className="text-zinc-500 text-sm">Gerencie as fórmulas em manipulação</p>
+          <h2 className="text-2xl font-bold text-zinc-900">{title}</h2>
+          <p className="text-zinc-500 text-sm">{subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={reload} className="p-2 text-zinc-400 hover:text-zinc-700 transition-colors" title="Atualizar"><RefreshCw className="w-5 h-5" /></button>
+          {statusFilterOptions && (
+            <select className="px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm"
+              value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">Todos os status</option>
+              {statusFilterOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-            <input className="pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm min-w-[260px]"
+            <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm min-w-[260px]"
               placeholder="Buscar cliente, farmacêutico ou ID..." value={search} onChange={e => setSearch(e.target.value)} />
+            {search && (
+              <button onClick={() => setSearch('')} title="Limpar busca"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Abas */}
-      <div className="flex gap-3">
-        <button onClick={() => setActiveTab('pending')}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all"
-          style={activeTab === 'pending'
-            ? { background: 'linear-gradient(135deg, #C41E3C, #A01830)', color: 'white', boxShadow: '0 4px 12px rgba(196,30,60,0.3)' }
-            : { background: 'white', color: '#C41E3C', border: '2px solid #C41E3C' }}>
-          <Clock className="w-4 h-4" /> Pendentes
-          <span className="ml-1 text-xs font-black px-1.5 py-0.5 rounded-full"
-            style={{ background: activeTab === 'pending' ? 'rgba(255,255,255,0.2)' : '#fff0f3' }}>
-            {pendingCount}
-          </span>
-        </button>
-        <button onClick={() => setActiveTab('completed')}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all"
-          style={activeTab === 'completed'
-            ? { background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }
-            : { background: 'white', color: '#16a34a', border: '2px solid #16a34a' }}>
-          <CheckCircle2 className="w-4 h-4" /> Concluídas
-          <span className="ml-1 text-xs font-black px-1.5 py-0.5 rounded-full"
-            style={{ background: activeTab === 'completed' ? 'rgba(255,255,255,0.2)' : '#f0fdf4' }}>
-            {completedCount}
-          </span>
-        </button>
       </div>
 
       {loading && <LoadingState />}
       {error && <ErrorState message={error} onRetry={reload} />}
       {!loading && !error && (
         <div className="space-y-3">
-          {filtered.map(f => (
-            <motion.div layout key={f.id}
-              className="bg-white rounded-2xl border shadow-sm overflow-hidden"
-              style={{ borderColor: f.status === 'completed' ? '#bbf7d0' : '#fecaca' }}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5">
-                {/* Info cliente */}
-                <div className="flex items-start gap-4 min-w-0">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white text-xs font-black"
-                    style={{ background: f.status === 'completed' ? 'linear-gradient(135deg,#16a34a,#15803d)' : 'linear-gradient(135deg,#C41E3C,#A01830)' }}>
-                    #{f.id}
+          {filtered.length > 0 && variant === 'confirmed' && (
+            <div className={`hidden md:grid ${gridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
+              <span>Cliente</span><span>Quantidade</span><span>Valor</span><span>Atendente PM</span>
+              <span>Data criação</span><span>Data entrega</span><span>Telefone</span><span />
+            </div>
+          )}
+          {filtered.map(f => {
+            const tint = paymentTint[f.payment_status ?? ''] ?? 'bg-white border-zinc-200';
+            return variant === 'confirmed' ? (
+              <button key={f.id} type="button" onClick={() => onSelect?.(f)}
+                className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group ${tint}`}>
+                <div className={`grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr] gap-2 items-center text-sm`}>
+                  <p className="font-bold text-zinc-900">{f.customer_name}</p>
+                  <div className="text-zinc-700 space-y-0.5 font-medium">
+                    {(f.budget_items ?? []).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{bi.quantity} {bi.unit}</p>)}
+                    {(f.budget_items ?? []).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${f.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                        {f.status === 'completed' ? '✓ Concluído' : '⏳ Pendente'}
-                      </span>
-                      {f.sync_status === 'pending' && (
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">↑ sync pendente</span>
-                      )}
+                  <div className="text-zinc-700 space-y-0.5 tabular-nums">
+                    {(f.budget_items ?? []).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
+                    {(f.budget_items ?? []).length === 0 && <p className="text-zinc-400">—</p>}
+                  </div>
+                  <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
+                  <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
+                  <p className="text-zinc-700 whitespace-nowrap">{f.customer_phone || '—'}</p>
+                  <div className="flex justify-end">
+                    <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
+                      <ChevronRight className="w-4 h-4" />
                     </div>
-                    <h4 className="font-bold text-zinc-900">{f.customer_name}</h4>
-                    <div className="flex items-center gap-3 text-xs text-zinc-500 mt-0.5 flex-wrap">
-                      {f.customer_phone && <span>📱 {f.customer_phone}</span>}
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <button key={f.id} type="button" onClick={() => onSelect?.(f)}
+                className="w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm p-5 hover:border-red-300 hover:shadow-md transition-all group">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold text-zinc-900 text-lg">{f.customer_name}</h4>
+                    <div className="flex items-center gap-3 text-xs text-zinc-500 mt-1 flex-wrap">
                       {f.pharmacist_name && <span>👨‍⚕️ {f.pharmacist_name}</span>}
                       <span>🕐 {new Date(f.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
                     </div>
-                  </div>
-                </div>
 
-                {/* Ingredientes */}
-                <div className="flex-1 min-w-0 max-w-sm">
-                  <div className="flex flex-wrap gap-1.5">
-                    {f.items.map((item, idx) => (
-                      <span key={idx} className="text-xs bg-zinc-50 border border-zinc-100 px-2 py-0.5 rounded-lg text-zinc-600 font-medium">
-                        {item.material_name} <span className="text-zinc-400">{item.quantity}mg</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Ações */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {f.status === 'pending' ? (
-                    <button onClick={() => updateStatus(f.id, 'completed')}
-                      className="text-white px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-md"
-                      style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                      ✓ Concluir
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => onRepeat(f)}
-                        className="text-sm font-semibold px-3 py-2 rounded-xl border-2 transition-colors flex items-center gap-1.5"
-                        style={{ color: '#1F3164', borderColor: '#1F3164' }}
-                        title="Criar nova receita com os mesmos dados">
-                        <RefreshCw className="w-3.5 h-3.5" /> Repetir
-                      </button>
-                      <button onClick={() => updateStatus(f.id, 'pending')}
-                        className="text-sm font-medium px-3 py-2 rounded-xl border transition-colors"
-                        style={{ color: '#C41E3C', borderColor: '#C41E3C' }}>
-                        Reabrir
-                      </button>
+                    <div className="mt-3 space-y-1">
+                      {f.items.slice(0, 3).map((item, idx) => (
+                        <p key={idx} className="text-sm text-zinc-600">
+                          <span className="text-zinc-300">•</span> {item.material_name} <span className="text-zinc-400">{item.quantity}{item.unit ?? 'mg'}</span>
+                        </p>
+                      ))}
+                      {f.items.length > 3 && (
+                        <p className="text-xs text-zinc-400 font-medium pt-0.5">
+                          Mais {f.items.length - 3} ingrediente{f.items.length - 3 === 1 ? '' : 's'}
+                        </p>
+                      )}
                     </div>
-                  )}
-                  <button onClick={() => downloadReport(f)} className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors rounded-lg hover:bg-zinc-50" title="Baixar relatório">
-                    <FileText className="w-4 h-4" />
-                  </button>
-                  {user.role === 'admin' && (
-                    <button onClick={() => handleDelete(f.id)} className="p-2 text-zinc-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50" title="Excluir fórmula">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  </div>
+
+                  <div className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
+                    <ChevronRight className="w-5 h-5" />
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </button>
+            );
+          })}
 
           {filtered.length === 0 && (
             <div className="py-16 text-center text-zinc-400">
-              {activeTab === 'pending'
-                ? <><CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-emerald-300" /><p className="font-medium text-emerald-600">Nenhuma fórmula pendente!</p><p className="text-sm mt-1">Todas as fórmulas foram concluídas.</p></>
-                : <><Clock className="w-12 h-12 mx-auto mb-3 opacity-20" /><p>Nenhuma fórmula concluída ainda.</p></>
-              }
+              <p className="font-medium">Nenhuma fórmula nesta lista ainda.</p>
             </div>
           )}
         </div>

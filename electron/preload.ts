@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Fórmulas
   listFormulas:         ()                        => ipcRenderer.invoke('formulas:list'),
   addFormula:           (f: any)                  => ipcRenderer.invoke('formulas:add', f),
+  updateFormula:        (id: number, f: any)      => ipcRenderer.invoke('formulas:update', id, f),
   updateFormulaStatus:  (id: number, s: string)   => ipcRenderer.invoke('formulas:update-status', id, s),
   deleteFormula:        (id: number)              => ipcRenderer.invoke('formulas:delete', id),
 
