@@ -163,11 +163,12 @@ export class CacheManager {
       );
 
       CREATE TABLE IF NOT EXISTS formula_budget_items (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        formula_id INTEGER NOT NULL,
-        quantity   REAL NOT NULL,
-        unit       TEXT NOT NULL DEFAULT 'caps',
-        value      REAL NOT NULL DEFAULT 0
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        formula_id  INTEGER NOT NULL,
+        quantity    REAL NOT NULL,
+        unit        TEXT NOT NULL DEFAULT 'caps',
+        value       REAL NOT NULL DEFAULT 0,
+        is_selected INTEGER NOT NULL DEFAULT 0
       );
     `;
 
@@ -187,10 +188,14 @@ export class CacheManager {
       `ALTER TABLE formulas ADD COLUMN payment_method TEXT`,
       `ALTER TABLE formulas ADD COLUMN delivery_status TEXT NOT NULL DEFAULT ''`,
       `ALTER TABLE formulas ADD COLUMN cancel_reason TEXT`,
+      `ALTER TABLE formula_budget_items ADD COLUMN is_selected INTEGER NOT NULL DEFAULT 0`,
     ];
     for (const sql of migrations) {
       try { this.db.exec(sql); } catch (_) { /* coluna já existe — ignorar */ }
     }
+
+    // ── Migração de dados: status 'saved' unificado em 'pending' ─────────────
+    this.db.exec(`UPDATE formulas SET status = 'pending' WHERE status = 'saved'`);
 
     // ── Migração: customers sem cpf, phone único ─────────────────────────────
     const custCols = this.db.exec(`PRAGMA table_info(customers)`)[0]?.values ?? [];
@@ -470,7 +475,7 @@ export class CacheManager {
         `SELECT material_id, material_name, quantity, unit FROM formula_items WHERE formula_id=?`, [f.id]
       );
       f.budget_items = this.query(
-        `SELECT quantity, unit, value FROM formula_budget_items WHERE formula_id=?`, [f.id]
+        `SELECT quantity, unit, value, is_selected FROM formula_budget_items WHERE formula_id=?`, [f.id]
       );
     }
     return formulas;
@@ -481,7 +486,7 @@ export class CacheManager {
     pharmacist_name: string;
     items: Array<{ material_id: number; quantity: number; unit?: string }>;
     budget_number?: string;
-    budget_items?: Array<{ quantity: number; unit: string; value: number }>;
+    budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
     attendant_name?: string;
     delivery_date?: string | null;
     payment_status?: string;
@@ -498,7 +503,7 @@ export class CacheManager {
       [formula.customer_id, customer.name, customer.phone ?? '', formula.pharmacist_name,
        formula.budget_number ?? '', formula.attendant_name ?? '', formula.delivery_date ?? null,
        formula.payment_status ?? '', formula.payment_method ?? null, formula.delivery_status ?? '',
-       formula.cancel_reason ?? null, formula.status ?? 'saved']);
+       formula.cancel_reason ?? null, formula.status ?? 'pending']);
     const formulaId = this.lastId();
 
     for (const item of formula.items) {
@@ -508,8 +513,8 @@ export class CacheManager {
     }
 
     for (const bi of formula.budget_items ?? []) {
-      this.exec(`INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)`,
-        [formulaId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
+      this.exec(`INSERT INTO formula_budget_items (formula_id, quantity, unit, value, is_selected) VALUES (?,?,?,?,?)`,
+        [formulaId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
     }
 
     this.save();
@@ -521,7 +526,7 @@ export class CacheManager {
     pharmacist_name: string;
     items: Array<{ material_id: number; quantity: number; unit?: string }>;
     budget_number?: string;
-    budget_items?: Array<{ quantity: number; unit: string; value: number }>;
+    budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
     attendant_name?: string;
     delivery_date?: string | null;
     payment_status?: string;
@@ -537,7 +542,7 @@ export class CacheManager {
       [formula.customer_id, customer.name, customer.phone ?? '', formula.pharmacist_name,
        formula.budget_number ?? '', formula.attendant_name ?? '', formula.delivery_date ?? null,
        formula.payment_status ?? '', formula.payment_method ?? null, formula.delivery_status ?? '',
-       formula.cancel_reason ?? null, formula.status ?? 'saved', id]);
+       formula.cancel_reason ?? null, formula.status ?? 'pending', id]);
 
     this.exec(`DELETE FROM formula_items WHERE formula_id=?`, [id]);
     for (const item of formula.items) {
@@ -548,8 +553,8 @@ export class CacheManager {
 
     this.exec(`DELETE FROM formula_budget_items WHERE formula_id=?`, [id]);
     for (const bi of formula.budget_items ?? []) {
-      this.exec(`INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)`,
-        [id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
+      this.exec(`INSERT INTO formula_budget_items (formula_id, quantity, unit, value, is_selected) VALUES (?,?,?,?,?)`,
+        [id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
     }
 
     this.save();
@@ -558,6 +563,15 @@ export class CacheManager {
 
   updateFormulaStatus(id: number, status: string) {
     this.exec(`UPDATE formulas SET status=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`, [status, id]);
+    this.save();
+    return { success: true };
+  }
+
+  updateFormulaDeliveryStatus(id: number, deliveryStatus: string) {
+    this.exec(
+      `UPDATE formulas SET delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' ELSE status END, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
+      [deliveryStatus, deliveryStatus, id]
+    );
     this.save();
     return { success: true };
   }
@@ -671,8 +685,9 @@ export class CacheManager {
         try { await this.qServer(`ALTER TABLE formulas ADD COLUMN ${col} ${def}`); } catch (_) {}
       }
     }
-    // Novos valores no ENUM de status (cancelled, delivered)
-    await this.qServer(`ALTER TABLE formulas MODIFY COLUMN status ENUM('pending','completed','saved','confirmed','cancelled','delivered') NOT NULL DEFAULT 'saved'`).catch(() => {});
+    // Status 'saved' unificado em 'pending' (fila "Pendentes")
+    await this.qServer(`UPDATE formulas SET status = 'pending' WHERE status = 'saved'`).catch(() => {});
+    await this.qServer(`ALTER TABLE formulas MODIFY COLUMN status ENUM('pending','completed','confirmed','cancelled','delivered') NOT NULL DEFAULT 'pending'`).catch(() => {});
     // Unidade de medida dos itens (g, mcg, ui, mg)
     try {
       await this.qServer('SELECT unit FROM formula_items LIMIT 1');
@@ -682,14 +697,20 @@ export class CacheManager {
     // Tabela de itens de orçamento (quantidade, unidade caps/ml/g, valor)
     await this.qServer(`
       CREATE TABLE IF NOT EXISTS formula_budget_items (
-        id         INT AUTO_INCREMENT PRIMARY KEY,
-        formula_id INT            NOT NULL,
-        quantity   DECIMAL(10,3)  NOT NULL,
-        unit       VARCHAR(5)     NOT NULL DEFAULT 'caps',
-        value      DECIMAL(10,2)  NOT NULL DEFAULT 0,
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        formula_id  INT            NOT NULL,
+        quantity    DECIMAL(10,3)  NOT NULL,
+        unit        VARCHAR(5)     NOT NULL DEFAULT 'caps',
+        value       DECIMAL(10,2)  NOT NULL DEFAULT 0,
+        is_selected TINYINT(1)     NOT NULL DEFAULT 0,
         FOREIGN KEY (formula_id) REFERENCES formulas(id) ON DELETE CASCADE
       ) ENGINE=InnoDB
     `).catch(() => {});
+    try {
+      await this.qServer('SELECT is_selected FROM formula_budget_items LIMIT 1');
+    } catch (_) {
+      try { await this.qServer(`ALTER TABLE formula_budget_items ADD COLUMN is_selected TINYINT(1) NOT NULL DEFAULT 0`); } catch (_) {}
+    }
   }
 
   // Retorna o instance_id atual do servidor
@@ -876,8 +897,8 @@ export class CacheManager {
             }
             for (const bi of budgetItems) {
               await conn.query(
-                'INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)',
-                [fRes.insertId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]
+                'INSERT INTO formula_budget_items (formula_id, quantity, unit, value, is_selected) VALUES (?,?,?,?,?)',
+                [fRes.insertId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]
               );
             }
             await conn.commit();
@@ -912,8 +933,8 @@ export class CacheManager {
             await conn.query('DELETE FROM formula_budget_items WHERE formula_id=?', [f.server_id]);
             for (const bi of budgetItems) {
               await conn.query(
-                'INSERT INTO formula_budget_items (formula_id, quantity, unit, value) VALUES (?,?,?,?)',
-                [f.server_id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]
+                'INSERT INTO formula_budget_items (formula_id, quantity, unit, value, is_selected) VALUES (?,?,?,?,?)',
+                [f.server_id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]
               );
             }
             await conn.commit();
@@ -1029,12 +1050,12 @@ export class CacheManager {
         }
 
         const budgetItems = await this.qServer<any[]>(
-          `SELECT quantity, unit, value FROM formula_budget_items WHERE formula_id=?`, [f.id]
+          `SELECT quantity, unit, value, is_selected FROM formula_budget_items WHERE formula_id=?`, [f.id]
         );
         this.exec(`DELETE FROM formula_budget_items WHERE formula_id=?`, [localFId]);
         for (const bi of budgetItems) {
-          this.exec(`INSERT INTO formula_budget_items (formula_id,quantity,unit,value) VALUES (?,?,?,?)`,
-            [localFId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
+          this.exec(`INSERT INTO formula_budget_items (formula_id,quantity,unit,value,is_selected) VALUES (?,?,?,?,?)`,
+            [localFId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
         }
       } else {
         try {
@@ -1059,11 +1080,11 @@ export class CacheManager {
             }
 
             const budgetItems = await this.qServer<any[]>(
-              `SELECT quantity, unit, value FROM formula_budget_items WHERE formula_id=?`, [f.id]
+              `SELECT quantity, unit, value, is_selected FROM formula_budget_items WHERE formula_id=?`, [f.id]
             );
             for (const bi of budgetItems) {
-              this.exec(`INSERT INTO formula_budget_items (formula_id,quantity,unit,value) VALUES (?,?,?,?)`,
-                [localFId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0]);
+              this.exec(`INSERT INTO formula_budget_items (formula_id,quantity,unit,value,is_selected) VALUES (?,?,?,?,?)`,
+                [localFId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
             }
           }
         } catch (_) {}

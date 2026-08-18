@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS formulas (
   payment_method  VARCHAR(20)  NULL,
   delivery_status VARCHAR(20)  NOT NULL DEFAULT '',
   cancel_reason   TEXT         NULL,
-  status          ENUM('pending','completed','saved','confirmed','cancelled','delivered') NOT NULL DEFAULT 'saved',
+  status          ENUM('pending','completed','confirmed','cancelled','delivered') NOT NULL DEFAULT 'pending',
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
@@ -62,11 +62,12 @@ CREATE TABLE IF NOT EXISTS formula_items (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS formula_budget_items (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  formula_id INT            NOT NULL,
-  quantity   DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
-  unit       VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, ml, g',
-  value      DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  formula_id  INT            NOT NULL,
+  quantity    DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
+  unit        VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, ml, g',
+  value       DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
+  is_selected TINYINT(1)     NOT NULL DEFAULT 0 COMMENT 'orçamento escolhido',
   FOREIGN KEY (formula_id) REFERENCES formulas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

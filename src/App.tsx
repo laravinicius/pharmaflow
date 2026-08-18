@@ -3,7 +3,7 @@ import {
   Users, Cross, ClipboardList, UserPlus, PlusCircle, LogOut,
   Trash2, CheckCircle2, Clock, FileText, ChevronRight, Search,
   Menu, Settings, RefreshCw, Wifi, WifiOff, AlertCircle, CloudOff,
-  CloudUpload, CheckCircle, Calendar, X, History,
+  CloudUpload, CheckCircle, Calendar, X, History, AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
@@ -14,10 +14,10 @@ interface User { id: number; name: string; username: string; role: 'admin' | 'em
 interface Customer { id: number; name: string; phone: string; created_at?: string }
 interface Material { id: number; name: string }
 interface FormulaItem { material_id: number; material_name: string; quantity: number; unit?: string }
-interface BudgetItem { quantity: number; unit: string; value: number }
+interface BudgetItem { quantity: number; unit: string; value: number; is_selected?: boolean }
 interface Formula {
   id: number; customer_id: number; customer_name: string; customer_phone: string;
-  pharmacist_name: string; status: 'pending' | 'completed' | 'saved' | 'confirmed' | 'cancelled' | 'delivered'; sync_status: string;
+  pharmacist_name: string; status: 'pending' | 'completed' | 'confirmed' | 'cancelled' | 'delivered'; sync_status: string;
   created_at: string; items: FormulaItem[]; budget_number?: string; budget_items?: BudgetItem[];
   attendant_name?: string; delivery_date?: string | null;
   payment_status?: string; payment_method?: string | null;
@@ -145,7 +145,7 @@ function useData<T>(fetcher: () => Promise<T>, deps: any[] = []) {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setupMode, setSetupMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'saved' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
@@ -154,6 +154,7 @@ export default function App() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
   const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
+  const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
   const prevSyncState = useRef<string | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
@@ -340,7 +341,7 @@ export default function App() {
         )}
       </AnimatePresence>
         {/* Sidebar */}
-        <aside className={`border-r border-zinc-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0`}
+        <aside className={`border-r border-zinc-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 self-start sticky top-0 h-screen overflow-hidden`}
           style={{ background: '#1F3164' }}>
           <div className="p-5 flex items-center gap-3">
             <PixFarmaLogo size={isSidebarOpen ? 'md' : 'icon'} />
@@ -358,7 +359,7 @@ export default function App() {
               <>
                 <NavItem icon={<ClipboardList />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<PlusCircle />} label="Nova Fórmula" active={activeTab === 'recipe'} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Clock />} label="Salvas" active={activeTab === 'saved'} onClick={() => setActiveTab('saved')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Clock />} label="Pendentes" active={activeTab === 'pending'} onClick={() => setActiveTab('pending')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={activeTab === 'confirmed'} onClick={() => setActiveTab('confirmed')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<History />} label="Histórico" active={activeTab === 'history'} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Users />} label="Clientes" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
@@ -411,7 +412,7 @@ export default function App() {
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
               {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab(dest); }} />}
               {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
-              {activeTab === 'saved' && <FormulaList variant="saved" title="Fórmulas Salvas" subtitle="Fórmulas salvas aguardando confirmação" statuses={['saved', 'pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} />}
+              {activeTab === 'pending' && <FormulaList variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setActiveTab('formulaDetail'); } }} />}
               {activeTab === 'confirmed' && <FormulaList variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />}
               {activeTab === 'history' && <FormulaList variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} />}
               {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
@@ -420,6 +421,35 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      {missingReasons && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setMissingReasons(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-zinc-900 text-lg">Informações necessárias</h3>
+                <p className="text-xs text-zinc-500">Preencha os campos abaixo para confirmar esta fórmula.</p>
+              </div>
+            </div>
+            <ul className="space-y-2">
+              {missingReasons.map(r => (
+                <li key={r} className="flex items-center gap-2 text-sm text-zinc-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                  {r}
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => setMissingReasons(null)}
+              className="mt-5 w-full py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
+              style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -605,7 +635,7 @@ function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: any) =>
   const { data: customers } = useData(() => db.customers.list());
   const { data: materials } = useData(() => db.materials.list());
   const { data: formulas } = useData(() => db.formulas.list());
-  const savedFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'saved' || f.status === 'pending').length;
+  const pendingFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'pending').length;
   const confirmedFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'confirmed' || f.status === 'completed').length;
 
   return (
@@ -616,7 +646,7 @@ function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: any) =>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
         <StatCard icon={<ClipboardList className="text-blue-600" />} label="Fórmulas Totais" value={formulas?.length ?? 0} color="bg-blue-50" />
-        <StatCard icon={<Clock className="text-red-600" />} label="Salvas" value={savedFormulas} color="bg-red-50" />
+        <StatCard icon={<Clock className="text-red-600" />} label="Pendentes" value={pendingFormulas} color="bg-red-50" />
         <StatCard icon={<CheckCircle2 className="text-emerald-600" />} label="Confirmadas" value={confirmedFormulas} color="bg-emerald-50" />
         <StatCard icon={<Users className="text-purple-600" />} label="Clientes" value={customers?.length ?? 0} color="bg-purple-50" />
         <StatCard icon={<Cross className="text-red-700" />} label="Matérias-Primas" value={materials?.length ?? 0} color="bg-red-50" />
@@ -625,7 +655,7 @@ function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: any) =>
         <h3 className="text-lg font-semibold mb-4">Ações Rápidas</h3>
         <div className="grid grid-cols-3 gap-4">
           <QuickActionButton icon={<PlusCircle />} label="Nova Fórmula" onClick={() => onNavigate('recipe')} color="pf-orange" />
-          <QuickActionButton icon={<Clock />} label="Salvas" onClick={() => onNavigate('saved')} color="bg-zinc-800" />
+          <QuickActionButton icon={<Clock />} label="Pendentes" onClick={() => onNavigate('pending')} color="bg-zinc-800" />
           <QuickActionButton icon={<CheckCircle2 />} label="Confirmadas" onClick={() => onNavigate('confirmed')} color="bg-zinc-800" />
         </div>
       </div>
@@ -679,7 +709,7 @@ function AdminPanel({ user }: { user: User }) {
       </div>
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
         {activeTab === 'materials' && <MaterialManager />}
-        {activeTab === 'users' && user.role === 'admin' && <UserManager />}
+        {activeTab === 'users' && user.role === 'admin' && <UserManager user={user} />}
       </div>
     </motion.div>
   );
@@ -689,7 +719,7 @@ function AdminPanel({ user }: { user: User }) {
 
 function CustomerManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (c: Customer) => void } = {}) {
   const { data: customers, loading, error, reload } = useData(() => db.customers.list());
-  const [form, setForm] = useState({ name: '', phone: '' });
+  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState({ name: '', phone: '' });
@@ -700,7 +730,7 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ key: 'name' | 'phone' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
 
-  const reset = () => { setForm({ name: '', phone: '' }); setEditingId(null); setFormError(''); setSuccess(null); };
+  const reset = () => { setForm({ firstName: '', lastName: '', phone: '' }); setEditingId(null); setFormError(''); setSuccess(null); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -714,7 +744,7 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
     }
     setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const payload = { name: form.name, phone: formatted };
+      const payload = { name: `${form.firstName} ${form.lastName}`.trim(), phone: formatted };
       if (editingId) {
         await db.customers.update(editingId, payload);
         reset(); reload();
@@ -794,9 +824,13 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
           <CheckCircle className="w-3.5 h-3.5 shrink-0" /> {success}
         </p>
       )}
-        <div className={compact ? '' : 'md:col-span-2'}>
+        <div className={compact ? '' : 'md:col-span-1'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} />
+      </div>
+      <div className={compact ? '' : 'md:col-span-1'}>
+        <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Sobrenome</label>
+        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} />
       </div>
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Celular</label>
@@ -990,7 +1024,7 @@ function MaterialManager({ compact = false, onCreated }: { compact?: boolean; on
 
 // ─── UserManager ───────────────────────────────────────────────────────────────
 
-function UserManager() {
+function UserManager({ user }: { user: User }) {
   const { data: users, loading, error, reload } = useData(() => db.users.list());
   const emptyForm = { name: '', username: '', password: '', role: 'employee' as 'admin' | 'employee' };
   const [form, setForm] = useState(emptyForm);
@@ -1048,12 +1082,14 @@ function UserManager() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (u: any) => {
+    if (u.role === 'admin') { alert('Administradores não podem ser excluídos.'); return; }
+    if (u.username === user.username) { alert('Você não pode excluir seu próprio usuário.'); return; }
     if (!confirm('Excluir este funcionário? Ele não conseguirá mais fazer login.')) return;
     // Cancela edição se for o mesmo usuário sendo deletado
-    if (editingId === id) reset();
+    if (editingId === u.id) reset();
     try {
-      await db.users.remove(id);
+      await db.users.remove(u.id);
       reload();
     } catch (err: any) {
       alert('Erro ao excluir: ' + (err?.message ?? 'tente novamente.'));
@@ -1174,11 +1210,13 @@ function UserManager() {
                       className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${editingId === u.id ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'text-blue-600 hover:bg-blue-50'}`}>
                       {editingId === u.id ? 'Cancelar' : 'Editar'}
                     </button>
-                    <button
-                      onClick={() => handleDelete(u.id)}
-                      className="text-zinc-300 hover:text-red-600 transition-colors p-1 rounded">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {u.role !== 'admin' && u.username !== user.username && (
+                      <button
+                        onClick={() => handleDelete(u)}
+                        className="text-zinc-300 hover:text-red-600 transition-colors p-1 rounded">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1195,7 +1233,7 @@ function UserManager() {
 
 // ─── RecipeForm ────────────────────────────────────────────────────────────────
 
-function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; onComplete: (dest: 'saved' | 'confirmed') => void }) {
+function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; onComplete: (dest: 'pending' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
   const { data: materials, reload: reloadMaterials } = useData(() => db.materials.list());
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
@@ -1214,6 +1252,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
   const [bUnit, setBUnit] = useState('caps');
   const [bValue, setBValue] = useState('');
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
+  const [selectedBudgetIndex, setSelectedBudgetIndex] = useState<number | null>(null);
   const [budgetError, setBudgetError] = useState('');
   const [attendantName, setAttendantName] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -1232,6 +1271,9 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
       setItems(formula.items.map(i => ({ ...i })));
       setBudgetNumber(formula.budget_number ?? '');
       setBudgetItems((formula.budget_items ?? []).map(bi => ({ ...bi })));
+      const budgetItems = formula.budget_items ?? [];
+      const selIdx = budgetItems.findIndex(bi => bi.is_selected);
+      setSelectedBudgetIndex(selIdx >= 0 ? selIdx : null);
       setAttendantName(formula.attendant_name ?? '');
       setDeliveryDate(formula.delivery_date ? formatDateToBR(formula.delivery_date) : '');
       setPaymentStatus(formula.payment_status ?? '');
@@ -1247,6 +1289,9 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
       setItems(template.items.map(i => ({ ...i })));
       setBudgetNumber(template.budget_number ?? '');
       setBudgetItems((template.budget_items ?? []).map(bi => ({ ...bi })));
+      const budgetItems = template.budget_items ?? [];
+      const selIdx = budgetItems.findIndex(bi => bi.is_selected);
+      setSelectedBudgetIndex(selIdx >= 0 ? selIdx : null);
       setAttendantName(template.attendant_name ?? '');
       setDeliveryDate(template.delivery_date ? formatDateToBR(template.delivery_date) : '');
       setPaymentStatus(template.payment_status ?? '');
@@ -1272,6 +1317,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
     setBUnit('caps');
     setBValue('');
     setBudgetItems([]);
+    setSelectedBudgetIndex(null);
     setBudgetError('');
     setAttendantName('');
     setDeliveryDate('');
@@ -1309,39 +1355,51 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
 
   const addBudgetItem = () => {
     if (!bQty || !bValue) return;
-    setBudgetItems([...budgetItems, { quantity: Number(bQty), unit: bUnit, value: parseCurrency(bValue) }]);
+    const next = [...budgetItems, { quantity: Number(bQty), unit: bUnit, value: parseCurrency(bValue) }];
+    setBudgetItems(next);
     setBQty('');
     setBValue('');
     setBudgetError('');
   };
 
-  const canSave = !!selectedCustomerId && items.length > 0;
-  const canConfirm = canSave &&
-    !!budgetNumber && budgetItems.length > 0 &&
-    !!attendantName && !!parseDateBR(deliveryDate) &&
-    !!paymentStatus;
+  const removeBudgetItem = (idx: number) => {
+    const next = budgetItems.filter((_, i) => i !== idx);
+    setBudgetItems(next);
+    if (selectedBudgetIndex === idx) setSelectedBudgetIndex(null);
+    else if (selectedBudgetIndex !== null && selectedBudgetIndex > idx) setSelectedBudgetIndex(selectedBudgetIndex - 1);
+  };
 
-  const buildPayload = (status: string) => ({
-    customer_id: selectedCustomerId as number,
-    pharmacist_name: user.name,
-    items: items.map(i => ({ material_id: i.material_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
-    budget_number: budgetNumber || undefined,
-    budget_items: budgetItems.length > 0 ? budgetItems : undefined,
-    attendant_name: attendantName || undefined,
-    delivery_date: parseDateBR(deliveryDate),
-    payment_status: paymentStatus || undefined,
-    payment_method: paymentMethod || null,
-    delivery_status: deliveryStatus,
-    status,
-  });
+  const canSave = !!selectedCustomerId && items.length > 0 &&
+    !!budgetNumber && budgetItems.length > 0 &&
+    !!attendantName;
+  const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parseDateBR(deliveryDate);
+
+  const buildPayload = (status: string, soloSelected = false) => {
+    const payloadBudgetItems = soloSelected && selectedBudgetIndex !== null
+      ? budgetItems.filter((_, i) => i === selectedBudgetIndex).map(bi => ({ ...bi, is_selected: true }))
+      : budgetItems.map((bi, i) => ({ ...bi, is_selected: selectedBudgetIndex === i }));
+    return {
+      customer_id: selectedCustomerId as number,
+      pharmacist_name: user.name,
+      items: items.map(i => ({ material_id: i.material_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
+      budget_number: budgetNumber || undefined,
+      budget_items: payloadBudgetItems.length > 0 ? payloadBudgetItems : undefined,
+      attendant_name: attendantName || undefined,
+      delivery_date: parseDateBR(deliveryDate),
+      payment_status: paymentStatus || undefined,
+      payment_method: paymentMethod || null,
+      delivery_status: deliveryStatus,
+      status,
+    };
+  };
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
-      if (formula) await db.formulas.update(formula.id, buildPayload('saved'));
-      else await db.formulas.add(buildPayload('saved'));
-      onComplete('saved');
+      if (formula) await db.formulas.update(formula.id, buildPayload('pending'));
+      else await db.formulas.add(buildPayload('pending'));
+      onComplete('pending');
     } finally { setSaving(false); }
   };
 
@@ -1349,8 +1407,8 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
     if (!canConfirm) return;
     setSaving(true);
     try {
-      if (formula) await db.formulas.update(formula.id, buildPayload('confirmed'));
-      else await db.formulas.add(buildPayload('confirmed'));
+      if (formula) await db.formulas.update(formula.id, buildPayload('confirmed', true));
+      else await db.formulas.add(buildPayload('confirmed', true));
       onComplete('confirmed');
     } finally { setSaving(false); }
   };
@@ -1536,15 +1594,15 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
           </div>
         )}
       </div>
-      {/* Linha 2 — Ingrediente */}
+      {/* Linha 2 — Matéria-Prima */}
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-zinc-900 text-sm">2. Ingrediente</h3>
+          <h3 className="font-semibold text-zinc-900 text-sm">2. Matéria-Prima</h3>
           {!locked && (
             <button type="button" onClick={() => setShowAddMaterial(!showAddMaterial)}
               className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
               style={{ color: showAddMaterial ? '#C41E3C' : '#1F3164', background: showAddMaterial ? '#fff0f3' : '#f0f4ff' }}>
-              <PlusCircle className="w-3 h-3" />{showAddMaterial ? 'Fechar' : '+ Novo ingrediente'}
+              <PlusCircle className="w-3 h-3" />{showAddMaterial ? 'Fechar' : '+ Nova matéria-prima'}
             </button>
           )}
         </div>
@@ -1565,7 +1623,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
             </div>
             {!locked && (
               <button type="button" onClick={() => { setSelectedMaterialId(''); setMaterialQuery(''); }}
-                className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar ingrediente">
+                className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar matéria-prima">
                 <X className="w-4 h-4" />
               </button>
             )}
@@ -1575,7 +1633,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="Buscar ingrediente por nome..."
+              placeholder="Buscar matéria-prima por nome..."
               value={materialQuery}
               disabled={locked}
               onChange={e => setMaterialQuery(e.target.value)}
@@ -1598,7 +1656,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
               </div>
             )}
             {mq && filteredMaterials.length === 0 && (
-              <p className="text-xs text-zinc-400 mt-1 px-1">Nenhum ingrediente encontrado.</p>
+              <p className="text-xs text-zinc-400 mt-1 px-1">Nenhuma matéria-prima encontrada.</p>
             )}
           </div>
         )}
@@ -1622,8 +1680,9 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
               value={unit} disabled={locked} onChange={e => setUnit(e.target.value)}>
               <option value="g">g</option>
               <option value="mcg">mcg</option>
-              <option value="ui">ui</option>
               <option value="mg">mg</option>
+              <option value="ml">ml</option>
+              <option value="ui">ui</option>
             </select>
           </div>
           <div className="flex-1 space-y-1">
@@ -1640,14 +1699,14 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
 
         <div className="mt-4 pt-3 border-t border-zinc-100">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Ingredientes adicionados</h4>
+            <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Matérias-primas adicionadas</h4>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff0f3', color: '#C41E3C' }}>
-              {items.length} {items.length === 1 ? 'ingrediente' : 'ingredientes'}
+              {items.length} {items.length === 1 ? 'matéria-prima' : 'matérias-primas'}
             </span>
           </div>
 
           {items.length === 0 ? (
-            <p className="text-sm text-zinc-400">Nenhum ingrediente adicionado ainda.</p>
+            <p className="text-sm text-zinc-400">Nenhuma matéria-prima adicionada ainda.</p>
           ) : (
             <div className="space-y-2">
               {items.map((item, idx) => (
@@ -1660,7 +1719,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
                   </div>
                   {!locked && (
                     <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setItemError(''); }}
-                      className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover ingrediente">
+                      className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover matéria-prima">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -1674,8 +1733,8 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
       {/* Linha 3 — Orçamento */}
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <h3 className="font-semibold text-zinc-900 text-sm mb-4">3. Orçamento</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-end">
+          <div className="w-36">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Número de orçamento</label>
             <input
               inputMode="numeric"
@@ -1707,8 +1766,9 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
                 <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                   value={bUnit} disabled={locked} onChange={e => setBUnit(e.target.value)}>
                   <option value="caps">caps</option>
-                  <option value="ml">ml</option>
+                  <option value="dose">dose</option>
                   <option value="g">g</option>
+                  <option value="ml">ml</option>
                 </select>
               </div>
               <div className="flex-1">
@@ -1736,20 +1796,30 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
 
             {budgetItems.length > 0 && (
               <div className="mt-3 space-y-2">
-                {budgetItems.map((bi, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-zinc-100"
-                    style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
-                    <p className="text-sm text-zinc-700">
-                      <strong>{bi.quantity}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </p>
-                    {!locked && (
-                      <button type="button" onClick={() => setBudgetItems(budgetItems.filter((_, i) => i !== idx))}
-                        className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover item do orçamento">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {budgetItems.map((bi, idx) => {
+                  const isSelected = selectedBudgetIndex === idx;
+                  return (
+                    <div key={idx}
+                      className={`flex items-center gap-3 p-3 rounded-xl border ${!locked ? 'cursor-pointer' : ''} ${isSelected ? 'border-red-300' : 'border-zinc-100'}`}
+                      style={{ background: isSelected ? '#fff0f3' : (idx % 2 === 0 ? '#f8faff' : '#fff') }}
+                      onClick={() => { if (!locked) setSelectedBudgetIndex(idx); }}>
+                      <input type="radio" name="budgetSelection" className="w-4 h-4 accent-[#C41E3C] shrink-0"
+                        checked={isSelected}
+                        disabled={locked}
+                        onChange={() => { if (!locked) setSelectedBudgetIndex(idx); }}
+                        onClick={e => e.stopPropagation()} />
+                      <p className="text-sm text-zinc-700 flex-1 min-w-0">
+                        <strong>{bi.quantity}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </p>
+                      {!locked && (
+                        <button type="button" onClick={e => { e.stopPropagation(); removeBudgetItem(idx); }}
+                          className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover item do orçamento">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1759,22 +1829,26 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
       {/* Bloco 4 — Informações */}
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <h3 className="font-semibold text-zinc-900 text-sm mb-4">4. Informações</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Atendente da PM</label>
-            <input
-              type="text"
-              maxLength={100}
-              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="Nome do atendente..."
-              value={attendantName}
-              disabled={locked}
-              onChange={e => setAttendantName(e.target.value)}
-            />
-          </div>
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Atendente da PM</label>
+          <input
+            type="text"
+            maxLength={100}
+            className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            placeholder="Nome do atendente..."
+            value={attendantName}
+            disabled={locked}
+            onChange={e => setAttendantName(e.target.value)}
+          />
+        </div>
+      </div>
 
+      {/* Bloco 5 — Finalizar */}
+      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+        <h3 className="font-semibold text-zinc-900 text-sm mb-4">5. Finalizar</h3>
+        <div className={(confirmed || readOnly) ? 'grid grid-cols-1 gap-6 md:grid-cols-3' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}>
           <div>
-            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Data de entrega</label>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Previsão de entrega</label>
             <div className="relative">
               <input
                 type="text"
@@ -1810,13 +1884,6 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
               onChange={e => setDeliveryDate(e.target.value ? formatDateToBR(e.target.value) : '')}
             />
           </div>
-        </div>
-      </div>
-
-      {/* Bloco 5 — Finalizar */}
-      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
-        <h3 className="font-semibold text-zinc-900 text-sm mb-4">5. Finalizar</h3>
-        <div className={(confirmed || readOnly) ? 'grid grid-cols-1 gap-6 md:grid-cols-3' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}>
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
             <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
@@ -1842,7 +1909,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Andamento</label>
               <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                value={deliveryStatus} disabled={(locked && !confirmed) || paymentStatus !== 'pago'} onChange={e => setDeliveryStatus(e.target.value)}>
+                value={deliveryStatus} disabled={!paymentStatus} onChange={e => setDeliveryStatus(e.target.value)}>
                 <option value="">Selecione...</option>
                 <option value="em_producao">Em produção</option>
                 <option value="aguardando_retirada">Aguardando retirada</option>
@@ -1877,7 +1944,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
               {saving ? 'Salvando...' : '💾 Salvar'}
             </button>
             <p className="text-center text-xs text-zinc-400 mt-2">
-              {canSave ? 'Precisa de cliente e pelo menos 1 ingrediente' : 'Preencha o cliente e ao menos 1 ingrediente (blocos 1 e 2)'}
+              {canSave ? 'Pronto para salvar' : 'Preencha os blocos 1 a 4 (cliente, matérias-primas, orçamento e informações)'}
             </p>
           </div>
           <div>
@@ -1889,7 +1956,9 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
             <p className="text-center text-xs text-zinc-400 mt-2">
               {canConfirm
                 ? 'Pronto para confirmar'
-                : 'Preencha cliente, ingredientes, orçamento, informações e o pagamento (blocos 1 a 5)'}
+                : budgetItems.length > 0 && selectedBudgetIndex === null
+                  ? 'Selecione um orçamento (marcador ao lado) e preencha os demais blocos'
+                  : 'Preencha cliente, matérias-primas, orçamento, informações e o pagamento (blocos 1 a 5)'}
             </p>
           </div>
         </div>
@@ -1945,10 +2014,50 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
 
 // ─── FormulaList ─────────────────────────────────────────────────────────────────
 
-function FormulaList({ title, subtitle, statuses, variant = 'saved', statusFilterOptions, onSelect }: { title: string; subtitle: string; statuses: string[]; variant?: 'saved' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; onSelect?: (f: Formula) => void }) {
+// Verifica quais requisitos faltam para a fórmula poder ser confirmada
+function getMissingReasons(f: Formula): string[] {
+  const reasons: string[] = [];
+  if (!f.items || f.items.length === 0) reasons.push('Matérias-primas');
+  if (!f.budget_number) reasons.push('Número do orçamento');
+  if (!f.budget_items || f.budget_items.length === 0) reasons.push('Itens do orçamento');
+  if (!f.attendant_name) reasons.push('Atendente PM');
+  if (!f.delivery_date || !/^\d{4}-\d{2}-\d{2}$/.test(f.delivery_date)) reasons.push('Data de entrega válida');
+  if (!f.payment_status) reasons.push('Status de pagamento');
+  const budgetItems = f.budget_items ?? [];
+  if (budgetItems.length > 1 && budgetItems.filter(bi => bi.is_selected).length !== 1) reasons.push('Selecionar um único orçamento');
+  return reasons;
+}
+
+function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFilterOptions, onSelect, onConfirm }: { title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+
+  const handleConfirm = async (f: Formula) => {
+    const reasons = getMissingReasons(f);
+    if (reasons.length === 0) {
+      setConfirmingId(f.id);
+      try {
+        await db.formulas.updateStatus(f.id, 'confirmed');
+        reload();
+      } finally {
+        setConfirmingId(null);
+      }
+    }
+    onConfirm?.(f, reasons);
+  };
+
+  const handleDeliveryStatusChange = async (f: Formula, deliveryStatus: string) => {
+    setUpdatingStatusId(f.id);
+    try {
+      await db.formulas.updateDeliveryStatus(f.id, deliveryStatus);
+      reload();
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
 
   const all = (formulas as Formula[]) ?? [];
   const filtered = all
@@ -1966,7 +2075,7 @@ function FormulaList({ title, subtitle, statuses, variant = 'saved', statusFilte
     nao_pago: 'bg-red-50 border-red-200',
     pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
   };
-  const gridCols = 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
+  const gridCols = 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.2fr_0.6fr]';
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -2005,7 +2114,7 @@ function FormulaList({ title, subtitle, statuses, variant = 'saved', statusFilte
           {filtered.length > 0 && variant === 'confirmed' && (
             <div className={`hidden md:grid ${gridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
               <span>Cliente</span><span>Quantidade</span><span>Valor</span><span>Atendente PM</span>
-              <span>Data criação</span><span>Data entrega</span><span>Telefone</span><span />
+              <span>Data criação</span><span>Data entrega</span><span>Telefone</span><span>Andamento</span><span />
             </div>
           )}
           {filtered.map(f => {
@@ -2013,7 +2122,7 @@ function FormulaList({ title, subtitle, statuses, variant = 'saved', statusFilte
             return variant === 'confirmed' ? (
               <button key={f.id} type="button" onClick={() => onSelect?.(f)}
                 className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group ${tint}`}>
-                <div className={`grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr] gap-2 items-center text-sm`}>
+                <div className={`grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.2fr_0.6fr] gap-2 items-center text-sm`}>
                   <p className="font-bold text-zinc-900">{f.customer_name}</p>
                   <div className="text-zinc-700 space-y-0.5 font-medium">
                     {(f.budget_items ?? []).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{bi.quantity} {bi.unit}</p>)}
@@ -2028,6 +2137,20 @@ function FormulaList({ title, subtitle, statuses, variant = 'saved', statusFilte
                   <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
                   <p className="text-zinc-700 whitespace-nowrap">{f.customer_phone || '—'}</p>
                   <div className="flex justify-end">
+                    <select
+                      value={f.delivery_status ?? ''}
+                      disabled={!f.payment_status || updatingStatusId === f.id}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onChange={(e) => handleDeliveryStatusChange(f, e.target.value)}
+                      className="w-full max-w-[170px] px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
+                      <option value="">Selecione...</option>
+                      <option value="em_producao">Em produção</option>
+                      <option value="aguardando_retirada">Aguardando retirada</option>
+                      <option value="aguardando_envio">Aguardando envio</option>
+                      <option value="entregue">Entregue</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end">
                     <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
                       <ChevronRight className="w-4 h-4" />
                     </div>
@@ -2035,35 +2158,40 @@ function FormulaList({ title, subtitle, statuses, variant = 'saved', statusFilte
                 </div>
               </button>
             ) : (
-              <button key={f.id} type="button" onClick={() => onSelect?.(f)}
-                className="w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm p-5 hover:border-red-300 hover:shadow-md transition-all group">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-bold text-zinc-900 text-lg">{f.customer_name}</h4>
-                    <div className="flex items-center gap-3 text-xs text-zinc-500 mt-1 flex-wrap">
-                      {f.pharmacist_name && <span>👨‍⚕️ {f.pharmacist_name}</span>}
-                      <span>🕐 {new Date(f.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                    </div>
-
-                    <div className="mt-3 space-y-1">
-                      {f.items.slice(0, 3).map((item, idx) => (
-                        <p key={idx} className="text-sm text-zinc-600">
-                          <span className="text-zinc-300">•</span> {item.material_name} <span className="text-zinc-400">{item.quantity}{item.unit ?? 'mg'}</span>
-                        </p>
-                      ))}
-                      {f.items.length > 3 && (
-                        <p className="text-xs text-zinc-400 font-medium pt-0.5">
-                          Mais {f.items.length - 3} ingrediente{f.items.length - 3 === 1 ? '' : 's'}
-                        </p>
-                      )}
-                    </div>
+              <div key={f.id} onClick={() => onSelect?.(f)}
+                className="w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-3 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer">
+                <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1.2fr_1fr_2fr_1.1fr] gap-2 items-center text-sm">
+                  <div className="min-w-0">
+                    <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
+                    {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
                   </div>
-
-                  <div className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
-                    <ChevronRight className="w-5 h-5" />
+                  <p className="text-zinc-700 truncate">{f.pharmacist_name || '—'}</p>
+                  <p className="text-zinc-500 whitespace-nowrap">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
+                  <div className="min-w-0">
+                    <p className="text-zinc-600 truncate">
+                      {f.items.slice(0, 3).map((item, idx) => (
+                        <span key={idx}>{idx > 0 && <span className="text-zinc-300">, </span>}{item.material_name}</span>
+                      ))}
+                    </p>
+                    {f.items.length > 3 && (
+                      <p className="text-xs text-zinc-400 font-medium pt-0.5">
+                        Mais {f.items.length - 3} matéria-prima{f.items.length - 3 === 1 ? '' : 's'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex justify-end items-center gap-2">
+                    <button type="button" disabled={confirmingId === f.id}
+                      onClick={(e) => { e.stopPropagation(); handleConfirm(f); }}
+                      className="px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+                      {confirmingId === f.id ? 'Confirmando...' : 'Confirmar'}
+                    </button>
+                    <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
 
@@ -2086,6 +2214,7 @@ function SettingsManager() {
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [tab, setTab] = useState<'db' | 'admin'>('db');
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -2131,10 +2260,26 @@ function SettingsManager() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-6">
+      {/* Abas */}
+      <div className="flex items-center gap-4 border-b border-zinc-200">
+        <button onClick={() => setTab('db')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'db' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
+          Banco de Dados
+          {tab === 'db' && <motion.div layoutId="activeSetup" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+        </button>
+        <button onClick={() => setTab('admin')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'admin' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
+          Administrador
+          {tab === 'admin' && <motion.div layoutId="activeSetup" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+        </button>
+      </div>
+
+      {tab === 'admin' && <AdminUserManager />}
+
+      {tab === 'db' && (
+        <>
       {/* Configuração do banco */}
       <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
         <div className="p-8 border-b border-zinc-100">
-          <h2 className="text-2xl font-bold text-zinc-900">Configuração do Servidor</h2>
+          <h2 className="text-2xl font-bold text-zinc-900">Banco de Dados</h2>
           <p className="text-zinc-500">Configure a conexão com o MariaDB da rede local.</p>
         </div>
         <form onSubmit={handleSave} className="p-8 space-y-5">
@@ -2192,6 +2337,181 @@ function SettingsManager() {
           {syncing ? 'Sincronizando...' : 'Sincronizar Agora'}
         </button>
       </div>
+        </>
+      )}
     </motion.div>
+  );
+}
+
+// ─── AdminUserManager ───────────────────────────────────────────────────────────
+
+function AdminUserManager() {
+  const { data: users, loading, error, reload } = useData(() => db.users.list());
+  const [form, setForm] = useState({ name: '', username: '', password: '' });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const admins = ((users as any[]) ?? []).filter(u => u.role === 'admin');
+
+  const reset = () => {
+    setForm({ name: '', username: '', password: '' });
+    setEditingId(null);
+    setFormError('');
+  };
+
+  const startEdit = (u: any) => {
+    setForm({ name: u.name, username: u.username, password: '' });
+    setEditingId(u.id);
+    setFormError('');
+    document.getElementById('admin-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+    if (!editingId && !form.password.trim()) {
+      setFormError('Informe uma senha para o administrador.');
+      return;
+    }
+    setSaving(true); setSuccess(null);
+    try {
+      if (editingId) {
+        await db.users.update(editingId, {
+          name: form.name.trim(),
+          username: form.username.trim(),
+          password: form.password.trim() || undefined,
+          role: 'admin',
+        });
+      } else {
+        await db.users.add({
+          name: form.name.trim(),
+          username: form.username.trim(),
+          password: form.password.trim(),
+          role: 'admin',
+        });
+      }
+      const wasEditing = editingId !== null;
+      reset(); reload();
+      setSuccess(wasEditing ? 'Alterações salvas com sucesso!' : 'Administrador criado! Use estas credenciais para acessar o sistema.');
+    } catch (err: any) {
+      setFormError(err?.message ?? 'Erro ao salvar. Tente novamente.');
+    } finally { setSaving(false); }
+  };
+
+  const isEditing = editingId !== null;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+      <div className="p-8 border-b border-zinc-100">
+        <h2 className="text-2xl font-bold text-zinc-900">Usuário administrador</h2>
+        <p className="text-zinc-500">
+          Crie o administrador com acesso ao sistema completo (fórmulas, clientes, funcionários).
+        </p>
+        <p className="text-xs text-zinc-400 mt-2">
+          Diferente do login de configuração <code className="font-mono">admin</code> / <code className="font-mono">admin123</code>,
+          que só acessa esta tela de servidor.
+        </p>
+      </div>
+
+      {/* Formulário */}
+      <div id="admin-form" className={`p-6 border-b border-zinc-100 transition-colors ${isEditing ? 'bg-blue-50' : ''}`}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-bold text-zinc-700 uppercase tracking-wide">
+            {isEditing ? '✏️ Editando administrador' : 'Novo administrador'}
+          </h3>
+          {isEditing && (
+            <button type="button" onClick={reset}
+              className="text-xs text-zinc-500 hover:text-zinc-800 px-2 py-1 rounded-lg hover:bg-zinc-100 transition-colors">
+              ✕ Cancelar edição
+            </button>
+          )}
+        </div>
+
+        {success && (
+          <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle className="w-4 h-4 shrink-0" /> {success}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome completo</label>
+            <input required type="text" placeholder="Ex: João Silva"
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Usuário de acesso</label>
+            <input required type="text" placeholder="Ex: joao (evite usar admin)"
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
+              value={form.username}
+              onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">
+              Senha {isEditing && <span className="text-zinc-400 font-normal normal-case">(em branco = não altera)</span>}
+            </label>
+            <input required={!isEditing} type="password" placeholder={isEditing ? 'Deixe em branco para manter' : '••••••••'}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+          </div>
+          <div className="space-y-1">
+            {formError && (
+              <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{formError}</p>
+            )}
+            <button type="submit" disabled={saving}
+              style={{ background: isEditing ? 'linear-gradient(135deg, #1F3164, #2a4080)' : 'linear-gradient(135deg, #C41E3C, #A01830)' }}
+              className="w-full text-white py-2 px-3 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 transition-all text-sm">
+              {saving ? 'Salvando...' : isEditing ? '✓ Salvar alterações' : '+ Criar administrador'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Lista */}
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-zinc-700 uppercase tracking-wide">Administradores do sistema</h3>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700">{admins.length}</span>
+        </div>
+        {loading && <LoadingState />}
+        {error && <ErrorState message={error} onRetry={reload} />}
+        {!loading && !error && (
+          <div className="overflow-x-auto rounded-xl border border-zinc-100">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-zinc-100 bg-zinc-50 text-zinc-400 text-xs uppercase font-semibold">
+                  <th className="px-4 py-3">Nome</th>
+                  <th className="px-4 py-3">Usuário</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-50 bg-white">
+                {admins.map(u => (
+                  <tr key={u.id} className={`transition-colors ${editingId === u.id ? 'bg-blue-50' : 'hover:bg-zinc-50'}`}>
+                    <td className="px-4 py-3 font-medium text-zinc-900">{u.name}</td>
+                    <td className="px-4 py-3 text-zinc-500 font-mono text-sm">{u.username}</td>
+                    <td className="px-4 py-3 text-right space-x-2">
+                      <button
+                        onClick={() => editingId === u.id ? reset() : startEdit(u)}
+                        className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${editingId === u.id ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'text-blue-600 hover:bg-blue-50'}`}>
+                        {editingId === u.id ? 'Cancelar' : 'Editar'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {admins.length === 0 && (
+              <p className="text-center py-10 text-zinc-400">Nenhum administrador cadastrado ainda.</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

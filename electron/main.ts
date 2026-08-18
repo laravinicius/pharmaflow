@@ -41,6 +41,7 @@ const initPool = () => {
     host: dbConfig.host, port: dbConfig.port, user: dbConfig.user,
     password: dbConfig.password, database: dbConfig.database,
     waitForConnections: true, connectionLimit: 10, connectTimeout: 5000,
+    dateStrings: true,
   });
   cache.setPool(pool);
 };
@@ -85,6 +86,7 @@ ipcMain.handle('formulas:list',          ()              => cache.listFormulas()
 ipcMain.handle('formulas:add',           (_, f)          => cache.addFormula(f));
 ipcMain.handle('formulas:update',        (_, id, f)      => cache.updateFormula(id, f));
 ipcMain.handle('formulas:update-status', (_, id, status) => cache.updateFormulaStatus(id, status));
+ipcMain.handle('formulas:update-delivery-status', (_, id, deliveryStatus) => cache.updateFormulaDeliveryStatus(id, deliveryStatus));
 ipcMain.handle('formulas:delete',        (_, id)         => cache.deleteFormula(id));
 
 // ─── IPC: Sync ────────────────────────────────────────────────────────────────
@@ -123,6 +125,7 @@ const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600,
     title: 'PIX Farma - Manipulação',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: false,
