@@ -414,7 +414,7 @@ export default function App() {
               {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
               {activeTab === 'pending' && <FormulaList variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setActiveTab('formulaDetail'); } }} />}
               {activeTab === 'confirmed' && <FormulaList variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />}
-              {activeTab === 'history' && <FormulaList variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} />}
+              {activeTab === 'history' && <FormulaList variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} />}
               {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
             </AnimatePresence>
@@ -2028,7 +2028,7 @@ function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFilterOptions, onSelect, onConfirm }: { title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void }) {
+function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, onSelect, onConfirm }: { title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -2075,7 +2075,9 @@ function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFil
     nao_pago: 'bg-red-50 border-red-200',
     pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
   };
-  const gridCols = 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.2fr_0.6fr]';
+  const gridCols = showAndamento
+    ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.2fr_0.6fr]'
+    : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -2114,7 +2116,7 @@ function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFil
           {filtered.length > 0 && variant === 'confirmed' && (
             <div className={`hidden md:grid ${gridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
               <span>Cliente</span><span>Quantidade</span><span>Valor</span><span>Atendente PM</span>
-              <span>Data criação</span><span>Data entrega</span><span>Telefone</span><span>Andamento</span><span />
+              <span>Data criação</span><span>Data entrega</span><span>Telefone</span>{showAndamento && <span>Andamento</span>}<span />
             </div>
           )}
           {filtered.map(f => {
@@ -2122,7 +2124,7 @@ function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFil
             return variant === 'confirmed' ? (
               <button key={f.id} type="button" onClick={() => onSelect?.(f)}
                 className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group ${tint}`}>
-                <div className={`grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.2fr_0.6fr] gap-2 items-center text-sm`}>
+                <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
                   <p className="font-bold text-zinc-900">{f.customer_name}</p>
                   <div className="text-zinc-700 space-y-0.5 font-medium">
                     {(f.budget_items ?? []).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{bi.quantity} {bi.unit}</p>)}
@@ -2136,20 +2138,22 @@ function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFil
                   <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
                   <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
                   <p className="text-zinc-700 whitespace-nowrap">{f.customer_phone || '—'}</p>
-                  <div className="flex justify-end">
-                    <select
-                      value={f.delivery_status ?? ''}
-                      disabled={!f.payment_status || updatingStatusId === f.id}
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      onChange={(e) => handleDeliveryStatusChange(f, e.target.value)}
-                      className="w-full max-w-[170px] px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
-                      <option value="">Selecione...</option>
-                      <option value="em_producao">Em produção</option>
-                      <option value="aguardando_retirada">Aguardando retirada</option>
-                      <option value="aguardando_envio">Aguardando envio</option>
-                      <option value="entregue">Entregue</option>
-                    </select>
-                  </div>
+                  {showAndamento && (
+                    <div className="flex justify-end">
+                      <select
+                        value={f.delivery_status ?? ''}
+                        disabled={!f.payment_status || updatingStatusId === f.id}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onChange={(e) => handleDeliveryStatusChange(f, e.target.value)}
+                        className="w-full max-w-[170px] px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
+                        <option value="">Selecione...</option>
+                        <option value="em_producao">Em produção</option>
+                        <option value="aguardando_retirada">Aguardando retirada</option>
+                        <option value="aguardando_envio">Aguardando envio</option>
+                        <option value="entregue">Entregue</option>
+                      </select>
+                    </div>
+                  )}
                   <div className="flex justify-end">
                     <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
                       <ChevronRight className="w-4 h-4" />
