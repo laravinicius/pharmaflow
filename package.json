@@ -28,7 +28,7 @@
       "category": "public.app-category.medical"
     },
     "win": {
-      "target": ["dir"],
+      "target": ["dir", "nsis"],
       "signAndEditExecutable": false
     },
     "linux": {
