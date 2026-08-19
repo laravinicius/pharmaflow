@@ -130,7 +130,8 @@ export class CacheManager {
         server_id   INTEGER UNIQUE,
         name        TEXT NOT NULL UNIQUE,
         sync_status TEXT NOT NULL DEFAULT 'pending',
-        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS formulas (
@@ -179,7 +180,8 @@ export class CacheManager {
     const migrations = [
       `ALTER TABLE formulas ADD COLUMN customer_phone  TEXT NOT NULL DEFAULT ''`,
       `ALTER TABLE formulas ADD COLUMN pharmacist_name TEXT NOT NULL DEFAULT ''`,
-      `ALTER TABLE customers ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))`,
+      `ALTER TABLE customers ADD COLUMN created_at TEXT NOT NULL DEFAULT ''`,
+      `UPDATE customers SET created_at = datetime('now') WHERE created_at = ''`,
       `ALTER TABLE formula_items ADD COLUMN unit TEXT NOT NULL DEFAULT 'mg'`,
       `ALTER TABLE formulas ADD COLUMN budget_number TEXT NOT NULL DEFAULT ''`,
       `ALTER TABLE formulas ADD COLUMN attendant_name TEXT NOT NULL DEFAULT ''`,
@@ -189,6 +191,8 @@ export class CacheManager {
       `ALTER TABLE formulas ADD COLUMN delivery_status TEXT NOT NULL DEFAULT ''`,
       `ALTER TABLE formulas ADD COLUMN cancel_reason TEXT`,
       `ALTER TABLE formula_budget_items ADD COLUMN is_selected INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE materials ADD COLUMN created_at TEXT NOT NULL DEFAULT ''`,
+      `UPDATE materials SET created_at = datetime('now') WHERE created_at = ''`,
     ];
     for (const sql of migrations) {
       try { this.db.exec(sql); } catch (_) { /* coluna já existe — ignorar */ }
@@ -440,14 +444,22 @@ export class CacheManager {
   // ── Matérias-Primas ───────────────────────────────────────────────────────────
 
   listMaterials() {
-    return this.query(`SELECT id, server_id, name FROM materials WHERE sync_status != 'deleted' ORDER BY name`);
+    return this.query(`SELECT id, server_id, name, created_at FROM materials WHERE sync_status != 'deleted' ORDER BY name`);
   }
 
   addMaterial(name: string) {
-    this.exec(`INSERT INTO materials (name, sync_status, updated_at) VALUES (?, 'pending', datetime('now'))`, [name]);
+    this.exec(`INSERT INTO materials (name, sync_status, updated_at, created_at)
+      VALUES (?, 'pending', datetime('now'), datetime('now'))`, [name]);
     const id = this.lastId();
     this.save();
     return { success: true, id };
+  }
+
+  updateMaterial(id: number, name: string) {
+    this.exec(`UPDATE materials SET name=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
+      [name, id]);
+    this.save();
+    return { success: true };
   }
 
   deleteMaterial(id: number) {
@@ -999,14 +1011,14 @@ export class CacheManager {
     }
 
     const materials = await this.qServer<any[]>(
-      `SELECT id,name FROM materials ${dateFilter}`, dateParam
+      `SELECT id,name,created_at FROM materials ${dateFilter}`, dateParam
     );
     for (const m of materials) {
       const exists = this.queryOne('SELECT id FROM materials WHERE server_id=?', [m.id]);
       if (exists) {
-        this.exec(`UPDATE materials SET name=?,sync_status='synced' WHERE server_id=?`, [m.name, m.id]);
+        this.exec(`UPDATE materials SET name=?,created_at=?,sync_status='synced' WHERE server_id=?`, [m.name, m.created_at, m.id]);
       } else {
-        try { this.exec(`INSERT INTO materials (server_id,name,sync_status) VALUES (?,?,'synced')`, [m.id, m.name]); } catch (_) {}
+        try { this.exec(`INSERT INTO materials (server_id,name,created_at,sync_status) VALUES (?,?,?,'synced')`, [m.id, m.name, m.created_at]); } catch (_) {}
       }
     }
 

@@ -78,6 +78,7 @@ ipcMain.handle('customers:delete', (_, id)       => cache.deleteCustomer(id));
 
 ipcMain.handle('materials:list',   ()        => cache.listMaterials());
 ipcMain.handle('materials:add',    (_, name) => cache.addMaterial(name));
+ipcMain.handle('materials:update', (_, id, name) => cache.updateMaterial(id, name));
 ipcMain.handle('materials:delete', (_, id)   => cache.deleteMaterial(id));
 
 // ─── IPC: Fórmulas ────────────────────────────────────────────────────────────

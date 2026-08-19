@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Matérias-Primas
   listMaterials:   ()           => ipcRenderer.invoke('materials:list'),
   addMaterial:     (name: string) => ipcRenderer.invoke('materials:add', name),
+  updateMaterial:  (id: number, name: string) => ipcRenderer.invoke('materials:update', id, name),
   deleteMaterial:  (id: number) => ipcRenderer.invoke('materials:delete', id),
 
   // Fórmulas

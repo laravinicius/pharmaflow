@@ -12,7 +12,7 @@ import { db } from './services/lanDatabase';
 
 interface User { id: number; name: string; username: string; role: 'admin' | 'employee' }
 interface Customer { id: number; name: string; phone: string; created_at?: string }
-interface Material { id: number; name: string }
+interface Material { id: number; name: string; created_at?: string }
 interface FormulaItem { material_id: number; material_name: string; quantity: number; unit?: string }
 interface BudgetItem { quantity: number; unit: string; value: number; is_selected?: boolean }
 interface Formula {
@@ -145,7 +145,7 @@ function useData<T>(fetcher: () => Promise<T>, deps: any[] = []) {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setupMode, setSetupMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'materials' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
@@ -363,6 +363,7 @@ export default function App() {
                 <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={activeTab === 'confirmed'} onClick={() => setActiveTab('confirmed')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<History />} label="Histórico" active={activeTab === 'history'} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Users />} label="Clientes" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Cross />} label="Matérias Primas" active={activeTab === 'materials'} onClick={() => setActiveTab('materials')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Settings />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
               </>
             )}
@@ -412,11 +413,12 @@ export default function App() {
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
               {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab(dest); }} />}
               {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
-              {activeTab === 'pending' && <FormulaList variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setActiveTab('formulaDetail'); } }} />}
-              {activeTab === 'confirmed' && <FormulaList variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />}
-              {activeTab === 'history' && <FormulaList variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} />}
+              {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setActiveTab('formulaDetail'); } }} />}
+              {activeTab === 'confirmed' && <FormulaList screenKey="confirmed" variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />}
+              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
               {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
+              {activeTab === 'materials' && <MaterialManager />}
             </AnimatePresence>
           </div>
         </main>
@@ -687,29 +689,12 @@ function QuickActionButton({ icon, label, onClick, color }: { icon: React.ReactN
 // ─── Admin Panel ───────────────────────────────────────────────────────────────
 
 function AdminPanel({ user }: { user: User }) {
-  const [tab, setTab] = useState<'materials' | 'users'>('materials');
-  const allTabs = [
-    { key: 'materials' as const, label: 'Matérias-Primas' },
-    { key: 'users' as const, label: 'Funcionários', adminOnly: true },
-  ];
-  const tabs = allTabs.filter(t => !t.adminOnly || user.role === 'admin');
-
-  // Se a aba ativa foi removida (employee tentando acessar users), volta para materials
-  const activeTab = tabs.find(t => t.key === tab) ? tab : 'materials';
-
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-      <div className="flex items-center gap-4 border-b border-zinc-200">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${activeTab === t.key ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
-            {t.label}
-            {activeTab === t.key && <motion.div layoutId="activeSub" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
-          </button>
-        ))}
-      </div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-        {activeTab === 'materials' && <MaterialManager />}
-        {activeTab === 'users' && user.role === 'admin' && <UserManager user={user} />}
+        {user.role === 'admin'
+          ? <UserManager user={user} />
+          : <p className="p-6 text-sm text-zinc-500">Somente administradores podem gerenciar funcionários.</p>}
       </div>
     </motion.div>
   );
@@ -967,18 +952,31 @@ function CustomerManager({ compact = false, onCreated }: { compact?: boolean; on
 function MaterialManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (m: Material) => void } = {}) {
   const { data: materials, loading, error, reload } = useData(() => db.materials.list());
   const [name, setName] = useState('');
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [rowDraft, setRowDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [success, setSuccess] = useState<string | null>(null);
+  const [tab, setTab] = useState<'list' | 'create'>('list');
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<{ key: 'name' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+
+  const reset = () => { setName(''); setFormError(''); setSuccess(null); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const dup = (materials as Material[])?.find(m => m.name.toLowerCase() === name.toLowerCase().trim());
-    if (dup) { setFormError('Matéria-prima já cadastrada.'); return; }
-    setSaving(true); setFormError('');
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const dup = (materials as Material[])?.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
+    if (dup) { setFormError(`Matéria-prima já cadastrada: ${dup.name}`); return; }
+    setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const res: any = await db.materials.add(name.trim());
-      if (onCreated) onCreated({ id: res.id, name: name.trim() });
-      setName(''); reload();
+      const res: any = await db.materials.add(trimmed);
+      if (onCreated) onCreated({ id: res.id, name: trimmed });
+      reset(); reload();
+      setSuccess('Matéria-prima cadastrada com sucesso!');
+    } catch (err: any) {
+      setFormError(err.message ?? 'Erro ao salvar.');
     } finally { setSaving(false); }
   };
 
@@ -987,9 +985,30 @@ function MaterialManager({ compact = false, onCreated }: { compact?: boolean; on
     await db.materials.remove(id); reload();
   };
 
+  const handleRowSave = async () => {
+    if (editingRow === null) return;
+    const trimmed = rowDraft.trim();
+    if (!trimmed) { setFormError('Informe o nome da matéria-prima.'); return; }
+    const dup = (materials as Material[])?.find(m => m.id !== editingRow && m.name.toLowerCase() === trimmed.toLowerCase());
+    if (dup) { setFormError(`Matéria-prima já cadastrada: ${dup.name}`); return; }
+    setSaving(true); setFormError('');
+    try {
+      await db.materials.update(editingRow, trimmed);
+      setEditingRow(null); setRowDraft('');
+      reload();
+    } catch (err: any) {
+      setFormError(err.message ?? 'Erro ao salvar.');
+    } finally { setSaving(false); }
+  };
+
   const formBlock = (
-    <form onSubmit={handleSubmit} className="flex gap-3 items-end bg-zinc-50 p-4 rounded-xl border border-zinc-100">
-      <div className="flex-1">
+    <form onSubmit={handleSubmit} className="flex flex-wrap gap-3 items-end bg-zinc-50 p-4 rounded-xl border border-zinc-100">
+      {success && (
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 w-full">
+          <CheckCircle className="w-3.5 h-3.5 shrink-0" /> {success}
+        </p>
+      )}
+      <div className="flex-1 min-w-[200px]">
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome da Matéria-Prima</label>
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value); }} placeholder="Ex: Amoxicilina" />
         {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
@@ -1002,23 +1021,131 @@ function MaterialManager({ compact = false, onCreated }: { compact?: boolean; on
 
   if (compact) return formBlock;
 
+  const available = (materials as Material[]) ?? [];
+  const q = stripDiacritics(search.trim().toLowerCase());
+  const list = available
+    .filter(m => {
+      if (!q) return true;
+      return stripDiacritics((m.name ?? '').toLowerCase()).includes(q);
+    })
+    .sort((a, b) => {
+      if (q) {
+        // Ordena por relevância quando há busca: início do nome primeiro;
+        // empates por nome (A–Z).
+        const score = (m: Material) => {
+          const name = stripDiacritics((m.name ?? '').toLowerCase());
+          if (name.startsWith(q)) return 2;
+          if (name.includes(q)) return 1;
+          return 0;
+        };
+        const diff = score(b) - score(a);
+        if (diff !== 0) return diff;
+        return (a.name ?? '').localeCompare(b.name ?? '');
+      }
+      const dir = sort.dir === 'desc' ? -1 : 1;
+      const av = String(a[sort.key] ?? '').toLowerCase();
+      const bv = String(b[sort.key] ?? '').toLowerCase();
+      return av.localeCompare(bv) * dir;
+    });
+
   return (
-    <div className="p-6 space-y-6">
-      {formBlock}
-      {loading && <LoadingState />}
-      {error && <ErrorState message={error} onRetry={reload} />}
-      {!loading && !error && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {(materials as Material[])?.map(m => (
-            <div key={m.id} className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 flex items-center justify-between group">
-              <span className="font-medium text-zinc-900">{m.name}</span>
-              <button onClick={() => handleDelete(m.id)} className="text-zinc-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
-            </div>
-          ))}
-          {(materials as Material[])?.length === 0 && <p className="col-span-full text-center py-8 text-zinc-400">Nenhuma matéria-prima cadastrada.</p>}
-        </div>
-      )}
-    </div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold text-zinc-900">Matérias-Primas</h2>
+        <p className="text-zinc-500">Gerencie as matérias-primas da farmácia.</p>
+      </div>
+      <div className="flex items-center gap-4 border-b border-zinc-200">
+        <button onClick={() => { setTab('list'); }} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'list' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
+          Lista de Matérias-Primas
+          {tab === 'list' && <motion.div layoutId="activeMat" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+        </button>
+        <button onClick={() => setTab('create')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'create' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
+          Cadastro de matéria-prima
+          {tab === 'create' && <motion.div layoutId="activeMat" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+        </button>
+      </div>
+      <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+        {tab === 'create' ? (
+          <div className="p-6 space-y-6">{formBlock}</div>
+        ) : (
+          <div className="p-6 space-y-6">
+            {loading && <LoadingState />}
+            {error && <ErrorState message={error} onRetry={reload} />}
+            {!loading && !error && (
+              <div className="space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+                    <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm w-full"
+                      placeholder="Buscar por nome..." value={search} onChange={e => setSearch(e.target.value)} />
+                    {search && (
+                      <button onClick={() => setSearch('')} title="Limpar busca"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <select value={`${sort.key}:${sort.dir}`}
+                    onChange={e => { const [key, dir] = e.target.value.split(':'); setSort({ key: key as any, dir: dir as any }); }}
+                    className="px-3 py-2 rounded-xl border border-zinc-200 text-sm text-zinc-600 bg-white focus:ring-2 focus:ring-red-500 outline-none">
+                    <option value="name:asc">Nome (A–Z)</option>
+                    <option value="name:desc">Nome (Z–A)</option>
+                    <option value="created_at:desc">Cadastro (mais recente)</option>
+                    <option value="created_at:asc">Cadastro (mais antigo)</option>
+                  </select>
+                  <span className="text-xs font-semibold text-zinc-500 whitespace-nowrap">
+                    {list.length} de {available.length} {available.length === 1 ? 'matéria-prima' : 'matérias-primas'}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead><tr className="border-b border-zinc-100 text-zinc-400 text-xs uppercase font-semibold">
+                      <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Cadastro</th><th className="px-4 py-3 text-right">Ações</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-zinc-50">
+                      {list.map(m => (
+                        <tr key={m.id} className="hover:bg-zinc-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-zinc-900">
+                            {editingRow === m.id ? (
+                              <div>
+                                <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                                  value={rowDraft} onChange={e => setRowDraft(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } }} />
+                                {formError && <p className="text-xs text-red-600 font-medium mt-1">{formError}</p>}
+                              </div>
+                            ) : (
+                              <HighlightMatch text={m.name} query={search} />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-zinc-500 text-sm">{m.created_at ? new Date(m.created_at).toLocaleString('pt-BR') : '—'}</td>
+                          <td className="px-4 py-3 text-right space-x-3">
+                            {editingRow === m.id ? (
+                              <>
+                                <button onClick={handleRowSave} disabled={saving} className="text-zinc-400 hover:text-green-700 text-sm font-medium transition-colors disabled:opacity-50">
+                                  {saving ? '...' : 'Salvar'}
+                                </button>
+                                <button onClick={() => { setEditingRow(null); setRowDraft(''); setFormError(''); }} className="text-zinc-400 hover:text-red-600 text-sm transition-colors">Cancelar</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => { setRowDraft(m.name); setEditingRow(m.id); setFormError(''); }} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
+                                <button onClick={() => handleDelete(m.id)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {available.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhuma matéria-prima cadastrada.</p>}
+                  {available.length > 0 && list.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhum resultado encontrado.</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 }
 
@@ -1287,15 +1414,6 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
     if (template) {
       setSelectedCustomerId(template.customer_id);
       setItems(template.items.map(i => ({ ...i })));
-      setBudgetNumber(template.budget_number ?? '');
-      setBudgetItems((template.budget_items ?? []).map(bi => ({ ...bi })));
-      const budgetItems = template.budget_items ?? [];
-      const selIdx = budgetItems.findIndex(bi => bi.is_selected);
-      setSelectedBudgetIndex(selIdx >= 0 ? selIdx : null);
-      setAttendantName(template.attendant_name ?? '');
-      setDeliveryDate(template.delivery_date ? formatDateToBR(template.delivery_date) : '');
-      setPaymentStatus(template.payment_status ?? '');
-      setPaymentMethod(template.payment_method ?? '');
       setShowTemplateBanner(true);
     }
   }, [template]);
@@ -1468,7 +1586,7 @@ function RecipeForm({ user, template, formula, confirmed = false, readOnly = fal
     : [];
 
   return (
-    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="max-w-4xl mx-auto space-y-6">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">
@@ -2028,7 +2146,7 @@ function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, onSelect, onConfirm }: { title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void }) {
+function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, onSelect, onConfirm, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -2075,12 +2193,15 @@ function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFil
     nao_pago: 'bg-red-50 border-red-200',
     pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
   };
+  const showRepeat = !!onRepeat;
   const gridCols = showAndamento
     ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.2fr_0.6fr]'
-    : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
+    : showRepeat
+      ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.6fr]'
+      : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <motion.div key={screenKey} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">{title}</h2>
@@ -2122,8 +2243,8 @@ function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFil
           {filtered.map(f => {
             const tint = paymentTint[f.payment_status ?? ''] ?? 'bg-white border-zinc-200';
             return variant === 'confirmed' ? (
-              <button key={f.id} type="button" onClick={() => onSelect?.(f)}
-                className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group ${tint}`}>
+              <div key={f.id} onClick={() => onSelect?.(f)}
+                className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group cursor-pointer ${tint}`}>
                 <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
                   <p className="font-bold text-zinc-900">{f.customer_name}</p>
                   <div className="text-zinc-700 space-y-0.5 font-medium">
@@ -2154,13 +2275,20 @@ function FormulaList({ title, subtitle, statuses, variant = 'pending', statusFil
                       </select>
                     </div>
                   )}
-                  <div className="flex justify-end">
+                  <div className="flex justify-end items-center gap-2">
+                    {showRepeat && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); onRepeat?.(f); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all whitespace-nowrap"
+                        style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+                        <RefreshCw className="w-3.5 h-3.5" /> Repetir
+                      </button>
+                    )}
                     <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
                       <ChevronRight className="w-4 h-4" />
                     </div>
                   </div>
                 </div>
-              </button>
+              </div>
             ) : (
               <div key={f.id} onClick={() => onSelect?.(f)}
                 className="w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-3 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer">

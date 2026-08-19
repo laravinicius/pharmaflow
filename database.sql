@@ -71,6 +71,11 @@ CREATE TABLE IF NOT EXISTS formula_budget_items (
   FOREIGN KEY (formula_id) REFERENCES formulas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS server_meta (
+  key_name VARCHAR(64) PRIMARY KEY,
+  value    VARCHAR(255) NOT NULL
+) ENGINE=InnoDB;
+
 CREATE INDEX idx_users_updated     ON users(updated_at);
 CREATE INDEX idx_customers_updated ON customers(updated_at);
 CREATE INDEX idx_materials_updated ON materials(updated_at);
