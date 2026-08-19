@@ -8,8 +8,7 @@ PharmaFlow is an offline-first desktop app (Electron + Vite + React 19 + Tailwin
   1. `electron/main.ts` — IPC handlers (`ipcMain.handle`)
   2. `electron/preload.ts` — bridge exposed as `window.electronAPI`
   3. `src/services/lanDatabase.ts` — typed client (`db.*`) plus the `Window.electronAPI` type declaration
-- `electron/cache.ts` (`CacheManager`) is the core: a local SQLite cache (sql.js, `userData/cache.db`) that syncs to a MariaDB server. Writes go to the cache with `sync_status='pending'`; `syncNow()` runs a push/pull loop (full sync every 10 min, health check every 30s).
-- Almost all frontend UI lives in one large file: `src/App.tsx` (~1500 lines).
+- The renderer UI is split into small files under `src/`: `App.tsx` holds only login, layout, routing and global state; feature screens live in `src/components/` (`Dashboard`, `RecipeForm`, `FormulaList`, `CustomerManager`, `MaterialManager`, `UserManager`/`AdminPanel`, `AdminUserManager`, `SettingsManager`); shared UI in `src/components/` (`SyncIndicator`, `Logo`, `NavItem`, `Feedback`, `HighlightMatch`); business types in `src/types.ts`, formatting helpers in `src/utils/format.ts`, and the data-loading hook in `src/hooks/useData.ts`.
 - The `@/*` alias resolves to the repo **root**, not `src/` (`tsconfig.json` + `vite.config.ts`).
 
 ## Database schema changes
