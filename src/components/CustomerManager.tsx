@@ -37,12 +37,13 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
     try {
       const payload = { name: `${form.firstName} ${form.lastName}`.trim(), phone: formatted };
       if (editingId) {
-        await db.customers.update(editingId, payload);
+        const res: any = await db.customers.update(editingId, payload);
+        if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
         reset(); reload();
       } else {
         const res: any = await db.customers.add(payload);
-        if (res?.error?.includes('UNIQUE') || res?.error?.includes('unique')) {
-          setFormError('Celular já cadastrado no servidor.');
+        if (res?.success === false) {
+          setFormError(res.error ?? 'Erro ao salvar.');
         } else {
           if (onCreated) onCreated({ id: res.id, ...payload });
           reset(); reload();
@@ -56,7 +57,13 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
 
   const handleDelete = async (id: number) => {
     if (!confirm('Excluir este cliente?')) return;
-    await db.customers.remove(id); reload();
+    try {
+      const res: any = await db.customers.remove(id);
+      if (res?.success === false) { setFormError(res.error ?? 'Erro ao excluir.'); return; }
+      reload();
+    } catch (err: any) {
+      setFormError(err.message ?? 'Erro ao excluir.');
+    }
   };
 
   const handleRowSave = async () => {
@@ -65,7 +72,8 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
     const formatted = formatPhone(rowDraft.phone);
     setSaving(true); setFormError('');
     try {
-      await db.customers.update(editingRow, { name: rowDraft.name, phone: formatted });
+      const res: any = await db.customers.update(editingRow, { name: rowDraft.name, phone: formatted });
+      if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
       setEditingRow(null); setRowDraft({ name: '', phone: '' });
       reload();
     } catch (err: any) {

@@ -35,6 +35,8 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       try {
         await db.formulas.updateStatus(f.id, 'confirmed');
         reload();
+      } catch (err: any) {
+        alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
       } finally {
         setConfirmingId(null);
       }
@@ -47,6 +49,8 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     try {
       await db.formulas.updateDeliveryStatus(f.id, deliveryStatus);
       reload();
+    } catch (err: any) {
+      alert('Erro ao atualizar o andamento: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally {
       setUpdatingStatusId(null);
     }

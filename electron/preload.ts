@@ -2,8 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Auth
-  login: (username: string, password: string) =>
-    ipcRenderer.invoke('auth:login', username, password),
+  login: (username: string, password: string, force: boolean = false) =>
+    ipcRenderer.invoke('auth:login', username, password, force),
+  logout: (token: string) => ipcRenderer.invoke('auth:logout', token),
+  sessionHeartbeat: (token: string) => ipcRenderer.invoke('session:heartbeat', token),
 
   // Usuários
   listUsers:   ()    => ipcRenderer.invoke('users:list'),
@@ -37,12 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateSavedFormula:  (id: number, f: any) => ipcRenderer.invoke('savedFormulas:update', id, f),
   deleteSavedFormula:  (id: number)      => ipcRenderer.invoke('savedFormulas:delete', id),
 
-  // Sync
-  syncNow:    () => ipcRenderer.invoke('sync:now'),
-  syncStatus: () => ipcRenderer.invoke('sync:status'),
-  onSyncStatusUpdate: (cb: (status: any) => void) => {
-    ipcRenderer.on('sync:status-update', (_, status) => cb(status));
-  },
+  // Atualização ao vivo — avisa quando os dados mudam no servidor
   onDataChanged: (cb: () => void) => {
     const listener = () => cb();
     ipcRenderer.on('data:changed', listener);

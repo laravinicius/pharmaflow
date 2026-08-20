@@ -88,26 +88,23 @@ CREATE TABLE IF NOT EXISTS saved_formula_items (
   FOREIGN KEY (insumo_id)        REFERENCES insumos(id)        ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS server_meta (
-  key_name VARCHAR(64) PRIMARY KEY,
-  value    VARCHAR(255) NOT NULL
-) ENGINE=InnoDB;
-
--- Tombstones de exclusões: propaga deleções feitas em um computador para os demais
-CREATE TABLE IF NOT EXISTS sync_deletes (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  table_name  VARCHAR(30) NOT NULL,
-  server_id   INT         NOT NULL,
-  deleted_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_sync_deletes (table_name, server_id)
-) ENGINE=InnoDB;
-
 CREATE INDEX idx_users_updated     ON users(updated_at);
 CREATE INDEX idx_customers_updated ON customers(updated_at);
 CREATE INDEX idx_insumos_updated ON insumos(updated_at);
 CREATE INDEX idx_formulas_updated  ON formulas(updated_at);
 CREATE INDEX idx_saved_formulas_updated ON saved_formulas(updated_at);
-CREATE INDEX idx_sync_deletes_deleted ON sync_deletes(deleted_at);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT          NOT NULL,
+  token      VARCHAR(64)  NOT NULL UNIQUE,
+  last_seen  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+CREATE INDEX idx_sessions_last_seen ON sessions(last_seen);
 
 -- Default admin user (password: admin123)
 INSERT IGNORE INTO users (name, username, password, role)

@@ -194,6 +194,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       if (formula) await db.formulas.update(formula.id, buildPayload('pending'));
       else await db.formulas.add(buildPayload('pending'));
       onComplete('pending');
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally { setSaving(false); }
   };
 
@@ -204,6 +206,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       if (formula) await db.formulas.update(formula.id, buildPayload('confirmed', true));
       else await db.formulas.add(buildPayload('confirmed', true));
       onComplete('confirmed');
+    } catch (err: any) {
+      alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally { setSaving(false); }
   };
 
@@ -215,6 +219,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         deliveryStatus === 'entregue' ? 'delivered' : 'confirmed'
       ));
       onComplete('confirmed');
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally { setSaving(false); }
   };
 
@@ -229,6 +235,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         payment_method: paymentMethod || null,
       });
       onComplete('confirmed');
+    } catch (err: any) {
+      alert('Erro ao cancelar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally { setSaving(false); }
   };
 

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { CloudUpload, RefreshCw, Settings, Wifi, WifiOff } from 'lucide-react';
+import { Settings, Wifi, WifiOff } from 'lucide-react';
 import { motion } from 'motion/react';
-import { db } from '../services/lanDatabase';
 import { AdminUserManager } from './AdminUserManager';
 
 export function SettingsManager() {
@@ -9,7 +8,6 @@ export function SettingsManager() {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [tab, setTab] = useState<'db' | 'admin'>('db');
 
   useEffect(() => {
@@ -34,14 +32,6 @@ export function SettingsManager() {
       : { type: 'error', msg: '❌ Falha: ' + result.error }
     );
     setTesting(false);
-  };
-
-  const handleSyncNow = async () => {
-    setSyncing(true);
-    await db.sync.now();
-    setStatus({ type: 'success', msg: '✅ Sincronização concluída!' });
-    setTimeout(() => setStatus(null), 3000);
-    setSyncing(false);
   };
 
   if (!window.electronAPI) {
@@ -122,16 +112,6 @@ export function SettingsManager() {
           <p className="text-sm text-red-800"><strong>Atenção:</strong> o servidor MariaDB deve aceitar conexões remotas e o firewall deve liberar a porta 3306.</p>
           <p className="text-sm text-red-800 mt-2"><strong>Importante:</strong> usuarios configurados com autenticacao Windows/GSSAPI (`auth_gssapi_client`) nao sao suportados por esta versao do app. Use um usuario MariaDB com senha normal, como `mysql_native_password`.</p>
         </div>
-      </div>
-
-      {/* Sincronização manual */}
-      <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-6">
-        <h3 className="text-lg font-bold text-zinc-900 mb-1">Sincronização</h3>
-        <p className="text-zinc-500 text-sm mb-4">O app sincroniza automaticamente a cada 10 minutos. Você também pode forçar uma sincronização manual.</p>
-        <button onClick={handleSyncNow} disabled={syncing} className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-900 text-white font-semibold px-5 py-2 rounded-lg disabled:opacity-60 transition-colors">
-          {syncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
-          {syncing ? 'Sincronizando...' : 'Sincronizar Agora'}
-        </button>
       </div>
         </>
       )}

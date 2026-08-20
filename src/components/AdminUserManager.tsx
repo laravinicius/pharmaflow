@@ -37,12 +37,16 @@ export function AdminUserManager() {
     setSaving(true); setSuccess(null);
     try {
       if (editingId) {
-        await db.users.update(editingId, {
+        const res: any = await db.users.update(editingId, {
           name: form.name.trim(),
           username: form.username.trim(),
           password: form.password.trim() || undefined,
           role: 'admin',
         });
+        if (res && res.success === false) {
+          setFormError(res.error ?? 'Erro ao salvar. Tente novamente.');
+          return;
+        }
       } else {
         const res: any = await db.users.add({
           name: form.name.trim(),

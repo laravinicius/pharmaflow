@@ -31,6 +31,7 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
     setSaving(true); setFormError(''); setSuccess(null);
     try {
       const res: any = await db.insumos.add(trimmed);
+      if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
       if (onCreated) onCreated({ id: res.id, name: trimmed });
       reset(); reload();
       setSuccess('Insumo cadastrado com sucesso!');
@@ -54,7 +55,8 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
     if (dup) { setFormError(`Insumo já cadastrado: ${dup.name}`); return; }
     setSaving(true); setFormError('');
     try {
-      await db.insumos.update(editingRow, trimmed);
+      const res: any = await db.insumos.update(editingRow, trimmed);
+      if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
       setEditingRow(null); setRowDraft('');
       reload();
     } catch (err: any) {

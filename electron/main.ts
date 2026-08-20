@@ -3,12 +3,12 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import mysql from 'mysql2/promise';
-import { CacheManager } from './cache';
+import { Db } from './db';
 import { formatDbError } from './dbError';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ─── Master key (modo setup offline) ─────────────────────────────────────────
+// ─── Master key (modo setup) ─────────────────────────────────────────────────
 const MASTER_USERNAME = 'admin';
 const MASTER_PASSWORD = 'admin123';
 const hasMasterSetupCredentials = true;
@@ -30,10 +30,10 @@ if (fs.existsSync(configPath)) {
   catch (e) { console.error('Erro ao carregar config:', e); }
 }
 
-// ─── Pool + CacheManager ──────────────────────────────────────────────────────
+// ─── Pool + Db ────────────────────────────────────────────────────────────────
 
 let pool: mysql.Pool | null = null;
-const cache = new CacheManager(app.getPath('userData'));
+const db = new Db();
 
 const initPool = () => {
   if (pool) pool.end().catch(() => {});
@@ -43,66 +43,73 @@ const initPool = () => {
     waitForConnections: true, connectionLimit: 10, connectTimeout: 5000,
     dateStrings: true,
   });
-  cache.setPool(pool);
+  db.setPool(pool);
 };
 
 initPool();
 
 // ─── IPC: Auth ────────────────────────────────────────────────────────────────
 
-ipcMain.handle('auth:login', async (_, username: string, password: string) => {
+ipcMain.handle('auth:login', async (_, username: string, password: string, force = false) => {
   if (hasMasterSetupCredentials && username === MASTER_USERNAME && password === MASTER_PASSWORD) {
     return {
       success: true, setupMode: true,
       user: { id: 0, name: 'Configuração', username: MASTER_USERNAME, role: 'admin' },
     };
   }
-  return await cache.login(username, password);
+  return await db.login(username, password, force);
 });
 
-// ─── IPC: Usuários ────────────────────────────────────────────────────────────
+ipcMain.handle('auth:logout', async (_, token: string) => {
+  await db.revokeSession(token);
+  return { success: true };
+});
 
-ipcMain.handle('users:list',   ()          => cache.listUsers());
-ipcMain.handle('users:add',    (_, u)      => cache.addUser(u));
-ipcMain.handle('users:update', (_, id, u)  => cache.updateUser(id, u));
-ipcMain.handle('users:delete', (_, id)     => cache.deleteUser(id));
+ipcMain.handle('session:heartbeat', async (_, token: string) => {
+  return await db.heartbeat(token);
+});
 
-// ─── IPC: Clientes ────────────────────────────────────────────────────────────
+// Limpa sessões órfãs (app fechado sem logout / queda de energia)
+setInterval(() => { db.cleanupStaleSessions().catch(() => {}); }, 60_000);
 
-ipcMain.handle('customers:list',   ()           => cache.listCustomers());
-ipcMain.handle('customers:add',    (_, c)        => cache.addCustomer(c));
-ipcMain.handle('customers:update', (_, id, c)    => cache.updateCustomer(id, c));
-ipcMain.handle('customers:delete', (_, id)       => cache.deleteCustomer(id));
+// ─── Usuários ────────────────────────────────────────────────────────────────
 
-// ─── IPC: Insumos ─────────────────────────────────────────────────────────────
+ipcMain.handle('users:list',   ()          => db.listUsers());
+ipcMain.handle('users:add',    async (_, u)      => { const r = await db.addUser(u); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('users:update', async (_, id, u)  => { const r = await db.updateUser(id, u); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('users:delete', async (_, id)     => { const r = await db.deleteUser(id); if (r?.success) notifyDataChanged(); return r; });
 
-ipcMain.handle('insumos:list',   ()        => cache.listInsumos());
-ipcMain.handle('insumos:add',    (_, name) => cache.addInsumo(name));
-ipcMain.handle('insumos:update', (_, id, name) => cache.updateInsumo(id, name));
-ipcMain.handle('insumos:delete', (_, id)   => cache.deleteInsumo(id));
+// ─── Clientes ────────────────────────────────────────────────────────────────
 
-// ─── IPC: Fórmulas ────────────────────────────────────────────────────────────
+ipcMain.handle('customers:list',   ()           => db.listCustomers());
+ipcMain.handle('customers:add',    async (_, c)        => { const r = await db.addCustomer(c); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('customers:update', async (_, id, c)    => { const r = await db.updateCustomer(id, c); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('customers:delete', async (_, id)       => { const r = await db.deleteCustomer(id); if (r?.success) notifyDataChanged(); return r; });
 
-ipcMain.handle('formulas:list',          ()              => cache.listFormulas());
-ipcMain.handle('formulas:add',           (_, f)          => cache.addFormula(f));
-ipcMain.handle('formulas:update',        (_, id, f)      => cache.updateFormula(id, f));
-ipcMain.handle('formulas:update-status', (_, id, status) => cache.updateFormulaStatus(id, status));
-ipcMain.handle('formulas:update-delivery-status', (_, id, deliveryStatus) => cache.updateFormulaDeliveryStatus(id, deliveryStatus));
-ipcMain.handle('formulas:delete',        (_, id)         => cache.deleteFormula(id));
+// ─── Insumos ─────────────────────────────────────────────────────────────────
 
-// ─── IPC: Fórmulas Salvas ─────────────────────────────────────────────────────
+ipcMain.handle('insumos:list',   ()        => db.listInsumos());
+ipcMain.handle('insumos:add',    async (_, name) => { const r = await db.addInsumo(name); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('insumos:update', async (_, id, name) => { const r = await db.updateInsumo(id, name); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('insumos:delete', async (_, id)   => { const r = await db.deleteInsumo(id); if (r?.success) notifyDataChanged(); return r; });
 
-ipcMain.handle('savedFormulas:list',   ()           => cache.listSavedFormulas());
-ipcMain.handle('savedFormulas:add',    (_, f)       => cache.addSavedFormula(f));
-ipcMain.handle('savedFormulas:update', (_, id, f)   => cache.updateSavedFormula(id, f));
-ipcMain.handle('savedFormulas:delete', (_, id)      => cache.deleteSavedFormula(id));
+// ─── Fórmulas ────────────────────────────────────────────────────────────────
 
-// ─── IPC: Sync ────────────────────────────────────────────────────────────────
+ipcMain.handle('formulas:list',          ()              => db.listFormulas());
+ipcMain.handle('formulas:add',           async (_, f)          => { const r = await db.addFormula(f); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:update',        async (_, id, f)      => { const r = await db.updateFormula(id, f); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:update-status', async (_, id, status) => { const r = await db.updateFormulaStatus(id, status); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:update-delivery-status', async (_, id, deliveryStatus) => { const r = await db.updateFormulaDeliveryStatus(id, deliveryStatus); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:delete',        async (_, id)         => { const r = await db.deleteFormula(id); notifyDataChanged(); return r; });
 
-ipcMain.handle('sync:now',    async () => { await cache.syncNow(); return cache.getStatus(); });
-ipcMain.handle('sync:status', ()      => cache.getStatus());
+// ─── Fórmulas Salvas ─────────────────────────────────────────────────────────
 
-// ─── IPC: Configurações ───────────────────────────────────────────────────────
+ipcMain.handle('savedFormulas:list',   ()           => db.listSavedFormulas());
+ipcMain.handle('savedFormulas:add',    async (_, f)       => { const r = await db.addSavedFormula(f); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('savedFormulas:update', async (_, id, f)   => { const r = await db.updateSavedFormula(id, f); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('savedFormulas:delete', async (_, id)      => { const r = await db.deleteSavedFormula(id); if (r?.success) notifyDataChanged(); return r; });
+
+// ─── Configurações ───────────────────────────────────────────────────────────
 
 ipcMain.handle('config:get', () => {
   const { password: _p, ...safe } = dbConfig;
@@ -127,10 +134,15 @@ ipcMain.handle('config:test', async () => {
 
 // ─── Janela ───────────────────────────────────────────────────────────────────
 
-let mainWindow: BrowserWindow | null = null;
+// Avisa todas as janelas abertas que os dados mudaram (atualização ao vivo)
+const notifyDataChanged = () => {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('data:changed');
+  }
+};
 
 const createWindow = () => {
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600,
     title: 'PIX Farma - Manipulação',
     autoHideMenuBar: true,
@@ -141,27 +153,14 @@ const createWindow = () => {
     },
   });
 
-  // Envia status de sync para o renderer sempre que mudar
-  cache.onStatus((status) => {
-    mainWindow?.webContents.send('sync:status-update', status);
-  });
-
-  // Avisa o renderer quando o cache muda (mutação local ou sync) — atualização ao vivo
-  cache.onDataChanged(() => {
-    mainWindow?.webContents.send('data:changed');
-  });
-
   if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 };
 
-app.on('ready', async () => {
-  await cache.init();
-  // Sync a cada 15s — seguro em LAN local com poucos registros (<1s por ciclo)
-  cache.startSyncLoop(15 * 1000);
+app.on('ready', () => {
   createWindow();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

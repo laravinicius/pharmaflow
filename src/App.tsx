@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Users, Cross, ClipboardList, UserPlus, PlusCircle, LogOut,
-  CheckCircle2, Clock, Menu, Settings, RefreshCw, WifiOff, AlertCircle,
-  CloudOff, CheckCircle, History, AlertTriangle, Bookmark,
+  CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
+  CheckCircle, History, AlertTriangle, Bookmark,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
-import { User, Formula, SyncStatus } from './types';
-import { SyncIndicator } from './components/SyncIndicator';
+import { User, Formula } from './types';
 import { PixFarmaLogo } from './components/Logo';
 import { NavItem } from './components/NavItem';
 import { AdminPanel } from './components/UserManager';
@@ -24,46 +23,35 @@ import { SavedFormulaManager } from './components/SavedFormulaManager';
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setupMode, setSetupMode] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [loginConflict, setLoginConflict] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'insumos' | 'savedFormulas' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
   const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
   const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
-  const prevSyncState = useRef<string | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Escuta atualizações de sync do processo principal
-  useEffect(() => {
-    if (!window.electronAPI) return;
-    db.sync.status().then(setSyncStatus);
-    db.sync.onUpdate((s) => {
-      setSyncStatus(s);
-      // Toast quando reconecta (offline → idle)
-      if (prevSyncState.current === 'offline' && s.state === 'idle') {
-        showToast('✓ Conexão restabelecida — dados sincronizados.', 'success');
-      }
-      prevSyncState.current = s.state;
-    });
-  }, []);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doLogin = async (force: boolean) => {
     setLoginLoading(true); setLoginError('');
     try {
-      const res = await db.auth.login(loginForm.username, loginForm.password);
+      const res = await db.auth.login(loginForm.username, loginForm.password, force);
       if (res.success) {
         setUser(res.user);
+        setSessionToken(res.sessionToken ?? null);
         setSetupMode(res.setupMode === true);
         setActiveTab('dashboard');
+        setLoginConflict(false);
+      } else if (res.conflict) {
+        setLoginConflict(true);
       } else {
         setLoginError(res.error ?? 'Erro ao fazer login.');
       }
@@ -74,11 +62,35 @@ export default function App() {
     }
   };
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    doLogin(false);
+  };
+
   const handleLogout = () => {
+    if (sessionToken) db.auth.logout(sessionToken).catch(() => {});
     setUser(null);
     setSetupMode(false);
+    setSessionToken(null);
     setActiveTab('dashboard');
   };
+
+  // Mantém a sessão viva; se ela for derrubada por outro login, volta ao login
+  useEffect(() => {
+    if (!user || setupMode || !sessionToken) return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await db.auth.heartbeat(sessionToken);
+        if (!res.valid) {
+          setUser(null);
+          setSetupMode(false);
+          setSessionToken(null);
+          setLoginError('Sua sessão foi encerrada em outro dispositivo.');
+        }
+      } catch { /* servidor fora do ar: mantém a sessão local */ }
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [user, setupMode, sessionToken]);
 
   if (!user) {
     return (
@@ -115,13 +127,6 @@ export default function App() {
                 <AlertCircle className="w-4 h-4 shrink-0" />{loginError}
               </div>
             )}
-            {loginError.includes('Servidor indisponível') && (
-              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-sm text-amber-900">
-                  O servidor não respondeu. Este computador só entra offline se este usuário já tiver feito login online antes.
-                </p>
-              </div>
-            )}
             <button type="submit" disabled={loginLoading}
               className="w-full hover:opacity-90 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-red-200"
               style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}
@@ -131,6 +136,34 @@ export default function App() {
           </form>
           </div>
         </motion.div>
+
+        {loginConflict && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setLoginConflict(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-zinc-900 text-lg">Usuário já logado</h3>
+                  <p className="text-xs text-zinc-500">Este usuário já está logado em outro dispositivo.</p>
+                </div>
+              </div>
+              <p className="text-sm text-zinc-700 mb-4">Deseja entrar mesmo assim? A sessão do outro dispositivo será encerrada.</p>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setLoginConflict(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="button" onClick={() => doLogin(true)} disabled={loginLoading}
+                  className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+                  {loginLoading ? 'Entrando...' : 'Entrar mesmo assim'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -157,51 +190,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
-      {/* Barra de status de conexão — só aparece em estados que requerem atenção */}
-      <AnimatePresence>
-        {syncStatus && (syncStatus.state === 'offline' || syncStatus.state === 'syncing' || syncStatus.state === 'error') && (
-          <motion.div
-            key={syncStatus.state}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-          >
-            {syncStatus.state === 'offline' && (
-              <div className="bg-amber-600 text-white text-xs font-semibold px-6 py-2 flex items-center gap-3">
-                <CloudOff className="w-3.5 h-3.5 shrink-0" />
-                <span>Servidor indisponível — trabalhando offline com dados locais.</span>
-                {syncStatus.pending > 0 && (
-                  <span className="bg-amber-700 px-2 py-0.5 rounded-full whitespace-nowrap">
-                    {syncStatus.pending} {syncStatus.pending === 1 ? 'alteração pendente' : 'alterações pendentes'}
-                  </span>
-                )}
-                <span className="ml-auto text-amber-200 font-normal whitespace-nowrap">Tentando reconectar a cada 30s</span>
-              </div>
-            )}
-            {syncStatus.state === 'syncing' && (
-              <div className="text-white text-xs font-semibold px-6 py-2 flex items-center gap-3" style={{ background: '#1F3164' }}>
-                <RefreshCw className="w-3.5 h-3.5 shrink-0 animate-spin" />
-                <span>Sincronizando com o servidor...</span>
-                {syncStatus.pending > 0 && (
-                  <span className="bg-blue-900 px-2 py-0.5 rounded-full">{syncStatus.pending} pendentes</span>
-                )}
-              </div>
-            )}
-            {syncStatus.state === 'error' && (
-              <div className="bg-red-700 text-white text-xs font-semibold px-6 py-2 flex items-center gap-3">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>Erro de sincronização — {syncStatus.error ?? 'verifique a conexão com o servidor.'}</span>
-                <button onClick={() => db.sync.now().then(setSyncStatus)}
-                  className="ml-auto bg-red-800 hover:bg-red-900 px-3 py-0.5 rounded-full transition-colors whitespace-nowrap">
-                  Tentar novamente
-                </button>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <div className="flex flex-1 min-h-0">
 
       {/* Toast de notificação */}
@@ -244,7 +232,9 @@ export default function App() {
                 <NavItem icon={<Users />} label="Clientes" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Cross />} label="Insumos" active={activeTab === 'insumos'} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Bookmark />} label="Fórmulas Salvas" active={activeTab === 'savedFormulas'} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Settings />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
+                {user.role === 'admin' && (
+                  <NavItem icon={<Settings />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
+                )}
               </>
             )}
           </nav>
@@ -278,8 +268,6 @@ export default function App() {
             </button>
 
             <div className="flex items-center gap-4">
-              {/* Indicador de sync */}
-              {syncStatus && <SyncIndicator status={syncStatus} onSync={() => db.sync.now().then(setSyncStatus)} />}
               <div className="text-sm text-zinc-500">
                 {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>

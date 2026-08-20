@@ -53,12 +53,16 @@ export function UserManager({ user }: { user: User }) {
     try {
       if (editingId) {
         // Edição: senha em branco = não altera
-        await db.users.update(editingId, {
+        const res: any = await db.users.update(editingId, {
           name: form.name.trim(),
           username: form.username.trim(),
           password: form.password.trim() || undefined,
           role: form.role,
         });
+        if (res && res.success === false) {
+          setFormError(res.error ?? 'Erro ao salvar. Tente novamente.');
+          return;
+        }
       } else {
         const res: any = await db.users.add({
           name: form.name.trim(),
@@ -87,7 +91,8 @@ export function UserManager({ user }: { user: User }) {
     // Cancela edição se for o mesmo usuário sendo deletado
     if (editingId === u.id) reset();
     try {
-      await db.users.remove(u.id);
+      const res: any = await db.users.remove(u.id);
+      if (res?.success === false) { setFormError(res.error ?? 'Erro ao excluir.'); return; }
       reload();
     } catch (err: any) {
       alert('Erro ao excluir: ' + (err?.message ?? 'tente novamente.'));

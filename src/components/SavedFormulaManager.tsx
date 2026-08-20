@@ -70,10 +70,12 @@ export function SavedFormulaManager() {
     const payload = { name: trimmed, items: items.map(i => ({ insumo_id: i.insumo_id, quantity: i.quantity, unit: i.unit ?? 'mg' })) };
     try {
       if (editingId) {
-        await db.savedFormulas.update(editingId, payload);
+        const res: any = await db.savedFormulas.update(editingId, payload);
+        if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
         reset(); setTab('list');
       } else {
-        await db.savedFormulas.add(payload);
+        const res: any = await db.savedFormulas.add(payload);
+        if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
         reset();
         setSuccess('Fórmula salva cadastrada com sucesso!');
       }
@@ -85,7 +87,13 @@ export function SavedFormulaManager() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Excluir esta fórmula salva?')) return;
-    await db.savedFormulas.remove(id); reload();
+    try {
+      const res: any = await db.savedFormulas.remove(id);
+      if (res?.success === false) { setFormError(res.error ?? 'Erro ao excluir.'); return; }
+      reload();
+    } catch (err: any) {
+      setFormError(err.message ?? 'Erro ao excluir.');
+    }
   };
 
   const startEdit = (f: SavedFormula) => {

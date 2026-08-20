@@ -3,7 +3,9 @@
 declare global {
   interface Window {
     electronAPI: {
-      login: (u: string, p: string) => Promise<{ success: boolean; user?: any; offline?: boolean; setupMode?: boolean; error?: string }>;
+      login: (u: string, p: string, force?: boolean) => Promise<{ success: boolean; user?: any; sessionToken?: string; conflict?: boolean; setupMode?: boolean; error?: string }>;
+      logout: (token: string) => Promise<{ success: boolean }>;
+      sessionHeartbeat: (token: string) => Promise<{ valid: boolean }>;
       listUsers: () => Promise<any[]>;
       addUser: (u: any) => Promise<any>;
       updateUser: (id: number, u: any) => Promise<any>;
@@ -26,9 +28,6 @@ declare global {
       addSavedFormula: (f: any) => Promise<any>;
       updateSavedFormula: (id: number, f: any) => Promise<any>;
       deleteSavedFormula: (id: number) => Promise<any>;
-      syncNow: () => Promise<any>;
-      syncStatus: () => Promise<any>;
-      onSyncStatusUpdate: (cb: (s: any) => void) => void;
       onDataChanged: (cb: () => void) => () => void;
       getConfig: () => Promise<any>;
       saveConfig: (cfg: any) => Promise<any>;
@@ -41,7 +40,9 @@ const api = () => window.electronAPI;
 
 export const db = {
   auth:      {
-    login: (u: string, p: string) => api().login(u, p),
+    login: (u: string, p: string, force?: boolean) => api().login(u, p, force),
+    logout: (token: string) => api().logout(token),
+    heartbeat: (token: string) => api().sessionHeartbeat(token),
   },
   users:     {
     list:   ()                    => api().listUsers(),
@@ -53,7 +54,6 @@ export const db = {
   insumos: { list: () => api().listInsumos(), add: (n: string) => api().addInsumo(n), update: (id: number, n: string) => api().updateInsumo(id, n), remove: (id: number) => api().deleteInsumo(id) },
   formulas:  { list: () => api().listFormulas(), add: (f: any) => api().addFormula(f), update: (id: number, f: any) => api().updateFormula(id, f), updateStatus: (id: number, s: string) => api().updateFormulaStatus(id, s), updateDeliveryStatus: (id: number, s: string) => api().updateFormulaDeliveryStatus(id, s), remove: (id: number) => api().deleteFormula(id) },
   savedFormulas: { list: () => api().listSavedFormulas(), add: (f: any) => api().addSavedFormula(f), update: (id: number, f: any) => api().updateSavedFormula(id, f), remove: (id: number) => api().deleteSavedFormula(id) },
-  sync:      { now: () => api().syncNow(), status: () => api().syncStatus(), onUpdate: (cb: (s: any) => void) => api().onSyncStatusUpdate(cb) },
   data:      { onChanged: (cb: () => void) => api().onDataChanged(cb) },
   config:    { get: () => api().getConfig(), save: (c: any) => api().saveConfig(c), test: () => api().testConnection() },
 };

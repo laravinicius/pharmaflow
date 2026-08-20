@@ -20,11 +20,12 @@ export function useData<T>(fetcher: () => Promise<T>, deps: any[] = []) {
     }
   }, deps);
 
-  // Atualização ao vivo: recarrega silenciosamente quando o cache muda
-  // (mutação nesta máquina ou sync que trouxe dados de outro computador)
+  // Atualização ao vivo: recarrega silenciosamente quando o servidor muda
+  // (gravação nesta máquina via data:changed) ou em outras máquinas (polling)
   useEffect(() => {
     const off = db.data.onChanged(() => load(true));
-    return () => { if (off) off(); };
+    const timer = setInterval(() => load(true), 10_000);
+    return () => { if (off) off(); clearInterval(timer); };
   }, [load]);
 
   useEffect(() => { load(); }, [load]);
