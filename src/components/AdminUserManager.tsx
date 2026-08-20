@@ -44,12 +44,16 @@ export function AdminUserManager() {
           role: 'admin',
         });
       } else {
-        await db.users.add({
+        const res: any = await db.users.add({
           name: form.name.trim(),
           username: form.username.trim(),
           password: form.password.trim(),
           role: 'admin',
         });
+        if (res && res.success === false) {
+          setFormError(res.error ?? 'Erro ao salvar. Tente novamente.');
+          return;
+        }
       }
       const wasEditing = editingId !== null;
       reset(); reload();

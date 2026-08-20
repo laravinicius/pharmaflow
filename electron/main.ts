@@ -74,12 +74,12 @@ ipcMain.handle('customers:add',    (_, c)        => cache.addCustomer(c));
 ipcMain.handle('customers:update', (_, id, c)    => cache.updateCustomer(id, c));
 ipcMain.handle('customers:delete', (_, id)       => cache.deleteCustomer(id));
 
-// ─── IPC: Matérias-Primas ─────────────────────────────────────────────────────
+// ─── IPC: Insumos ─────────────────────────────────────────────────────────────
 
-ipcMain.handle('materials:list',   ()        => cache.listMaterials());
-ipcMain.handle('materials:add',    (_, name) => cache.addMaterial(name));
-ipcMain.handle('materials:update', (_, id, name) => cache.updateMaterial(id, name));
-ipcMain.handle('materials:delete', (_, id)   => cache.deleteMaterial(id));
+ipcMain.handle('insumos:list',   ()        => cache.listInsumos());
+ipcMain.handle('insumos:add',    (_, name) => cache.addInsumo(name));
+ipcMain.handle('insumos:update', (_, id, name) => cache.updateInsumo(id, name));
+ipcMain.handle('insumos:delete', (_, id)   => cache.deleteInsumo(id));
 
 // ─── IPC: Fórmulas ────────────────────────────────────────────────────────────
 
@@ -89,6 +89,13 @@ ipcMain.handle('formulas:update',        (_, id, f)      => cache.updateFormula(
 ipcMain.handle('formulas:update-status', (_, id, status) => cache.updateFormulaStatus(id, status));
 ipcMain.handle('formulas:update-delivery-status', (_, id, deliveryStatus) => cache.updateFormulaDeliveryStatus(id, deliveryStatus));
 ipcMain.handle('formulas:delete',        (_, id)         => cache.deleteFormula(id));
+
+// ─── IPC: Fórmulas Salvas ─────────────────────────────────────────────────────
+
+ipcMain.handle('savedFormulas:list',   ()           => cache.listSavedFormulas());
+ipcMain.handle('savedFormulas:add',    (_, f)       => cache.addSavedFormula(f));
+ipcMain.handle('savedFormulas:update', (_, id, f)   => cache.updateSavedFormula(id, f));
+ipcMain.handle('savedFormulas:delete', (_, id)      => cache.deleteSavedFormula(id));
 
 // ─── IPC: Sync ────────────────────────────────────────────────────────────────
 
@@ -139,6 +146,11 @@ const createWindow = () => {
     mainWindow?.webContents.send('sync:status-update', status);
   });
 
+  // Avisa o renderer quando o cache muda (mutação local ou sync) — atualização ao vivo
+  cache.onDataChanged(() => {
+    mainWindow?.webContents.send('data:changed');
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
@@ -148,8 +160,8 @@ const createWindow = () => {
 
 app.on('ready', async () => {
   await cache.init();
-  // Sync a cada 30s — seguro em LAN local com poucos registros (<1s por ciclo)
-  cache.startSyncLoop(30 * 1000);
+  // Sync a cada 15s — seguro em LAN local com poucos registros (<1s por ciclo)
+  cache.startSyncLoop(15 * 1000);
   createWindow();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

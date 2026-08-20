@@ -1,29 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Users, Search, X, PlusCircle, RefreshCw, Trash2, AlertCircle, Calendar, ClipboardList,
+  Users, Search, X, PlusCircle, RefreshCw, Trash2, AlertCircle, Calendar, ClipboardList, Bookmark,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
-import { User, Customer, Material, Formula, FormulaItem, BudgetItem } from '../types';
+import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
 import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { CustomerManager } from './CustomerManager';
-import { MaterialManager } from './MaterialManager';
+import { InsumoManager } from './InsumoManager';
 
 export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; onComplete: (dest: 'pending' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
-  const { data: materials, reload: reloadMaterials } = useData(() => db.materials.list());
+  const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
+  const { data: savedFormulas } = useData(() => db.savedFormulas.list());
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [items, setItems] = useState<FormulaItem[]>([]);
   const [customerQuery, setCustomerQuery] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showTemplateBanner, setShowTemplateBanner] = useState(false);
-  const [materialQuery, setMaterialQuery] = useState('');
-  const [selectedMaterialId, setSelectedMaterialId] = useState<number | ''>('');
+  const [insumoQuery, setInsumoQuery] = useState('');
+  const [selectedInsumoId, setSelectedInsumoId] = useState<number | ''>('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('mg');
-  const [showAddMaterial, setShowAddMaterial] = useState(false);
+  const [showAddInsumo, setShowAddInsumo] = useState(false);
   const [itemError, setItemError] = useState('');
+  const [savedFormulaQuery, setSavedFormulaQuery] = useState('');
+  const [appliedSavedFormula, setAppliedSavedFormula] = useState<SavedFormula | null>(null);
   const [budgetNumber, setBudgetNumber] = useState('');
   const [bQty, setBQty] = useState('');
   const [bUnit, setBUnit] = useState('caps');
@@ -74,12 +77,14 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setCustomerQuery('');
     setShowAddCustomer(false);
     setShowTemplateBanner(false);
-    setMaterialQuery('');
-    setSelectedMaterialId('');
+    setInsumoQuery('');
+    setSelectedInsumoId('');
     setQuantity('');
     setUnit('mg');
-    setShowAddMaterial(false);
+    setShowAddInsumo(false);
     setItemError('');
+    setSavedFormulaQuery('');
+    setAppliedSavedFormula(null);
     setBudgetNumber('');
     setBQty('');
     setBUnit('caps');
@@ -93,11 +98,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setPaymentMethod('');
   };
 
-  const allMaterials = (materials as Material[]) ?? [];
-  const selectedMaterial = allMaterials.find(m => m.id === selectedMaterialId) ?? null;
-  const mq = stripDiacritics(materialQuery.trim().toLowerCase());
-  const filteredMaterials = mq
-    ? allMaterials
+  const allInsumos = (insumos as Insumo[]) ?? [];
+  const selectedInsumo = allInsumos.find(m => m.id === selectedInsumoId) ?? null;
+  const mq = stripDiacritics(insumoQuery.trim().toLowerCase());
+  const filteredInsumos = mq
+    ? allInsumos
         .filter(m => stripDiacritics((m.name ?? '').toLowerCase()).includes(mq))
         .sort((a, b) => {
           const nameA = stripDiacritics((a.name ?? '').toLowerCase());
@@ -109,15 +114,36 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     : [];
 
   const addIngredient = () => {
-    if (!selectedMaterialId || !quantity) return;
-    if (items.find(i => i.material_id === Number(selectedMaterialId))) {
-      setItemError('Esta matéria-prima já foi adicionada à fórmula.');
+    if (!selectedInsumoId || !quantity) return;
+    if (items.find(i => i.insumo_id === Number(selectedInsumoId))) {
+      setItemError('Este insumo já foi adicionado à fórmula.');
       return;
     }
-    setItems([...items, { material_id: Number(selectedMaterialId), material_name: selectedMaterial?.name ?? '', quantity: Number(quantity), unit }]);
-    setSelectedMaterialId('');
-    setMaterialQuery('');
+    setItems([...items, { insumo_id: Number(selectedInsumoId), insumo_name: selectedInsumo?.name ?? '', quantity: Number(quantity), unit }]);
+    setSelectedInsumoId('');
+    setInsumoQuery('');
     setQuantity('');
+    setItemError('');
+  };
+
+  const allSavedFormulas = (savedFormulas as SavedFormula[]) ?? [];
+  const sfq = stripDiacritics(savedFormulaQuery.trim().toLowerCase());
+  const filteredSavedFormulas = sfq
+    ? allSavedFormulas
+        .filter(f => stripDiacritics((f.name ?? '').toLowerCase()).includes(sfq))
+        .sort((a, b) => {
+          const nameA = stripDiacritics((a.name ?? '').toLowerCase());
+          const nameB = stripDiacritics((b.name ?? '').toLowerCase());
+          const diff = (nameB.startsWith(sfq) ? 1 : 0) - (nameA.startsWith(sfq) ? 1 : 0);
+          if (diff !== 0) return diff;
+          return nameA.localeCompare(nameB);
+        })
+    : [];
+
+  const applySavedFormula = (f: SavedFormula) => {
+    setItems(f.items.map(i => ({ insumo_id: i.insumo_id, insumo_name: i.insumo_name ?? '', quantity: i.quantity, unit: i.unit ?? 'mg' })));
+    setAppliedSavedFormula(f);
+    setSavedFormulaQuery('');
     setItemError('');
   };
 
@@ -149,7 +175,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     return {
       customer_id: selectedCustomerId as number,
       pharmacist_name: user.name,
-      items: items.map(i => ({ material_id: i.material_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
+      items: items.map(i => ({ insumo_id: i.insumo_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
       budget_number: budgetNumber || undefined,
       budget_items: payloadBudgetItems.length > 0 ? payloadBudgetItems : undefined,
       attendant_name: attendantName || undefined,
@@ -362,36 +388,37 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           </div>
         )}
       </div>
-      {/* Linha 2 — Matéria-Prima */}
-      <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+      {/* Linha 2 — Insumo */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className={`bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm ${locked ? 'lg:col-span-2' : ''}`}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-zinc-900 text-sm">2. Matéria-Prima</h3>
+          <h3 className="font-semibold text-zinc-900 text-sm">2.1 Insumo</h3>
           {!locked && (
-            <button type="button" onClick={() => setShowAddMaterial(!showAddMaterial)}
+            <button type="button" onClick={() => setShowAddInsumo(!showAddInsumo)}
               className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
-              style={{ color: showAddMaterial ? '#C41E3C' : '#1F3164', background: showAddMaterial ? '#fff0f3' : '#f0f4ff' }}>
-              <PlusCircle className="w-3 h-3" />{showAddMaterial ? 'Fechar' : '+ Nova matéria-prima'}
+              style={{ color: showAddInsumo ? '#C41E3C' : '#1F3164', background: showAddInsumo ? '#fff0f3' : '#f0f4ff' }}>
+              <PlusCircle className="w-3 h-3" />{showAddInsumo ? 'Fechar' : '+ Novo insumo'}
             </button>
           )}
         </div>
 
-        {showAddMaterial && (
+        {showAddInsumo && (
           <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
-            <MaterialManager compact onCreated={(m: Material) => { reloadMaterials(); setSelectedMaterialId(m.id); setShowAddMaterial(false); setMaterialQuery(''); }} />
+            <InsumoManager compact onCreated={(m: Insumo) => { reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); }} />
           </div>
         )}
 
-        {selectedMaterial ? (
+        {selectedInsumo ? (
           <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 bg-zinc-50 mb-4">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
                 <ClipboardList className="w-4 h-4 text-red-700" />
               </div>
-              <p className="font-semibold text-zinc-900 text-sm truncate">{selectedMaterial.name}</p>
+              <p className="font-semibold text-zinc-900 text-sm truncate">{selectedInsumo.name}</p>
             </div>
             {!locked && (
-              <button type="button" onClick={() => { setSelectedMaterialId(''); setMaterialQuery(''); }}
-                className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar matéria-prima">
+              <button type="button" onClick={() => { setSelectedInsumoId(''); setInsumoQuery(''); }}
+                className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar insumo">
                 <X className="w-4 h-4" />
               </button>
             )}
@@ -401,21 +428,21 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="Buscar matéria-prima por nome..."
-              value={materialQuery}
+              placeholder="Buscar insumo por nome..."
+              value={insumoQuery}
               disabled={locked}
-              onChange={e => setMaterialQuery(e.target.value)}
+              onChange={e => setInsumoQuery(e.target.value)}
             />
-            {materialQuery && (
-              <button onClick={() => setMaterialQuery('')} title="Limpar busca"
+            {insumoQuery && (
+              <button onClick={() => setInsumoQuery('')} title="Limpar busca"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             )}
-            {filteredMaterials.length > 0 && (
+            {filteredInsumos.length > 0 && (
               <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
-                {filteredMaterials.map(m => (
-                  <button key={m.id} type="button" onClick={() => { setSelectedMaterialId(m.id); setMaterialQuery(''); }}
+                {filteredInsumos.map(m => (
+                  <button key={m.id} type="button" onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); }}
                     className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
                     <ClipboardList className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                     <span className="text-sm text-zinc-800 truncate flex-1">{m.name}</span>
@@ -423,8 +450,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 ))}
               </div>
             )}
-            {mq && filteredMaterials.length === 0 && (
-              <p className="text-xs text-zinc-400 mt-1 px-1">Nenhuma matéria-prima encontrada.</p>
+            {mq && filteredInsumos.length === 0 && (
+              <p className="text-xs text-zinc-400 mt-1 px-1">Nenhum insumo encontrado.</p>
             )}
           </div>
         )}
@@ -456,7 +483,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="flex-1 space-y-1">
             {itemError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{itemError}</p>}
             {!locked && (
-              <button type="button" disabled={!selectedMaterialId || !quantity} onClick={addIngredient}
+              <button type="button" disabled={!selectedInsumoId || !quantity} onClick={addIngredient}
                 className="w-full text-white py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
                 + Adicionar à fórmula
@@ -467,27 +494,27 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
         <div className="mt-4 pt-3 border-t border-zinc-100">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Matérias-primas adicionadas</h4>
+            <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Insumos adicionados</h4>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff0f3', color: '#C41E3C' }}>
-              {items.length} {items.length === 1 ? 'matéria-prima' : 'matérias-primas'}
+              {items.length} {items.length === 1 ? 'insumo' : 'insumos'}
             </span>
           </div>
 
           {items.length === 0 ? (
-            <p className="text-sm text-zinc-400">Nenhuma matéria-prima adicionada ainda.</p>
+            <p className="text-sm text-zinc-400">Nenhum insumo adicionado ainda.</p>
           ) : (
             <div className="space-y-2">
               {items.map((item, idx) => (
-                <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={item.material_id}
+                <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={item.insumo_id}
                   className="flex items-center justify-between p-3 rounded-xl border border-zinc-100"
                   style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
                   <div className="min-w-0">
-                    <p className="font-semibold text-zinc-900 text-sm truncate">{item.material_name}</p>
+                    <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
                     <p className="text-xs text-zinc-400">{item.quantity}{item.unit ?? 'mg'}</p>
                   </div>
                   {!locked && (
                     <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setItemError(''); }}
-                      className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover matéria-prima">
+                      className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover insumo">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -496,6 +523,66 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             </div>
           )}
         </div>
+      </div>
+
+      {/* Linha 2.2 — Fórmula Salva */}
+      {!locked && (
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+          <h3 className="font-semibold text-zinc-900 text-sm mb-1">2.2 Fórmula Salva</h3>
+          <p className="text-xs text-zinc-500 mb-4">Selecione uma fórmula salva para preencher automaticamente os insumos (substitui a lista atual).</p>
+
+          {appliedSavedFormula && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium mb-4"
+              style={{ background: '#f0f4ff', border: '1px solid #c7d7f0', color: '#1F3164' }}>
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span className="flex-1 min-w-0">
+                Fórmula salva <strong>{appliedSavedFormula.name}</strong> aplicada — os insumos da lista foram substituídos.
+              </span>
+              <button type="button" onClick={() => setAppliedSavedFormula(null)}
+                className="text-zinc-400 hover:text-red-600 transition-colors" title="Dispensar aviso">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {allSavedFormulas.length === 0 ? (
+            <p className="text-sm text-zinc-400">Nenhuma fórmula salva cadastrada. Cadastre uma na tela "Fórmulas Salvas".</p>
+          ) : (
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+              <input
+                className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                placeholder="Buscar fórmula salva por nome..."
+                value={savedFormulaQuery}
+                onChange={e => setSavedFormulaQuery(e.target.value)}
+              />
+              {savedFormulaQuery && (
+                <button onClick={() => setSavedFormulaQuery('')} title="Limpar busca"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              {filteredSavedFormulas.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+                  {filteredSavedFormulas.map(f => (
+                    <button key={f.id} type="button" onClick={() => applySavedFormula(f)}
+                      className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
+                      <Bookmark className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      <span className="text-sm text-zinc-800 truncate flex-1">{f.name}</span>
+                      <span className="text-xs text-zinc-400 shrink-0">
+                        {f.items.length} {f.items.length === 1 ? 'insumo' : 'insumos'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {sfq && filteredSavedFormulas.length === 0 && (
+                <p className="text-xs text-zinc-400 mt-1 px-1">Nenhuma fórmula salva encontrada.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       </div>
 
       {/* Linha 3 — Orçamento */}
@@ -712,7 +799,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               {saving ? 'Salvando...' : '💾 Salvar'}
             </button>
             <p className="text-center text-xs text-zinc-400 mt-2">
-              {canSave ? 'Pronto para salvar' : 'Preencha os blocos 1 a 4 (cliente, matérias-primas, orçamento e informações)'}
+              {canSave ? 'Pronto para salvar' : 'Preencha os blocos 1 a 4 (cliente, insumos, orçamento e informações)'}
             </p>
           </div>
           <div>
@@ -726,7 +813,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 ? 'Pronto para confirmar'
                 : budgetItems.length > 0 && selectedBudgetIndex === null
                   ? 'Selecione um orçamento (marcador ao lado) e preencha os demais blocos'
-                  : 'Preencha cliente, matérias-primas, orçamento, informações e o pagamento (blocos 1 a 5)'}
+                  : 'Preencha cliente, insumos, orçamento, informações e o pagamento (blocos 1 a 5)'}
             </p>
           </div>
         </div>

@@ -1,7 +1,7 @@
 export interface User { id: number; name: string; username: string; role: 'admin' | 'employee' }
 export interface Customer { id: number; name: string; phone: string; created_at?: string }
-export interface Material { id: number; name: string; created_at?: string }
-export interface FormulaItem { material_id: number; material_name: string; quantity: number; unit?: string }
+export interface Insumo { id: number; name: string; created_at?: string }
+export interface FormulaItem { insumo_id: number; insumo_name: string; quantity: number; unit?: string }
 export interface BudgetItem { quantity: number; unit: string; value: number; is_selected?: boolean }
 export interface Formula {
   id: number; customer_id: number; customer_name: string; customer_phone: string;
@@ -11,9 +11,12 @@ export interface Formula {
   payment_status?: string; payment_method?: string | null;
   delivery_status?: string; cancel_reason?: string | null;
 }
+export interface SavedFormulaItem { insumo_id: number; insumo_name?: string; quantity: number; unit?: string }
+export interface SavedFormula { id: number; name: string; created_at?: string; items: SavedFormulaItem[] }
 export interface SyncStatus {
   state: 'idle' | 'syncing' | 'offline' | 'error' | 'connecting';
   lastSync: string | null;
   pending: number;
+  rowErrors?: number;
   error?: string;
 }

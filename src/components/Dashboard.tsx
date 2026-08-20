@@ -7,7 +7,7 @@ import { useData } from '../hooks/useData';
 
 export function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: any) => void }) {
   const { data: customers } = useData(() => db.customers.list());
-  const { data: materials } = useData(() => db.materials.list());
+  const { data: insumos } = useData(() => db.insumos.list());
   const { data: formulas } = useData(() => db.formulas.list());
   const pendingFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'pending').length;
   const confirmedFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'confirmed' || f.status === 'completed').length;
@@ -23,7 +23,7 @@ export function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: 
         <StatCard icon={<Clock className="text-red-600" />} label="Pendentes" value={pendingFormulas} color="bg-red-50" />
         <StatCard icon={<CheckCircle2 className="text-emerald-600" />} label="Confirmadas" value={confirmedFormulas} color="bg-emerald-50" />
         <StatCard icon={<Users className="text-purple-600" />} label="Clientes" value={customers?.length ?? 0} color="bg-purple-50" />
-        <StatCard icon={<Cross className="text-red-700" />} label="Matérias-Primas" value={materials?.length ?? 0} color="bg-red-50" />
+        <StatCard icon={<Cross className="text-red-700" />} label="Insumos" value={insumos?.length ?? 0} color="bg-red-50" />
       </div>
       <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm max-w-2xl">
         <h3 className="text-lg font-semibold mb-4">Ações Rápidas</h3>

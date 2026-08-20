@@ -44,7 +44,10 @@ export function SyncIndicator({ status, onSync }: { status: SyncStatus; onSync: 
   return (
     <div className="flex items-center gap-2">
       {status.pending > 0 && status.state === 'idle' && (
-        <span className="text-xs bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">
+        <span
+          className={`text-xs font-bold px-2 py-0.5 rounded-full ${status.rowErrors ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}
+          title={status.rowErrors ? 'Algumas alterações não puderam ser enviadas ao servidor' : undefined}
+        >
           {status.pending} pendente{status.pending > 1 ? 's' : ''}
         </span>
       )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Users, Cross, ClipboardList, UserPlus, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, WifiOff, AlertCircle,
-  CloudOff, CheckCircle, History, AlertTriangle,
+  CloudOff, CheckCircle, History, AlertTriangle, Bookmark,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
@@ -12,18 +12,19 @@ import { PixFarmaLogo } from './components/Logo';
 import { NavItem } from './components/NavItem';
 import { AdminPanel } from './components/UserManager';
 import { CustomerManager } from './components/CustomerManager';
-import { MaterialManager } from './components/MaterialManager';
+import { InsumoManager } from './components/InsumoManager';
 import { SettingsManager } from './components/SettingsManager';
 import { Dashboard } from './components/Dashboard';
 import { RecipeForm } from './components/RecipeForm';
 import { FormulaList } from './components/FormulaList';
+import { SavedFormulaManager } from './components/SavedFormulaManager';
 
 // ─── App Principal ─────────────────────────────────────────────────────────────
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setupMode, setSetupMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'materials' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'insumos' | 'savedFormulas' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
@@ -241,7 +242,8 @@ export default function App() {
                 <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={activeTab === 'confirmed'} onClick={() => setActiveTab('confirmed')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<History />} label="Histórico" active={activeTab === 'history'} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Users />} label="Clientes" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Cross />} label="Matérias Primas" active={activeTab === 'materials'} onClick={() => setActiveTab('materials')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Cross />} label="Insumos" active={activeTab === 'insumos'} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Bookmark />} label="Fórmulas Salvas" active={activeTab === 'savedFormulas'} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Settings />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
               </>
             )}
@@ -296,7 +298,8 @@ export default function App() {
               {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
               {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
-              {activeTab === 'materials' && <MaterialManager />}
+              {activeTab === 'insumos' && <InsumoManager />}
+              {activeTab === 'savedFormulas' && <SavedFormulaManager />}
             </AnimatePresence>
           </div>
         </main>

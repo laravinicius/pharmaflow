@@ -17,11 +17,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateCustomer:  (id: number, c: any) => ipcRenderer.invoke('customers:update', id, c),
   deleteCustomer:  (id: number)    => ipcRenderer.invoke('customers:delete', id),
 
-  // Matérias-Primas
-  listMaterials:   ()           => ipcRenderer.invoke('materials:list'),
-  addMaterial:     (name: string) => ipcRenderer.invoke('materials:add', name),
-  updateMaterial:  (id: number, name: string) => ipcRenderer.invoke('materials:update', id, name),
-  deleteMaterial:  (id: number) => ipcRenderer.invoke('materials:delete', id),
+  // Insumos
+  listInsumos:   ()           => ipcRenderer.invoke('insumos:list'),
+  addInsumo:     (name: string) => ipcRenderer.invoke('insumos:add', name),
+  updateInsumo:  (id: number, name: string) => ipcRenderer.invoke('insumos:update', id, name),
+  deleteInsumo:  (id: number) => ipcRenderer.invoke('insumos:delete', id),
 
   // Fórmulas
   listFormulas:         ()                        => ipcRenderer.invoke('formulas:list'),
@@ -31,11 +31,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateFormulaDeliveryStatus: (id: number, s: string) => ipcRenderer.invoke('formulas:update-delivery-status', id, s),
   deleteFormula:        (id: number)              => ipcRenderer.invoke('formulas:delete', id),
 
+  // Fórmulas Salvas
+  listSavedFormulas:   ()                => ipcRenderer.invoke('savedFormulas:list'),
+  addSavedFormula:     (f: any)          => ipcRenderer.invoke('savedFormulas:add', f),
+  updateSavedFormula:  (id: number, f: any) => ipcRenderer.invoke('savedFormulas:update', id, f),
+  deleteSavedFormula:  (id: number)      => ipcRenderer.invoke('savedFormulas:delete', id),
+
   // Sync
   syncNow:    () => ipcRenderer.invoke('sync:now'),
   syncStatus: () => ipcRenderer.invoke('sync:status'),
   onSyncStatusUpdate: (cb: (status: any) => void) => {
     ipcRenderer.on('sync:status-update', (_, status) => cb(status));
+  },
+  onDataChanged: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on('data:changed', listener);
+    return () => ipcRenderer.removeListener('data:changed', listener);
   },
 
   // Configurações

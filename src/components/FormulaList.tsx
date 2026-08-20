@@ -177,12 +177,12 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   <div className="min-w-0">
                     <p className="text-zinc-600 truncate">
                       {f.items.slice(0, 3).map((item, idx) => (
-                        <span key={idx}>{idx > 0 && <span className="text-zinc-300">, </span>}{item.material_name}</span>
+                        <span key={idx}>{idx > 0 && <span className="text-zinc-300">, </span>}{item.insumo_name}</span>
                       ))}
                     </p>
                     {f.items.length > 3 && (
                       <p className="text-xs text-zinc-400 font-medium pt-0.5">
-                        Mais {f.items.length - 3} matéria-prima{f.items.length - 3 === 1 ? '' : 's'}
+                        Mais {f.items.length - 3} insumo{f.items.length - 3 === 1 ? '' : 's'}
                       </p>
                     )}
                   </div>

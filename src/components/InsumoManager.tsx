@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { CheckCircle, Trash2, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
-import { Material } from '../types';
+import { Insumo } from '../types';
 import { stripDiacritics } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 
-export function MaterialManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (m: Material) => void } = {}) {
-  const { data: materials, loading, error, reload } = useData(() => db.materials.list());
+export function InsumoManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (m: Insumo) => void } = {}) {
+  const { data: insumos, loading, error, reload } = useData(() => db.insumos.list());
   const [name, setName] = useState('');
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState('');
@@ -26,33 +26,35 @@ export function MaterialManager({ compact = false, onCreated }: { compact?: bool
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    const dup = (materials as Material[])?.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
-    if (dup) { setFormError(`Matéria-prima já cadastrada: ${dup.name}`); return; }
+    const dup = (insumos as Insumo[])?.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
+    if (dup) { setFormError(`Insumo já cadastrado: ${dup.name}`); return; }
     setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const res: any = await db.materials.add(trimmed);
+      const res: any = await db.insumos.add(trimmed);
       if (onCreated) onCreated({ id: res.id, name: trimmed });
       reset(); reload();
-      setSuccess('Matéria-prima cadastrada com sucesso!');
+      setSuccess('Insumo cadastrado com sucesso!');
     } catch (err: any) {
       setFormError(err.message ?? 'Erro ao salvar.');
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Excluir esta matéria-prima?')) return;
-    await db.materials.remove(id); reload();
+    if (!confirm('Excluir este insumo?')) return;
+    const res: any = await db.insumos.remove(id);
+    if (!res?.success) { setFormError(res?.error ?? 'Erro ao excluir.'); return; }
+    reload();
   };
 
   const handleRowSave = async () => {
     if (editingRow === null) return;
     const trimmed = rowDraft.trim();
-    if (!trimmed) { setFormError('Informe o nome da matéria-prima.'); return; }
-    const dup = (materials as Material[])?.find(m => m.id !== editingRow && m.name.toLowerCase() === trimmed.toLowerCase());
-    if (dup) { setFormError(`Matéria-prima já cadastrada: ${dup.name}`); return; }
+    if (!trimmed) { setFormError('Informe o nome do insumo.'); return; }
+    const dup = (insumos as Insumo[])?.find(m => m.id !== editingRow && m.name.toLowerCase() === trimmed.toLowerCase());
+    if (dup) { setFormError(`Insumo já cadastrado: ${dup.name}`); return; }
     setSaving(true); setFormError('');
     try {
-      await db.materials.update(editingRow, trimmed);
+      await db.insumos.update(editingRow, trimmed);
       setEditingRow(null); setRowDraft('');
       reload();
     } catch (err: any) {
@@ -68,7 +70,7 @@ export function MaterialManager({ compact = false, onCreated }: { compact?: bool
         </p>
       )}
       <div className="flex-1 min-w-[200px]">
-        <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome da Matéria-Prima</label>
+        <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Insumo</label>
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value); }} placeholder="Ex: Amoxicilina" />
         {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
       </div>
@@ -80,7 +82,7 @@ export function MaterialManager({ compact = false, onCreated }: { compact?: bool
 
   if (compact) return formBlock;
 
-  const available = (materials as Material[]) ?? [];
+  const available = (insumos as Insumo[]) ?? [];
   const q = stripDiacritics(search.trim().toLowerCase());
   const list = available
     .filter(m => {
@@ -91,7 +93,7 @@ export function MaterialManager({ compact = false, onCreated }: { compact?: bool
       if (q) {
         // Ordena por relevância quando há busca: início do nome primeiro;
         // empates por nome (A–Z).
-        const score = (m: Material) => {
+        const score = (m: Insumo) => {
           const name = stripDiacritics((m.name ?? '').toLowerCase());
           if (name.startsWith(q)) return 2;
           if (name.includes(q)) return 1;
@@ -110,17 +112,17 @@ export function MaterialManager({ compact = false, onCreated }: { compact?: bool
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold text-zinc-900">Matérias-Primas</h2>
-        <p className="text-zinc-500">Gerencie as matérias-primas da farmácia.</p>
+        <h2 className="text-3xl font-bold text-zinc-900">Insumos</h2>
+        <p className="text-zinc-500">Gerencie os insumos da farmácia.</p>
       </div>
       <div className="flex items-center gap-4 border-b border-zinc-200">
         <button onClick={() => { setTab('list'); }} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'list' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
-          Lista de Matérias-Primas
-          {tab === 'list' && <motion.div layoutId="activeMat" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+          Lista de Insumos
+          {tab === 'list' && <motion.div layoutId="activeInsumo" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
         </button>
         <button onClick={() => setTab('create')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'create' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
-          Cadastro de matéria-prima
-          {tab === 'create' && <motion.div layoutId="activeMat" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+          Cadastro de insumo
+          {tab === 'create' && <motion.div layoutId="activeInsumo" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
         </button>
       </div>
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
@@ -153,7 +155,7 @@ export function MaterialManager({ compact = false, onCreated }: { compact?: bool
                     <option value="created_at:asc">Cadastro (mais antigo)</option>
                   </select>
                   <span className="text-xs font-semibold text-zinc-500 whitespace-nowrap">
-                    {list.length} de {available.length} {available.length === 1 ? 'matéria-prima' : 'matérias-primas'}
+                    {list.length} de {available.length} {available.length === 1 ? 'insumo' : 'insumos'}
                   </span>
                 </div>
                 <div className="overflow-x-auto">
@@ -196,7 +198,7 @@ export function MaterialManager({ compact = false, onCreated }: { compact?: bool
                       ))}
                     </tbody>
                   </table>
-                  {available.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhuma matéria-prima cadastrada.</p>}
+                  {available.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhum insumo cadastrado.</p>}
                   {available.length > 0 && list.length === 0 && <p className="text-center py-8 text-zinc-400">Nenhum resultado encontrado.</p>}
                 </div>
               </div>

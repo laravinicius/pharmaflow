@@ -60,12 +60,16 @@ export function UserManager({ user }: { user: User }) {
           role: form.role,
         });
       } else {
-        await db.users.add({
+        const res: any = await db.users.add({
           name: form.name.trim(),
           username: form.username.trim(),
           password: form.password.trim(),
           role: form.role,
         });
+        if (res && res.success === false) {
+          setFormError(res.error ?? 'Erro ao salvar. Tente novamente.');
+          return;
+        }
       }
       reset();
       reload();

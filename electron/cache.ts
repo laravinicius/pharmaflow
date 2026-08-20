@@ -17,6 +17,7 @@ export interface SyncStatus {
   state: SyncState;
   lastSync: string | null;
   pending: number;
+  rowErrors?: number;
   error?: string;
 }
 
@@ -24,6 +25,12 @@ export interface SyncStatus {
 
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const nowISO = () => new Date().toISOString();
+
+// Erros de conectividade (servidor fora do ar) ≠ erros de dados
+const isConnectionError = (e: any): boolean => {
+  const msg = e instanceof Error ? e.message : String(e ?? '');
+  return /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|PROTOCOL_CONNECTION_LOST|EHOSTUNREACH|EAI_AGAIN/.test(msg);
+};
 
 // ─── CacheManager ──────────────────────────────────────────────────────────────
 
@@ -34,6 +41,7 @@ export class CacheManager {
   private pool: mysql.Pool | null = null;
   private timer: NodeJS.Timeout | null = null;
   private statusCb?: (s: SyncStatus) => void;
+  private dataCb?: () => void;
 
   constructor(dataPath: string) {
     this.dbPath = path.join(dataPath, 'cache.db');
@@ -125,7 +133,7 @@ export class CacheManager {
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
       );
 
-      CREATE TABLE IF NOT EXISTS materials (
+      CREATE TABLE IF NOT EXISTS insumos (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id   INTEGER UNIQUE,
         name        TEXT NOT NULL UNIQUE,
@@ -155,12 +163,12 @@ export class CacheManager {
       );
 
       CREATE TABLE IF NOT EXISTS formula_items (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        formula_id    INTEGER NOT NULL,
-        material_id   INTEGER,
-        material_name TEXT NOT NULL,
-        quantity      REAL NOT NULL,
-        unit          TEXT NOT NULL DEFAULT 'mg'
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        formula_id  INTEGER NOT NULL,
+        insumo_id   INTEGER,
+        insumo_name TEXT NOT NULL,
+        quantity    REAL NOT NULL,
+        unit        TEXT NOT NULL DEFAULT 'mg'
       );
 
       CREATE TABLE IF NOT EXISTS formula_budget_items (
@@ -171,7 +179,32 @@ export class CacheManager {
         value       REAL NOT NULL DEFAULT 0,
         is_selected INTEGER NOT NULL DEFAULT 0
       );
+
+      CREATE TABLE IF NOT EXISTS saved_formulas (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id   INTEGER UNIQUE,
+        name        TEXT NOT NULL UNIQUE,
+        sync_status TEXT NOT NULL DEFAULT 'pending',
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS saved_formula_items (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        saved_formula_id INTEGER NOT NULL,
+        insumo_id        INTEGER,
+        insumo_name      TEXT NOT NULL,
+        quantity         REAL NOT NULL,
+        unit             TEXT NOT NULL DEFAULT 'mg'
+      );
     `;
+
+    // Renomeia tabela antiga materials → insumos antes de criar o schema novo
+    const existingTables = this.db.exec(`SELECT name FROM sqlite_master WHERE type='table'`)[0]?.values ?? [];
+    const tableNames = existingTables.map((row: any[]) => row[0]);
+    if (tableNames.includes('materials') && !tableNames.includes('insumos')) {
+      this.db.exec(`ALTER TABLE materials RENAME TO insumos`);
+    }
 
     // sql.js não aceita múltiplos statements em run(), usa exec()
     this.db.exec(tables);
@@ -191,8 +224,12 @@ export class CacheManager {
       `ALTER TABLE formulas ADD COLUMN delivery_status TEXT NOT NULL DEFAULT ''`,
       `ALTER TABLE formulas ADD COLUMN cancel_reason TEXT`,
       `ALTER TABLE formula_budget_items ADD COLUMN is_selected INTEGER NOT NULL DEFAULT 0`,
-      `ALTER TABLE materials ADD COLUMN created_at TEXT NOT NULL DEFAULT ''`,
-      `UPDATE materials SET created_at = datetime('now') WHERE created_at = ''`,
+      `ALTER TABLE insumos ADD COLUMN created_at TEXT NOT NULL DEFAULT ''`,
+      `UPDATE insumos SET created_at = datetime('now') WHERE created_at = ''`,
+      `ALTER TABLE formula_items RENAME COLUMN material_id TO insumo_id`,
+      `ALTER TABLE formula_items RENAME COLUMN material_name TO insumo_name`,
+      `ALTER TABLE saved_formula_items RENAME COLUMN material_id TO insumo_id`,
+      `ALTER TABLE saved_formula_items RENAME COLUMN material_name TO insumo_name`,
     ];
     for (const sql of migrations) {
       try { this.db.exec(sql); } catch (_) { /* coluna já existe — ignorar */ }
@@ -242,6 +279,13 @@ export class CacheManager {
 
   onStatus(cb: (s: SyncStatus) => void) { this.statusCb = cb; }
 
+  // Avisa o renderer quando o cache mudou (mutação local ou sync que trouxe dados novos)
+  onDataChanged(cb: () => void) { this.dataCb = cb; }
+
+  private notifyDataChanged() {
+    this.dataCb?.();
+  }
+
   private getMeta(key: string): string | null {
     const r = this.queryOne<{ value: string }>('SELECT value FROM sync_meta WHERE key = ?', [key]);
     return r?.value ?? null;
@@ -260,12 +304,13 @@ export class CacheManager {
       state: this.currentState,
       lastSync: this.getMeta('last_sync_at'),
       pending: this.countPending(),
+      rowErrors: this.rowErrors,
     };
   }
 
   private countPending(): number {
     let count = 0;
-    for (const t of ['users', 'customers', 'materials', 'formulas']) {
+    for (const t of ['users', 'customers', 'insumos', 'formulas', 'saved_formulas']) {
       const r = this.queryOne<{ c: number }>(`SELECT COUNT(*) AS c FROM ${t} WHERE sync_status = 'pending'`);
       count += r?.c ?? 0;
     }
@@ -370,12 +415,25 @@ export class CacheManager {
     return this.query(`SELECT id, server_id, name, username, role FROM users WHERE sync_status != 'deleted' ORDER BY name`);
   }
 
-  addUser(user: { name: string; username: string; password: string; role: string }) {
+  async addUser(user: { name: string; username: string; password: string; role: string }) {
+    // Pre-check de duplicidade: evita erro cru de SQL e o caso de duas pessoas
+    // criarem o mesmo usuário ao mesmo tempo (uma sendo sobrescrita em silêncio).
+    const existsLocal = this.queryOne<any>('SELECT id FROM users WHERE username=?', [user.username]);
+    if (existsLocal) return { success: false, error: 'Usuário já existe.' };
+
+    if (this.pool) {
+      try {
+        const rows = await this.qServer<any[]>('SELECT id FROM users WHERE username=?', [user.username]);
+        if (rows.length > 0) return { success: false, error: 'Usuário já existe no servidor.' };
+      } catch (_) { /* servidor indisponível — o INSERT IGNORE protege contra duplicidade */ }
+    }
+
     this.exec(`INSERT INTO users (name, username, password, role, sync_status, updated_at)
       VALUES (?, ?, ?, ?, 'pending', datetime('now'))`,
       [user.name, user.username, hash(user.password), user.role]);
     const id = this.lastId();
     this.save();
+    this.notifyDataChanged();
     // Sincroniza imediatamente para o novo funcionário poder logar em outros PCs
     this.syncNow().catch(() => {});
     return { success: true, id };
@@ -394,6 +452,7 @@ export class CacheManager {
       );
     }
     this.save();
+    this.notifyDataChanged();
     this.syncNow().catch(() => {});
     return { success: true };
   }
@@ -406,6 +465,7 @@ export class CacheManager {
       this.exec('DELETE FROM users WHERE id = ?', [id]);
     }
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
@@ -420,6 +480,7 @@ export class CacheManager {
       VALUES (?, ?, 'pending', datetime('now'), datetime('now'))`, [c.name, c.phone]);
     const id = this.lastId();
     this.save();
+    this.notifyDataChanged();
     return { success: true, id };
   }
 
@@ -427,6 +488,7 @@ export class CacheManager {
     this.exec(`UPDATE customers SET name=?, phone=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
       [c.name, c.phone, id]);
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
@@ -438,38 +500,47 @@ export class CacheManager {
       this.exec('DELETE FROM customers WHERE id=?', [id]);
     }
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
-  // ── Matérias-Primas ───────────────────────────────────────────────────────────
+  // ── Insumos ─────────────────────────────────────────────────────────────────
 
-  listMaterials() {
-    return this.query(`SELECT id, server_id, name, created_at FROM materials WHERE sync_status != 'deleted' ORDER BY name`);
+  listInsumos() {
+    return this.query(`SELECT id, server_id, name, created_at FROM insumos WHERE sync_status != 'deleted' ORDER BY name`);
   }
 
-  addMaterial(name: string) {
-    this.exec(`INSERT INTO materials (name, sync_status, updated_at, created_at)
+  addInsumo(name: string) {
+    this.exec(`INSERT INTO insumos (name, sync_status, updated_at, created_at)
       VALUES (?, 'pending', datetime('now'), datetime('now'))`, [name]);
     const id = this.lastId();
     this.save();
+    this.notifyDataChanged();
     return { success: true, id };
   }
 
-  updateMaterial(id: number, name: string) {
-    this.exec(`UPDATE materials SET name=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
+  updateInsumo(id: number, name: string) {
+    this.exec(`UPDATE insumos SET name=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
       [name, id]);
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
-  deleteMaterial(id: number) {
-    const m = this.queryOne<any>('SELECT server_id FROM materials WHERE id=?', [id]);
+  deleteInsumo(id: number) {
+    const inUse = this.queryOne<{ c: number }>('SELECT COUNT(*) AS c FROM formula_items WHERE insumo_id=?', [id]);
+    const inSaved = this.queryOne<{ c: number }>('SELECT COUNT(*) AS c FROM saved_formula_items WHERE insumo_id=?', [id]);
+    if ((inUse?.c ?? 0) > 0 || (inSaved?.c ?? 0) > 0) {
+      return { success: false, error: 'Insumo em uso por fórmulas cadastradas. Não é possível excluir.' };
+    }
+    const m = this.queryOne<any>('SELECT server_id FROM insumos WHERE id=?', [id]);
     if (m?.server_id) {
-      this.exec(`UPDATE materials SET sync_status='deleted', updated_at=datetime('now') WHERE id=?`, [id]);
+      this.exec(`UPDATE insumos SET sync_status='deleted', updated_at=datetime('now') WHERE id=?`, [id]);
     } else {
-      this.exec('DELETE FROM materials WHERE id=?', [id]);
+      this.exec('DELETE FROM insumos WHERE id=?', [id]);
     }
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
@@ -484,7 +555,7 @@ export class CacheManager {
     `);
     for (const f of formulas) {
       f.items = this.query(
-        `SELECT material_id, material_name, quantity, unit FROM formula_items WHERE formula_id=?`, [f.id]
+        `SELECT insumo_id, insumo_name, quantity, unit FROM formula_items WHERE formula_id=?`, [f.id]
       );
       f.budget_items = this.query(
         `SELECT quantity, unit, value, is_selected FROM formula_budget_items WHERE formula_id=?`, [f.id]
@@ -496,7 +567,7 @@ export class CacheManager {
   addFormula(formula: {
     customer_id: number;
     pharmacist_name: string;
-    items: Array<{ material_id: number; quantity: number; unit?: string }>;
+    items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_number?: string;
     budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
     attendant_name?: string;
@@ -519,9 +590,9 @@ export class CacheManager {
     const formulaId = this.lastId();
 
     for (const item of formula.items) {
-      const mat = this.queryOne<any>('SELECT name FROM materials WHERE id=?', [item.material_id]);
-      this.exec(`INSERT INTO formula_items (formula_id, material_id, material_name, quantity, unit) VALUES (?,?,?,?,?)`,
-        [formulaId, item.material_id, mat?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
+      const insumo = this.queryOne<any>('SELECT name FROM insumos WHERE id=?', [item.insumo_id]);
+      this.exec(`INSERT INTO formula_items (formula_id, insumo_id, insumo_name, quantity, unit) VALUES (?,?,?,?,?)`,
+        [formulaId, item.insumo_id, insumo?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
     }
 
     for (const bi of formula.budget_items ?? []) {
@@ -530,13 +601,14 @@ export class CacheManager {
     }
 
     this.save();
+    this.notifyDataChanged();
     return { success: true, id: formulaId };
   }
 
   updateFormula(id: number, formula: {
     customer_id: number;
     pharmacist_name: string;
-    items: Array<{ material_id: number; quantity: number; unit?: string }>;
+    items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_number?: string;
     budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
     attendant_name?: string;
@@ -558,9 +630,9 @@ export class CacheManager {
 
     this.exec(`DELETE FROM formula_items WHERE formula_id=?`, [id]);
     for (const item of formula.items) {
-      const mat = this.queryOne<any>('SELECT name FROM materials WHERE id=?', [item.material_id]);
-      this.exec(`INSERT INTO formula_items (formula_id, material_id, material_name, quantity, unit) VALUES (?,?,?,?,?)`,
-        [id, item.material_id, mat?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
+      const insumo = this.queryOne<any>('SELECT name FROM insumos WHERE id=?', [item.insumo_id]);
+      this.exec(`INSERT INTO formula_items (formula_id, insumo_id, insumo_name, quantity, unit) VALUES (?,?,?,?,?)`,
+        [id, item.insumo_id, insumo?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
     }
 
     this.exec(`DELETE FROM formula_budget_items WHERE formula_id=?`, [id]);
@@ -570,12 +642,14 @@ export class CacheManager {
     }
 
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
   updateFormulaStatus(id: number, status: string) {
     this.exec(`UPDATE formulas SET status=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`, [status, id]);
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
@@ -585,6 +659,7 @@ export class CacheManager {
       [deliveryStatus, deliveryStatus, id]
     );
     this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
@@ -596,6 +671,69 @@ export class CacheManager {
       this.exec('DELETE FROM formulas WHERE id=?', [id]);
     }
     this.save();
+    this.notifyDataChanged();
+    return { success: true };
+  }
+
+  // ── Fórmulas Salvas ──────────────────────────────────────────────────────────
+
+  listSavedFormulas() {
+    const formulas = this.query<any>(`
+      SELECT id, server_id, name, created_at
+      FROM saved_formulas WHERE sync_status != 'deleted'
+      ORDER BY name
+    `);
+    for (const f of formulas) {
+      f.items = this.query(
+        `SELECT insumo_id, insumo_name, quantity, unit FROM saved_formula_items WHERE saved_formula_id=?`, [f.id]
+      );
+    }
+    return formulas;
+  }
+
+  addSavedFormula(formula: {
+    name: string;
+    items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
+  }) {
+    this.exec(`INSERT INTO saved_formulas (name, sync_status, updated_at, created_at)
+      VALUES (?, 'pending', datetime('now'), datetime('now'))`, [formula.name]);
+    const formulaId = this.lastId();
+    for (const item of formula.items) {
+      const insumo = this.queryOne<any>('SELECT name FROM insumos WHERE id=?', [item.insumo_id]);
+      this.exec(`INSERT INTO saved_formula_items (saved_formula_id, insumo_id, insumo_name, quantity, unit) VALUES (?,?,?,?,?)`,
+        [formulaId, item.insumo_id, insumo?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
+    }
+    this.save();
+    this.notifyDataChanged();
+    return { success: true, id: formulaId };
+  }
+
+  updateSavedFormula(id: number, formula: {
+    name: string;
+    items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
+  }) {
+    this.exec(`UPDATE saved_formulas SET name=?, sync_status='pending', updated_at=datetime('now') WHERE id=?`,
+      [formula.name, id]);
+    this.exec(`DELETE FROM saved_formula_items WHERE saved_formula_id=?`, [id]);
+    for (const item of formula.items) {
+      const insumo = this.queryOne<any>('SELECT name FROM insumos WHERE id=?', [item.insumo_id]);
+      this.exec(`INSERT INTO saved_formula_items (saved_formula_id, insumo_id, insumo_name, quantity, unit) VALUES (?,?,?,?,?)`,
+        [id, item.insumo_id, insumo?.name ?? 'N/A', item.quantity, item.unit ?? 'mg']);
+    }
+    this.save();
+    this.notifyDataChanged();
+    return { success: true };
+  }
+
+  deleteSavedFormula(id: number) {
+    const f = this.queryOne<any>('SELECT server_id FROM saved_formulas WHERE id=?', [id]);
+    if (f?.server_id) {
+      this.exec(`UPDATE saved_formulas SET sync_status='deleted', updated_at=datetime('now') WHERE id=?`, [id]);
+    } else {
+      this.exec('DELETE FROM saved_formulas WHERE id=?', [id]);
+    }
+    this.save();
+    this.notifyDataChanged();
     return { success: true };
   }
 
@@ -603,6 +741,8 @@ export class CacheManager {
 
   private wasOffline = false;          // rastreia se estava offline antes
   private healthTimer: NodeJS.Timeout | null = null;
+  private syncing = false;             // trava — evita syncNow sobrepostos
+  private rowErrors = 0;               // linhas que falharam no último push
 
   startSyncLoop(intervalMs = 10 * 60 * 1000) {
     if (this.timer) clearInterval(this.timer);
@@ -634,7 +774,8 @@ export class CacheManager {
         await this.syncNow();
       } else {
         const cur = this.getMeta('sync_state');
-        if (cur !== 'syncing') this.emit('idle');
+        // Mantém o estado de erro visível enquanto houver linhas com falha de envio
+        if (cur !== 'syncing' && this.rowErrors === 0) this.emit('idle');
       }
     } catch (_) {
       this.wasOffline = true;
@@ -646,6 +787,18 @@ export class CacheManager {
   // Garante que tabelas antigas (sem updated_at) sejam atualizadas automaticamente
 
   private async migrateServer() {
+    // Schema versionado: roda os DDLs só quando a versão muda (1x por máquina),
+    // em vez de a cada ciclo de sync (15s).
+    const SCHEMA_VERSION = '3';
+    const currentVersion = await this.getServerMeta('schema_version');
+    if (currentVersion === SCHEMA_VERSION) return;
+
+    // ── Renomeia tabela/colunas antigas materials → insumos ─────────────────
+    try { await this.qServer(`RENAME TABLE materials TO insumos`); } catch (_) {}
+    try { await this.qServer(`ALTER TABLE formula_items CHANGE material_id insumo_id INT NOT NULL`); } catch (_) {}
+    try { await this.qServer(`ALTER TABLE saved_formula_items CHANGE material_id insumo_id INT NOT NULL`); } catch (_) {}
+    try { await this.qServer(`ALTER TABLE insumos RENAME INDEX idx_materials_updated TO idx_insumos_updated`); } catch (_) {}
+
     // ── Garante tabela server_meta com instance_id único ─────────────────────
     await this.qServer(`
       CREATE TABLE IF NOT EXISTS server_meta (
@@ -663,8 +816,27 @@ export class CacheManager {
       );
     }
 
+    // ── Tabela de tombstones (propaga exclusões entre computadores) ──────────
+    await this.qServer(`
+      CREATE TABLE IF NOT EXISTS sync_deletes (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        table_name  VARCHAR(30) NOT NULL,
+        server_id   INT         NOT NULL,
+        deleted_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_sync_deletes (table_name, server_id)
+      ) ENGINE=InnoDB
+    `).catch(() => {});
+    const idxExists = await this.qServer<any[]>(
+      `SELECT 1 FROM information_schema.STATISTICS
+       WHERE table_schema = DATABASE() AND table_name = 'sync_deletes'
+         AND index_name = 'idx_sync_deletes_deleted'`
+    ).catch(() => []);
+    if (idxExists.length === 0) {
+      try { await this.qServer('CREATE INDEX idx_sync_deletes_deleted ON sync_deletes(deleted_at)'); } catch (_) {}
+    }
+
     // ── Migração de colunas updated_at nas tabelas de dados ──────────────────
-    const tables = ['users', 'customers', 'materials', 'formulas'];
+    const tables = ['users', 'customers', 'insumos', 'formulas'];
     for (const t of tables) {
       try {
         await this.qServer(`SELECT updated_at FROM ${t} LIMIT 1`);
@@ -723,6 +895,44 @@ export class CacheManager {
     } catch (_) {
       try { await this.qServer(`ALTER TABLE formula_budget_items ADD COLUMN is_selected TINYINT(1) NOT NULL DEFAULT 0`); } catch (_) {}
     }
+    // Fórmulas salvas (templates de insumos)
+    await this.qServer(`
+      CREATE TABLE IF NOT EXISTS saved_formulas (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        name       VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB
+    `).catch(() => {});
+    await this.qServer(`
+      CREATE TABLE IF NOT EXISTS saved_formula_items (
+        id               INT AUTO_INCREMENT PRIMARY KEY,
+        saved_formula_id INT           NOT NULL,
+        insumo_id        INT           NOT NULL,
+        quantity         DECIMAL(10,3) NOT NULL,
+        unit             VARCHAR(5)    NOT NULL DEFAULT 'mg',
+        FOREIGN KEY (saved_formula_id) REFERENCES saved_formulas(id) ON DELETE CASCADE,
+        FOREIGN KEY (insumo_id) REFERENCES insumos(id) ON DELETE RESTRICT
+      ) ENGINE=InnoDB
+    `).catch(() => {});
+
+    await this.setServerMeta('schema_version', SCHEMA_VERSION);
+  }
+
+  // Lê uma chave da server_meta
+  private async getServerMeta(key: string): Promise<string | null> {
+    try {
+      const rows = await this.qServer<any[]>(`SELECT value FROM server_meta WHERE key_name = ?`, [key]);
+      return rows[0]?.value ?? null;
+    } catch (_) { return null; }
+  }
+
+  // Grava/atualiza uma chave da server_meta
+  private async setServerMeta(key: string, value: string) {
+    await this.qServer(
+      `INSERT INTO server_meta (key_name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)`,
+      [key, value]
+    );
   }
 
   // Retorna o instance_id atual do servidor
@@ -758,7 +968,9 @@ export class CacheManager {
     this.db.exec(`
       DELETE FROM formula_items;
       DELETE FROM formulas;
-      DELETE FROM materials;
+      DELETE FROM saved_formula_items;
+      DELETE FROM saved_formulas;
+      DELETE FROM insumos;
       DELETE FROM customers;
       DELETE FROM users;
     `);
@@ -768,7 +980,19 @@ export class CacheManager {
   }
 
   async syncNow(): Promise<void> {
+    if (this.syncing) return; // já está rodando — ignora sobreposição
     if (!this.pool) { this.wasOffline = true; this.emit('offline'); return; }
+    // Gate de conectividade: evita rodar o ciclo completo (migrate + push + pull)
+    // enquanto o servidor está fora — também evita emitir 'error' falso a cada 15s
+    try {
+      await this.pool.query('SELECT 1');
+    } catch (_) {
+      this.wasOffline = true;
+      this.emit('offline');
+      return;
+    }
+    this.syncing = true;
+    this.rowErrors = 0;
     this.emit('syncing');
     try {
       await this.migrateServer();
@@ -791,12 +1015,22 @@ export class CacheManager {
 
       await this.push();
       await this.pull();
-      this.setMeta('last_sync_at', nowISO());
+      // Âncora no relógio do servidor (e não no do cliente): elimina desvio de
+      // timezone entre máquinas e o filtro do pull fica sempre no formato do servidor
+      const now = await this.qServer<any[]>('SELECT NOW() AS now');
+      this.setMeta('last_sync_at', now[0]?.now ?? nowISO());
       this.wasOffline = false;
+      this.notifyDataChanged();
       this.emit('idle');
     } catch (e: any) {
-      this.wasOffline = true;
-      this.emit('error', { error: formatDbError(e) });
+      if (isConnectionError(e)) {
+        this.wasOffline = true;
+        this.emit('offline');
+      } else {
+        this.emit('error', { error: formatDbError(e) });
+      }
+    } finally {
+      this.syncing = false;
     }
   }
 
@@ -819,17 +1053,20 @@ export class CacheManager {
         this.exec(`UPDATE users SET sync_status='synced' WHERE id=?`, [u.id]);
       }
     }, async (u) => {
-      if (u.server_id) await this.qServer('DELETE FROM users WHERE id=?', [u.server_id]);
+      if (u.server_id) {
+        // Tombstone + delete físico: outros computadores removem via sync_deletes
+        await this.qServer('INSERT IGNORE INTO sync_deletes (table_name, server_id) VALUES (?,?)', ['users', u.server_id]);
+        await this.qServer('DELETE FROM users WHERE id=?', [u.server_id]);
+      }
       this.exec('DELETE FROM users WHERE id=?', [u.id]);
     });
 
     await this.pushTable('customers', async (c) => {
       if (!c.server_id) {
-        const r = c.created_at
-          ? await this.qServer<any>('INSERT IGNORE INTO customers (name,phone,created_at) VALUES (?,?,?)',
-              [c.name, c.phone, c.created_at])
-          : await this.qServer<any>('INSERT IGNORE INTO customers (name,phone) VALUES (?,?)',
-              [c.name, c.phone]);
+        // O servidor define created_at (CURRENT_TIMESTAMP) — evita gravar hora UTC
+        // do cliente como hora local do servidor
+        const r = await this.qServer<any>('INSERT IGNORE INTO customers (name,phone) VALUES (?,?)',
+            [c.name, c.phone]);
         if (r.insertId) {
           this.exec(`UPDATE customers SET server_id=?, sync_status='synced' WHERE id=?`, [r.insertId, c.id]);
         } else {
@@ -842,24 +1079,43 @@ export class CacheManager {
         this.exec(`UPDATE customers SET sync_status='synced' WHERE id=?`, [c.id]);
       }
     }, async (c) => {
-      if (c.server_id) await this.qServer('DELETE FROM customers WHERE id=?', [c.server_id]);
+      if (c.server_id) {
+        // O servidor cascateia a exclusão para as fórmulas (ON DELETE CASCADE);
+        // registra tombstone delas também para os outros clientes limparem.
+        const fids = await this.qServer<any[]>('SELECT id FROM formulas WHERE customer_id=?', [c.server_id]);
+        for (const f of fids) {
+          await this.qServer('INSERT IGNORE INTO sync_deletes (table_name, server_id) VALUES (?,?)', ['formulas', f.id]);
+        }
+        await this.qServer('INSERT IGNORE INTO sync_deletes (table_name, server_id) VALUES (?,?)', ['customers', c.server_id]);
+        await this.qServer('DELETE FROM customers WHERE id=?', [c.server_id]);
+      }
       this.exec('DELETE FROM customers WHERE id=?', [c.id]);
     });
 
-    await this.pushTable('materials', async (m) => {
+    await this.pushTable('insumos', async (m) => {
       if (!m.server_id) {
-        const r = await this.qServer<any>('INSERT IGNORE INTO materials (name) VALUES (?)', [m.name]);
-        if (r.insertId) this.exec(`UPDATE materials SET server_id=?, sync_status='synced' WHERE id=?`, [r.insertId, m.id]);
+        const r = await this.qServer<any>('INSERT IGNORE INTO insumos (name) VALUES (?)', [m.name]);
+        if (r.insertId) {
+          this.exec(`UPDATE insumos SET server_id=?, sync_status='synced' WHERE id=?`, [r.insertId, m.id]);
+        } else {
+          // Nome já existe no servidor — vincula ao registro existente
+          const existing = await this.qServer<any[]>('SELECT id FROM insumos WHERE name=?', [m.name]);
+          if (existing.length > 0) this.exec(`UPDATE insumos SET server_id=?, sync_status='synced' WHERE id=?`, [existing[0].id, m.id]);
+        }
       } else {
-        await this.qServer('UPDATE materials SET name=? WHERE id=?', [m.name, m.server_id]);
-        this.exec(`UPDATE materials SET sync_status='synced' WHERE id=?`, [m.id]);
+        await this.qServer('UPDATE insumos SET name=? WHERE id=?', [m.name, m.server_id]);
+        this.exec(`UPDATE insumos SET sync_status='synced' WHERE id=?`, [m.id]);
       }
     }, async (m) => {
-      if (m.server_id) await this.qServer('DELETE FROM materials WHERE id=?', [m.server_id]);
-      this.exec('DELETE FROM materials WHERE id=?', [m.id]);
+      if (m.server_id) {
+        await this.qServer('INSERT IGNORE INTO sync_deletes (table_name, server_id) VALUES (?,?)', ['insumos', m.server_id]);
+        await this.qServer('DELETE FROM insumos WHERE id=?', [m.server_id]);
+      }
+      this.exec('DELETE FROM insumos WHERE id=?', [m.id]);
     });
 
     await this.pushFormulas();
+    await this.pushSavedFormulas();
     this.save();
   }
 
@@ -870,11 +1126,13 @@ export class CacheManager {
   ) {
     const pending = this.query(`SELECT * FROM ${table} WHERE sync_status='pending'`);
     for (const row of pending) {
-      try { await onPending(row); } catch (_) {}
+      try { await onPending(row); }
+      catch (e) { console.error(`push ${table} (pending)`, row.id, e); this.rowErrors++; }
     }
     const deleted = this.query(`SELECT * FROM ${table} WHERE sync_status='deleted'`);
     for (const row of deleted) {
-      try { await onDeleted(row); } catch (_) {}
+      try { await onDeleted(row); }
+      catch (e) { console.error(`push ${table} (deleted)`, row.id, e); this.rowErrors++; }
     }
   }
 
@@ -900,11 +1158,11 @@ export class CacheManager {
                f.payment_status ?? '', f.payment_method ?? null, f.delivery_status ?? '', f.cancel_reason ?? null]
             );
             for (const item of items) {
-              const mat = this.queryOne<any>('SELECT server_id FROM materials WHERE id=?', [item.material_id]);
-              if (!mat?.server_id) continue;
+              const insumo = this.queryOne<any>('SELECT server_id FROM insumos WHERE id=?', [item.insumo_id]);
+              if (!insumo?.server_id) continue;
               await conn.query(
-                'INSERT INTO formula_items (formula_id, material_id, quantity, unit) VALUES (?,?,?,?)',
-                [fRes.insertId, mat.server_id, item.quantity, item.unit ?? 'mg']
+                'INSERT INTO formula_items (formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
+                [fRes.insertId, insumo.server_id, item.quantity, item.unit ?? 'mg']
               );
             }
             for (const bi of budgetItems) {
@@ -935,11 +1193,11 @@ export class CacheManager {
             );
             await conn.query('DELETE FROM formula_items WHERE formula_id=?', [f.server_id]);
             for (const item of items) {
-              const mat = this.queryOne<any>('SELECT server_id FROM materials WHERE id=?', [item.material_id]);
-              if (!mat?.server_id) continue;
+              const insumo = this.queryOne<any>('SELECT server_id FROM insumos WHERE id=?', [item.insumo_id]);
+              if (!insumo?.server_id) continue;
               await conn.query(
-                'INSERT INTO formula_items (formula_id, material_id, quantity, unit) VALUES (?,?,?,?)',
-                [f.server_id, mat.server_id, item.quantity, item.unit ?? 'mg']
+                'INSERT INTO formula_items (formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
+                [f.server_id, insumo.server_id, item.quantity, item.unit ?? 'mg']
               );
             }
             await conn.query('DELETE FROM formula_budget_items WHERE formula_id=?', [f.server_id]);
@@ -957,15 +1215,74 @@ export class CacheManager {
             conn.release();
           }
         }
-      } catch (_) {}
+      } catch (e) { console.error('push formulas (pending)', f.id, e); this.rowErrors++; }
     }
 
     const deleted = this.query(`SELECT * FROM formulas WHERE sync_status='deleted'`);
     for (const f of deleted) {
       try {
-        if (f.server_id) await this.qServer('DELETE FROM formulas WHERE id=?', [f.server_id]);
+        if (f.server_id) {
+          await this.qServer('INSERT IGNORE INTO sync_deletes (table_name, server_id) VALUES (?,?)', ['formulas', f.server_id]);
+          await this.qServer('DELETE FROM formulas WHERE id=?', [f.server_id]);
+        }
         this.exec('DELETE FROM formulas WHERE id=?', [f.id]);
-      } catch (_) {}
+      } catch (e) { console.error('push formulas (deleted)', f.id, e); this.rowErrors++; }
+    }
+  }
+
+  private async pushSavedFormulas() {
+    const pending = this.query(`SELECT * FROM saved_formulas WHERE sync_status='pending'`);
+
+    for (const f of pending) {
+      try {
+        const items = this.query('SELECT * FROM saved_formula_items WHERE saved_formula_id=?', [f.id]);
+        const conn = await this.pool!.getConnection();
+        try {
+          await conn.beginTransaction();
+          let targetId = f.server_id;
+          if (!targetId) {
+            const [r]: any = await conn.query('INSERT IGNORE INTO saved_formulas (name) VALUES (?)', [f.name]);
+            if (r.insertId) {
+              targetId = r.insertId;
+            } else {
+              // Nome já existe no servidor — vincula ao registro existente
+              const [existing]: any = await conn.query('SELECT id FROM saved_formulas WHERE name=?', [f.name]);
+              targetId = existing[0]?.id;
+            }
+          }
+          if (targetId) {
+            if (f.server_id) await conn.query('UPDATE saved_formulas SET name=? WHERE id=?', [f.name, f.server_id]);
+            // Substitui os itens do registro remoto (criação, duplicata por nome ou atualização)
+            await conn.query('DELETE FROM saved_formula_items WHERE saved_formula_id=?', [targetId]);
+            for (const item of items) {
+              const insumo = this.queryOne<any>('SELECT server_id FROM insumos WHERE id=?', [item.insumo_id]);
+              if (!insumo?.server_id) continue;
+              await conn.query(
+                'INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
+                [targetId, insumo.server_id, item.quantity, item.unit ?? 'mg']
+              );
+            }
+          }
+          await conn.commit();
+          if (targetId) this.exec(`UPDATE saved_formulas SET server_id=?, sync_status='synced' WHERE id=?`, [targetId, f.id]);
+        } catch (e) {
+          await conn.rollback();
+          throw e;
+        } finally {
+          conn.release();
+        }
+      } catch (e) { console.error('push saved formulas (pending)', f.id, e); this.rowErrors++; }
+    }
+
+    const deleted = this.query(`SELECT * FROM saved_formulas WHERE sync_status='deleted'`);
+    for (const f of deleted) {
+      try {
+        if (f.server_id) {
+          await this.qServer('INSERT IGNORE INTO sync_deletes (table_name, server_id) VALUES (?,?)', ['saved_formulas', f.server_id]);
+          await this.qServer('DELETE FROM saved_formulas WHERE id=?', [f.server_id]);
+        }
+        this.exec('DELETE FROM saved_formulas WHERE id=?', [f.id]);
+      } catch (e) { console.error('push saved formulas (deleted)', f.id, e); this.rowErrors++; }
     }
   }
 
@@ -974,20 +1291,22 @@ export class CacheManager {
   private async pull() {
     const lastSync = this.getMeta('last_sync_at');
     const isFirstSync = !lastSync;
-    const since = lastSync
-      ? new Date(lastSync).toISOString().slice(0, 19).replace('T', ' ')
-      : '1970-01-01 00:00:00';
-
+    // A marca d'água é a hora do servidor (SELECT NOW()); a margem de 1s cobre a
+    // precisão de segundos do TIMESTAMP e evita perder alteração no mesmo segundo.
+    // Re-baixar a mesma linha é idempotente (upsert).
+    const since = lastSync ?? '1970-01-01 00:00:00';
     // Na primeira sync baixa tudo; depois filtra por updated_at
-    const dateFilter = isFirstSync ? '' : 'WHERE updated_at > ?';
+    const dateFilter = isFirstSync ? '' : 'WHERE updated_at > DATE_SUB(?, INTERVAL 1 SECOND)';
     const dateParam = isFirstSync ? [] : [since];
 
     const users = await this.qServer<any[]>(
       `SELECT id,name,username,password,role FROM users ${dateFilter}`, dateParam
     );
     for (const u of users) {
-      const exists = this.queryOne('SELECT id FROM users WHERE server_id=?', [u.id]);
+      const exists = this.queryOne<{ id: number; sync_status: string }>('SELECT id, sync_status FROM users WHERE server_id=?', [u.id]);
       if (exists) {
+        // Não sobrescreve alteração local ainda não enviada (push falhou)
+        if (exists.sync_status !== 'synced') continue;
         this.exec(`UPDATE users SET name=?,username=?,password=?,role=?,sync_status='synced' WHERE server_id=?`,
           [u.name, u.username, u.password, u.role, u.id]);
       } else {
@@ -1000,8 +1319,10 @@ export class CacheManager {
       `SELECT id,name,phone,created_at FROM customers ${dateFilter}`, dateParam
     );
     for (const c of customers) {
-      const exists = this.queryOne('SELECT id FROM customers WHERE server_id=?', [c.id]);
+      const exists = this.queryOne<{ id: number; sync_status: string }>('SELECT id, sync_status FROM customers WHERE server_id=?', [c.id]);
       if (exists) {
+        // Não sobrescreve alteração local ainda não enviada (push falhou)
+        if (exists.sync_status !== 'synced') continue;
         this.exec(`UPDATE customers SET name=?,phone=?,created_at=?,sync_status='synced' WHERE server_id=?`,
           [c.name, c.phone, c.created_at, c.id]);
       } else {
@@ -1010,19 +1331,21 @@ export class CacheManager {
       }
     }
 
-    const materials = await this.qServer<any[]>(
-      `SELECT id,name,created_at FROM materials ${dateFilter}`, dateParam
+    const insumos = await this.qServer<any[]>(
+      `SELECT id,name,created_at FROM insumos ${dateFilter}`, dateParam
     );
-    for (const m of materials) {
-      const exists = this.queryOne('SELECT id FROM materials WHERE server_id=?', [m.id]);
+    for (const m of insumos) {
+      const exists = this.queryOne<{ id: number; sync_status: string }>('SELECT id, sync_status FROM insumos WHERE server_id=?', [m.id]);
       if (exists) {
-        this.exec(`UPDATE materials SET name=?,created_at=?,sync_status='synced' WHERE server_id=?`, [m.name, m.created_at, m.id]);
+        // Não sobrescreve alteração local ainda não enviada (push falhou)
+        if (exists.sync_status !== 'synced') continue;
+        this.exec(`UPDATE insumos SET name=?,created_at=?,sync_status='synced' WHERE server_id=?`, [m.name, m.created_at, m.id]);
       } else {
-        try { this.exec(`INSERT INTO materials (server_id,name,created_at,sync_status) VALUES (?,?,?,'synced')`, [m.id, m.name, m.created_at]); } catch (_) {}
+        try { this.exec(`INSERT INTO insumos (server_id,name,created_at,sync_status) VALUES (?,?,?,'synced')`, [m.id, m.name, m.created_at]); } catch (_) {}
       }
     }
 
-    const formulaFilter = isFirstSync ? '' : 'WHERE f.updated_at > ?';
+    const formulaFilter = isFirstSync ? '' : 'WHERE f.updated_at > DATE_SUB(?, INTERVAL 1 SECOND)';
     const formulas = await this.qServer<any[]>(`
       SELECT f.id, f.customer_id, f.status, f.created_at,
              COALESCE(f.customer_phone,'') AS customer_phone,
@@ -1040,9 +1363,11 @@ export class CacheManager {
 
     for (const f of formulas) {
       const localCust = this.queryOne<any>('SELECT id FROM customers WHERE server_id=?', [f.customer_id]);
-      const exists = this.queryOne('SELECT id FROM formulas WHERE server_id=?', [f.id]);
+      const exists = this.queryOne<{ id: number; sync_status: string }>('SELECT id, sync_status FROM formulas WHERE server_id=?', [f.id]);
 
       if (exists) {
+        // Não sobrescreve alteração local ainda não enviada (push falhou)
+        if (exists.sync_status !== 'synced') continue;
         this.exec(`UPDATE formulas SET customer_id=?,customer_name=?,customer_phone=?,pharmacist_name=?,budget_number=?,attendant_name=?,delivery_date=?,payment_status=?,payment_method=?,delivery_status=?,cancel_reason=?,status=?,sync_status='synced' WHERE server_id=?`,
           [localCust?.id ?? 0, f.customer_name, f.customer_phone ?? '', f.pharmacist_name ?? '',
            f.budget_number ?? '', f.attendant_name ?? '', f.delivery_date ?? null,
@@ -1051,14 +1376,14 @@ export class CacheManager {
 
         const localFId = exists.id;
         const items = await this.qServer<any[]>(`
-          SELECT fi.material_id, fi.quantity, fi.unit, m.name AS material_name
-          FROM formula_items fi JOIN materials m ON fi.material_id = m.id
+          SELECT fi.insumo_id, fi.quantity, fi.unit, m.name AS insumo_name
+          FROM formula_items fi JOIN insumos m ON fi.insumo_id = m.id
           WHERE fi.formula_id=?`, [f.id]);
         this.exec(`DELETE FROM formula_items WHERE formula_id=?`, [localFId]);
         for (const item of items) {
-          const localMat = this.queryOne<any>('SELECT id FROM materials WHERE server_id=?', [item.material_id]);
-          this.exec(`INSERT INTO formula_items (formula_id,material_id,material_name,quantity,unit) VALUES (?,?,?,?,?)`,
-            [localFId, localMat?.id ?? null, item.material_name, item.quantity, item.unit ?? 'mg']);
+          const localInsumo = this.queryOne<any>('SELECT id FROM insumos WHERE server_id=?', [item.insumo_id]);
+          this.exec(`INSERT INTO formula_items (formula_id,insumo_id,insumo_name,quantity,unit) VALUES (?,?,?,?,?)`,
+            [localFId, localInsumo?.id ?? null, item.insumo_name, item.quantity, item.unit ?? 'mg']);
         }
 
         const budgetItems = await this.qServer<any[]>(
@@ -1081,14 +1406,14 @@ export class CacheManager {
           const localFId = this.queryOne<any>('SELECT id FROM formulas WHERE server_id=?', [f.id])?.id;
           if (localFId) {
             const items = await this.qServer<any[]>(`
-              SELECT fi.material_id, fi.quantity, fi.unit, m.name AS material_name
-              FROM formula_items fi JOIN materials m ON fi.material_id = m.id
+              SELECT fi.insumo_id, fi.quantity, fi.unit, m.name AS insumo_name
+              FROM formula_items fi JOIN insumos m ON fi.insumo_id = m.id
               WHERE fi.formula_id=?`, [f.id]);
 
             for (const item of items) {
-              const localMat = this.queryOne<any>('SELECT id FROM materials WHERE server_id=?', [item.material_id]);
-              this.exec(`INSERT INTO formula_items (formula_id,material_id,material_name,quantity,unit) VALUES (?,?,?,?,?)`,
-                [localFId, localMat?.id ?? null, item.material_name, item.quantity, item.unit ?? 'mg']);
+              const localInsumo = this.queryOne<any>('SELECT id FROM insumos WHERE server_id=?', [item.insumo_id]);
+              this.exec(`INSERT INTO formula_items (formula_id,insumo_id,insumo_name,quantity,unit) VALUES (?,?,?,?,?)`,
+                [localFId, localInsumo?.id ?? null, item.insumo_name, item.quantity, item.unit ?? 'mg']);
             }
 
             const budgetItems = await this.qServer<any[]>(
@@ -1102,6 +1427,80 @@ export class CacheManager {
         } catch (_) {}
       }
     }
+
+    const savedFormulaFilter = isFirstSync ? '' : 'WHERE sf.updated_at > DATE_SUB(?, INTERVAL 1 SECOND)';
+    const savedFormulas = await this.qServer<any[]>(
+      `SELECT sf.id, sf.name, sf.created_at FROM saved_formulas sf ${savedFormulaFilter}`, dateParam
+    );
+    for (const f of savedFormulas) {
+      const exists = this.queryOne<{ id: number; sync_status: string }>('SELECT id, sync_status FROM saved_formulas WHERE server_id=?', [f.id]);
+      if (exists) {
+        // Não sobrescreve alteração local ainda não enviada (push falhou)
+        if (exists.sync_status !== 'synced') continue;
+        this.exec(`UPDATE saved_formulas SET name=?,created_at=?,sync_status='synced' WHERE server_id=?`,
+          [f.name, f.created_at, f.id]);
+        const localFId = exists.id;
+        const items = await this.qServer<any[]>(`
+          SELECT sfi.insumo_id, sfi.quantity, sfi.unit, m.name AS insumo_name
+          FROM saved_formula_items sfi JOIN insumos m ON sfi.insumo_id = m.id
+          WHERE sfi.saved_formula_id=?`, [f.id]);
+        this.exec(`DELETE FROM saved_formula_items WHERE saved_formula_id=?`, [localFId]);
+        for (const item of items) {
+          const localInsumo = this.queryOne<any>('SELECT id FROM insumos WHERE server_id=?', [item.insumo_id]);
+          this.exec(`INSERT INTO saved_formula_items (saved_formula_id,insumo_id,insumo_name,quantity,unit) VALUES (?,?,?,?,?)`,
+            [localFId, localInsumo?.id ?? null, item.insumo_name, item.quantity, item.unit ?? 'mg']);
+        }
+      } else {
+        try {
+          this.exec(`INSERT INTO saved_formulas (server_id,name,sync_status,created_at,updated_at)
+            VALUES (?,?,'synced',?,datetime('now'))`, [f.id, f.name, f.created_at]);
+          const localFId = this.queryOne<any>('SELECT id FROM saved_formulas WHERE server_id=?', [f.id])?.id;
+          if (localFId) {
+            const items = await this.qServer<any[]>(`
+              SELECT sfi.insumo_id, sfi.quantity, sfi.unit, m.name AS insumo_name
+              FROM saved_formula_items sfi JOIN insumos m ON sfi.insumo_id = m.id
+              WHERE sfi.saved_formula_id=?`, [f.id]);
+            for (const item of items) {
+              const localInsumo = this.queryOne<any>('SELECT id FROM insumos WHERE server_id=?', [item.insumo_id]);
+              this.exec(`INSERT INTO saved_formula_items (saved_formula_id,insumo_id,insumo_name,quantity,unit) VALUES (?,?,?,?,?)`,
+                [localFId, localInsumo?.id ?? null, item.insumo_name, item.quantity, item.unit ?? 'mg']);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // ── Tombstones: exclusões feitas em outros computadores ──────────────────
+    const tombFilter = isFirstSync ? '' : 'WHERE deleted_at > DATE_SUB(?, INTERVAL 1 SECOND)';
+    const tombstones = await this.qServer<any[]>(
+      `SELECT table_name, server_id FROM sync_deletes ${tombFilter}`, dateParam
+    );
+    for (const t of tombstones) {
+      const sid = t.server_id;
+      if (t.table_name === 'users') {
+        this.exec('DELETE FROM users WHERE server_id=?', [sid]);
+      } else if (t.table_name === 'customers') {
+        this.exec('DELETE FROM customers WHERE server_id=?', [sid]);
+      } else if (t.table_name === 'insumos') {
+        this.exec('DELETE FROM insumos WHERE server_id=?', [sid]);
+      } else if (t.table_name === 'formulas') {
+        const local = this.queryOne<any>('SELECT id FROM formulas WHERE server_id=?', [sid]);
+        if (local) {
+          this.exec('DELETE FROM formula_items WHERE formula_id=?', [local.id]);
+          this.exec('DELETE FROM formula_budget_items WHERE formula_id=?', [local.id]);
+          this.exec('DELETE FROM formulas WHERE id=?', [local.id]);
+        }
+      } else if (t.table_name === 'saved_formulas') {
+        const local = this.queryOne<any>('SELECT id FROM saved_formulas WHERE server_id=?', [sid]);
+        if (local) {
+          this.exec('DELETE FROM saved_formula_items WHERE saved_formula_id=?', [local.id]);
+          this.exec('DELETE FROM saved_formulas WHERE id=?', [local.id]);
+        }
+      }
+    }
+
+    // Tombstones antigos já não são necessários — limpa para evitar crescimento sem limite
+    try { await this.qServer(`DELETE FROM sync_deletes WHERE deleted_at < DATE_SUB(NOW(), INTERVAL 30 DAY)`); } catch (_) {}
 
     this.save();
   }

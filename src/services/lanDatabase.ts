@@ -12,19 +12,24 @@ declare global {
       addCustomer: (c: any) => Promise<any>;
       updateCustomer: (id: number, c: any) => Promise<any>;
       deleteCustomer: (id: number) => Promise<any>;
-      listMaterials: () => Promise<any[]>;
-      addMaterial: (name: string) => Promise<any>;
-      updateMaterial: (id: number, name: string) => Promise<any>;
-      deleteMaterial: (id: number) => Promise<any>;
+      listInsumos: () => Promise<any[]>;
+      addInsumo: (name: string) => Promise<any>;
+      updateInsumo: (id: number, name: string) => Promise<any>;
+      deleteInsumo: (id: number) => Promise<any>;
       listFormulas: () => Promise<any[]>;
       addFormula: (f: any) => Promise<any>;
       updateFormula: (id: number, f: any) => Promise<any>;
       updateFormulaStatus: (id: number, s: string) => Promise<any>;
       updateFormulaDeliveryStatus: (id: number, s: string) => Promise<any>;
       deleteFormula: (id: number) => Promise<any>;
+      listSavedFormulas: () => Promise<any[]>;
+      addSavedFormula: (f: any) => Promise<any>;
+      updateSavedFormula: (id: number, f: any) => Promise<any>;
+      deleteSavedFormula: (id: number) => Promise<any>;
       syncNow: () => Promise<any>;
       syncStatus: () => Promise<any>;
       onSyncStatusUpdate: (cb: (s: any) => void) => void;
+      onDataChanged: (cb: () => void) => () => void;
       getConfig: () => Promise<any>;
       saveConfig: (cfg: any) => Promise<any>;
       testConnection: () => Promise<any>;
@@ -45,8 +50,10 @@ export const db = {
     remove: (id: number)          => api().deleteUser(id),
   },
   customers: { list: () => api().listCustomers(), add: (c: any) => api().addCustomer(c), update: (id: number, c: any) => api().updateCustomer(id, c), remove: (id: number) => api().deleteCustomer(id) },
-  materials: { list: () => api().listMaterials(), add: (n: string) => api().addMaterial(n), update: (id: number, n: string) => api().updateMaterial(id, n), remove: (id: number) => api().deleteMaterial(id) },
+  insumos: { list: () => api().listInsumos(), add: (n: string) => api().addInsumo(n), update: (id: number, n: string) => api().updateInsumo(id, n), remove: (id: number) => api().deleteInsumo(id) },
   formulas:  { list: () => api().listFormulas(), add: (f: any) => api().addFormula(f), update: (id: number, f: any) => api().updateFormula(id, f), updateStatus: (id: number, s: string) => api().updateFormulaStatus(id, s), updateDeliveryStatus: (id: number, s: string) => api().updateFormulaDeliveryStatus(id, s), remove: (id: number) => api().deleteFormula(id) },
+  savedFormulas: { list: () => api().listSavedFormulas(), add: (f: any) => api().addSavedFormula(f), update: (id: number, f: any) => api().updateSavedFormula(id, f), remove: (id: number) => api().deleteSavedFormula(id) },
   sync:      { now: () => api().syncNow(), status: () => api().syncStatus(), onUpdate: (cb: (s: any) => void) => api().onSyncStatusUpdate(cb) },
+  data:      { onChanged: (cb: () => void) => api().onDataChanged(cb) },
   config:    { get: () => api().getConfig(), save: (c: any) => api().saveConfig(c), test: () => api().testConnection() },
 };
