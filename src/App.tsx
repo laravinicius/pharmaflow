@@ -18,6 +18,50 @@ import { RecipeForm } from './components/RecipeForm';
 import { FormulaList } from './components/FormulaList';
 import { SavedFormulaManager } from './components/SavedFormulaManager';
 
+// ─── Modal de Confirmação de Saída ─────────────────────────────────────────────
+
+function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
+  show: boolean;
+  context: 'window-close' | 'logout' | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!show || !context) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-zinc-900 text-lg">
+              {context === 'window-close' ? 'Sair do aplicativo' : 'Sair da conta'}
+            </h3>
+            <p className="text-xs text-zinc-500">
+              {context === 'window-close' ? 'O aplicativo será fechado completamente.' : 'Sua sessão será encerrada.'}
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-zinc-700 mb-4">
+          {context === 'window-close' ? 'Deseja realmente sair do aplicativo?' : 'Deseja realmente sair da conta?'}
+        </p>
+        <div className="flex gap-3">
+          <button type="button" onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
+            Cancelar
+          </button>
+          <button type="button" onClick={onConfirm}
+            className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
+            style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+            Sim, sair
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── App Principal ─────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -34,6 +78,8 @@ export default function App() {
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
   const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
   const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
     setToast({ msg, type });
@@ -68,12 +114,37 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    if (sessionToken) db.auth.logout(sessionToken).catch(() => {});
-    setUser(null);
-    setSetupMode(false);
-    setSessionToken(null);
-    setActiveTab('dashboard');
+    setExitContext('logout');
+    setShowExitConfirm(true);
   };
+
+  const handleExitConfirm = async () => {
+    if (exitContext === 'window-close') {
+      await db.app.confirmExit();
+    } else if (exitContext === 'logout') {
+      if (sessionToken) await db.auth.logout(sessionToken).catch(() => {});
+      setUser(null);
+      setSetupMode(false);
+      setSessionToken(null);
+      setActiveTab('dashboard');
+    }
+    setShowExitConfirm(false);
+    setExitContext(null);
+  };
+
+  const handleExitCancel = () => {
+    setShowExitConfirm(false);
+    setExitContext(null);
+  };
+
+  const exitModal = (
+    <ExitConfirmModal
+      show={showExitConfirm}
+      context={exitContext}
+      onConfirm={handleExitConfirm}
+      onCancel={handleExitCancel}
+    />
+  );
 
   // Mantém a sessão viva; se ela for derrubada por outro login, volta ao login
   useEffect(() => {
@@ -88,103 +159,117 @@ export default function App() {
           setLoginError('Sua sessão foi encerrada em outro dispositivo.');
         }
       } catch { /* servidor fora do ar: mantém a sessão local */ }
-    }, 30_000);
+    }, 2_000);
     return () => clearInterval(timer);
   }, [user, setupMode, sessionToken]);
 
+  useEffect(() => {
+    const cleanup = db.app.onConfirmExit((context) => {
+      setExitContext(context.source);
+      setShowExitConfirm(true);
+    });
+    return cleanup;
+  }, []);
+
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
-      <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-200 overflow-hidden"
-        >
-          <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #C41E3C, #1F3164, #C41E3C)' }} />
-          <div className="p-8">
-          <div className="flex flex-col items-center mb-8">
-            <PixFarmaLogo size="lg" />
-            <p className="text-zinc-500 text-sm mt-2">Acesse sua conta para continuar</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Usuário</label>
-              <input type="text" required
-                className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none transition-all"
-                value={loginForm.username}
-                onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
-              />
+      <>
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
+        <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-200 overflow-hidden"
+          >
+            <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #C41E3C, #1F3164, #C41E3C)' }} />
+            <div className="p-8">
+            <div className="flex flex-col items-center mb-8">
+              <PixFarmaLogo size="lg" />
+              <p className="text-zinc-500 text-sm mt-2">Acesse sua conta para continuar</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1">Senha</label>
-              <input type="password" required
-                className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none transition-all"
-                value={loginForm.password}
-                onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-              />
-            </div>
-            {loginError && (
-              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">
-                <AlertCircle className="w-4 h-4 shrink-0" />{loginError}
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Usuário</label>
+                <input type="text" required
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                  value={loginForm.username}
+                  onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
+                />
               </div>
-            )}
-            <button type="submit" disabled={loginLoading}
-              className="w-full hover:opacity-90 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-red-200"
-              style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}
-            >
-              {loginLoading ? 'Conectando...' : 'Entrar'}
-            </button>
-          </form>
-          </div>
-        </motion.div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Senha</label>
+                <input type="password" required
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                  value={loginForm.password}
+                  onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                />
+              </div>
+              {loginError && (
+                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">
+                  <AlertCircle className="w-4 h-4 shrink-0" />{loginError}
+                </div>
+              )}
+              <button type="submit" disabled={loginLoading}
+                className="w-full hover:opacity-90 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-red-200"
+                style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}
+              >
+                {loginLoading ? 'Conectando...' : 'Entrar'}
+              </button>
+            </form>
+            </div>
+          </motion.div>
 
-        {loginConflict && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setLoginConflict(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+          {loginConflict && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setLoginConflict(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-zinc-900 text-lg">Usuário já logado</h3>
+                    <p className="text-xs text-zinc-500">Este usuário já está logado em outro dispositivo.</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-zinc-900 text-lg">Usuário já logado</h3>
-                  <p className="text-xs text-zinc-500">Este usuário já está logado em outro dispositivo.</p>
+                <p className="text-sm text-zinc-700 mb-4">Deseja entrar mesmo assim? A sessão do outro dispositivo será encerrada.</p>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setLoginConflict(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={() => doLogin(true)} disabled={loginLoading}
+                    className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+                    {loginLoading ? 'Entrando...' : 'Entrar mesmo assim'}
+                  </button>
                 </div>
-              </div>
-              <p className="text-sm text-zinc-700 mb-4">Deseja entrar mesmo assim? A sessão do outro dispositivo será encerrada.</p>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setLoginConflict(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
-                  Cancelar
-                </button>
-                <button type="button" onClick={() => doLogin(true)} disabled={loginLoading}
-                  className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
-                  {loginLoading ? 'Entrando...' : 'Entrar mesmo assim'}
-                </button>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+        {exitModal}
+      </>
     );
   }
 
   if (setupMode) {
     return (
-      <div className="min-h-screen flex flex-col bg-zinc-50">
-        <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-8 shrink-0">
-          <PixFarmaLogo size="md" />
-          <button
-            onClick={handleLogout}
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair
-          </button>
-        </header>
-        <main className="flex-1 overflow-auto p-8">
-          <SettingsManager />
-        </main>
-      </div>
+      <>
+        <div className="min-h-screen flex flex-col bg-zinc-50">
+          <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-8 shrink-0">
+            <PixFarmaLogo size="md" />
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
+            </button>
+          </header>
+          <main className="flex-1 overflow-auto p-8">
+            <SettingsManager />
+          </main>
+        </div>
+        {exitModal}
+      </>
     );
   }
 
@@ -321,6 +406,7 @@ export default function App() {
           </div>
         </div>
       )}
+      {exitModal}
     </div>
   );
 }

@@ -32,6 +32,8 @@ declare global {
       getConfig: () => Promise<any>;
       saveConfig: (cfg: any) => Promise<any>;
       testConnection: () => Promise<any>;
+      onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => () => void;
+      confirmAppExit: () => Promise<void>;
     };
   }
 }
@@ -56,4 +58,5 @@ export const db = {
   savedFormulas: { list: () => api().listSavedFormulas(), add: (f: any) => api().addSavedFormula(f), update: (id: number, f: any) => api().updateSavedFormula(id, f), remove: (id: number) => api().deleteSavedFormula(id) },
   data:      { onChanged: (cb: () => void) => api().onDataChanged(cb) },
   config:    { get: () => api().getConfig(), save: (c: any) => api().saveConfig(c), test: () => api().testConnection() },
+  app:       { onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => api().onConfirmExit(cb), confirmExit: () => api().confirmAppExit() },
 };

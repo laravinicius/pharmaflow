@@ -141,6 +141,8 @@ const notifyDataChanged = () => {
   }
 };
 
+let pendingExitConfirm = false;
+
 const createWindow = () => {
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600,
@@ -153,12 +155,36 @@ const createWindow = () => {
     },
   });
 
+  win.on('close', (event) => {
+    if (!pendingExitConfirm && BrowserWindow.getAllWindows().length === 1) {
+      event.preventDefault();
+      win.webContents.send('app:confirm-exit', { source: 'window-close' });
+    } else if (pendingExitConfirm) {
+      pendingExitConfirm = false;
+    }
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 };
+
+ipcMain.handle('app:exit-confirmed', () => {
+  pendingExitConfirm = true;
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.destroy();
+  }
+});
+
+app.on('before-quit', (event) => {
+  if (!pendingExitConfirm && BrowserWindow.getAllWindows().length > 0) {
+    event.preventDefault();
+    const win = BrowserWindow.getAllWindows()[0];
+    win.webContents.send('app:confirm-exit', { source: 'window-close' });
+  }
+});
 
 app.on('ready', () => {
   createWindow();

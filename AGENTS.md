@@ -15,7 +15,7 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 ## Database schema changes
 
 - `database.sql` is the single source of truth for the server schema. **Always** update it so it stays current for a future full implementation and fresh installs.
-- Existing production databases are already created, so each change also needs a numbered migration under `migrations/` (e.g. `0003_*.sql`) to update the running DB. Always do **both**: update `database.sql` AND create the migration.
+- **Do NOT create migration files** — the `migrations/` directory is legacy history only. The official schema flow only uses `database.sql` (per README.md). Production databases are updated manually or via external tooling.
 - Passwords are SHA-256 hex (`hash()` in `electron/db.ts`). Roles are `admin` / `employee`.
 
 ## Setup & dev commands
@@ -25,6 +25,14 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 - `npm run build` = `vite build --configLoader native && electron-builder`. On Windows it produces a `dir` package (no NSIS installer) and uses local `node_modules/electron/dist`.
 - `npm run lint` = `tsc --noEmit`. There is no test framework; lint is the only verification.
 - `npm run clean` removes `dist/`, `dist-electron/`, `release/`.
+
+## Key implementation details
+
+- **Session handling**: Single active session per user (enforced in `db.ts` login). Heartbeat runs every 2s client-side; stale sessions cleaned up every 60s server-side (TTL 120s).
+- **Force login**: If user already logged in elsewhere, login returns `conflict: true`; pass `force: true` to override.
+- **Setup mode**: Login with `admin`/`admin123` grants `setupMode: true` and shows only Settings screen (no data access).
+- **Live reload**: `useData` hook subscribes to `data:changed` IPC event AND polls every 10s.
+- **Exit confirmation**: App blocks close/logout until user confirms via modal (`app:confirm-exit` / `app:exit-confirmed`).
 
 ## Conventions
 

@@ -50,4 +50,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfig:       () => ipcRenderer.invoke('config:get'),
   saveConfig:      (cfg: any) => ipcRenderer.invoke('config:save', cfg),
   testConnection:  () => ipcRenderer.invoke('config:test'),
+
+  // Confirmação de saída
+  onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => {
+    const listener = (_: any, context: { source: 'window-close' | 'logout' }) => cb(context);
+    ipcRenderer.on('app:confirm-exit', listener);
+    return () => ipcRenderer.removeListener('app:confirm-exit', listener);
+  },
+  confirmAppExit: () => ipcRenderer.invoke('app:exit-confirmed'),
 });
