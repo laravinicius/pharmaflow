@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { CheckCircle, Trash2, Search, X, PlusCircle, ClipboardList } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
@@ -33,18 +33,19 @@ export function SavedFormulaManager() {
   const allFormulas = (formulas as SavedFormula[]) ?? [];
   const allInsumos = (insumos as Insumo[]) ?? [];
   const selectedInsumo = allInsumos.find(m => m.id === selectedInsumoId) ?? null;
-  const mq = stripDiacritics(insumoQuery.trim().toLowerCase());
-  const filteredInsumos = mq
-    ? allInsumos
-        .filter(m => stripDiacritics((m.name ?? '').toLowerCase()).includes(mq))
-        .sort((a, b) => {
-          const nameA = stripDiacritics((a.name ?? '').toLowerCase());
-          const nameB = stripDiacritics((b.name ?? '').toLowerCase());
-          const diff = (nameB.startsWith(mq) ? 1 : 0) - (nameA.startsWith(mq) ? 1 : 0);
-          if (diff !== 0) return diff;
-          return nameA.localeCompare(nameB);
-        })
-    : [];
+  const mq = useMemo(() => stripDiacritics(insumoQuery.trim().toLowerCase()), [insumoQuery]);
+  const filteredInsumos = useMemo(() => {
+    if (!mq) return [];
+    return allInsumos
+      .filter(m => stripDiacritics((m.name ?? '').toLowerCase()).includes(mq))
+      .sort((a, b) => {
+        const nameA = stripDiacritics((a.name ?? '').toLowerCase());
+        const nameB = stripDiacritics((b.name ?? '').toLowerCase());
+        const diff = (nameB.startsWith(mq) ? 1 : 0) - (nameA.startsWith(mq) ? 1 : 0);
+        if (diff !== 0) return diff;
+        return nameA.localeCompare(nameB);
+      });
+  }, [allInsumos, mq]);
 
   const addItem = () => {
     if (!selectedInsumoId || !quantity) return;
@@ -244,29 +245,31 @@ export function SavedFormulaManager() {
     </form>
   );
 
-  const q = stripDiacritics(search.trim().toLowerCase());
-  const list = allFormulas
-    .filter(f => {
-      if (!q) return true;
-      return stripDiacritics((f.name ?? '').toLowerCase()).includes(q);
-    })
-    .sort((a, b) => {
-      if (q) {
-        const score = (f: SavedFormula) => {
-          const name = stripDiacritics((f.name ?? '').toLowerCase());
-          if (name.startsWith(q)) return 2;
-          if (name.includes(q)) return 1;
-          return 0;
-        };
-        const diff = score(b) - score(a);
-        if (diff !== 0) return diff;
-        return (a.name ?? '').localeCompare(b.name ?? '');
-      }
-      const dir = sort.dir === 'desc' ? -1 : 1;
-      const av = String(a[sort.key] ?? '').toLowerCase();
-      const bv = String(b[sort.key] ?? '').toLowerCase();
-      return av.localeCompare(bv) * dir;
-    });
+  const q = useMemo(() => stripDiacritics(search.trim().toLowerCase()), [search]);
+  const list = useMemo(() => {
+    return allFormulas
+      .filter(f => {
+        if (!q) return true;
+        return stripDiacritics((f.name ?? '').toLowerCase()).includes(q);
+      })
+      .sort((a, b) => {
+        if (q) {
+          const score = (f: SavedFormula) => {
+            const name = stripDiacritics((f.name ?? '').toLowerCase());
+            if (name.startsWith(q)) return 2;
+            if (name.includes(q)) return 1;
+            return 0;
+          };
+          const diff = score(b) - score(a);
+          if (diff !== 0) return diff;
+          return (a.name ?? '').localeCompare(b.name ?? '');
+        }
+        const dir = sort.dir === 'desc' ? -1 : 1;
+        const av = String(a[sort.key] ?? '').toLowerCase();
+        const bv = String(b[sort.key] ?? '').toLowerCase();
+        return av.localeCompare(bv) * dir;
+      });
+  }, [allFormulas, q, sort]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">

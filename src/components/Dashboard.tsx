@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ClipboardList, PlusCircle, Clock, CheckCircle2, Users, Cross } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
@@ -9,8 +9,8 @@ export function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: 
   const { data: customers } = useData(() => db.customers.list());
   const { data: insumos } = useData(() => db.insumos.list());
   const { data: formulas } = useData(() => db.formulas.list());
-  const pendingFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'pending').length;
-  const confirmedFormulas = (formulas ?? []).filter((f: Formula) => f.status === 'confirmed' || f.status === 'completed').length;
+  const pendingFormulas = useMemo(() => (formulas ?? []).filter((f: Formula) => f.status === 'pending').length, [formulas]);
+  const confirmedFormulas = useMemo(() => (formulas ?? []).filter((f: Formula) => f.status === 'confirmed' || f.status === 'completed').length, [formulas]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">

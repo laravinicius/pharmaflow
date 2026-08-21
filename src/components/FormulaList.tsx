@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RefreshCw, Search, X, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
@@ -58,14 +58,18 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   };
 
   const all = (formulas as Formula[]) ?? [];
-  const filtered = all
-    .filter(f => statuses.includes(f.status))
-    .filter(f => !statusFilter || f.status === statusFilter)
-    .filter(f =>
-      f.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      (f.pharmacist_name || '').toLowerCase().includes(search.toLowerCase()) ||
-      String(f.id).includes(search)
-    );
+  const searchLower = search.toLowerCase();
+
+  const filtered = useMemo(() => {
+    return all
+      .filter(f => statuses.includes(f.status))
+      .filter(f => !statusFilter || f.status === statusFilter)
+      .filter(f =>
+        f.customer_name.toLowerCase().includes(searchLower) ||
+        (f.pharmacist_name || '').toLowerCase().includes(searchLower) ||
+        String(f.id).includes(searchLower)
+      );
+  }, [all, statuses, statusFilter, searchLower]);
 
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
