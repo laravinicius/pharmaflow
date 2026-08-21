@@ -138,7 +138,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
       <div className="space-y-1">
         {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
         <div className="flex gap-2">
-          <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }} className="flex-1 text-white py-2 px-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
+          <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="flex-1 text-white py-2 px-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
             {saving ? '...' : editingId ? 'Atualizar' : 'Adicionar'}
           </button>
           {editingId && <button type="button" onClick={reset} className="px-3 py-2 rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-100 text-sm">✕</button>}
@@ -211,7 +211,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
                             {editingRow === c.id ? (
                               <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
                                 value={rowDraft.name} onChange={e => setRowDraft(d => ({ ...d, name: e.target.value }))}
-                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } }} />
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />
                             ) : (
                               <HighlightMatch text={c.name} query={search} />
                             )}
@@ -222,7 +222,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
                                 <input inputMode="numeric" maxLength={15} placeholder="(00) 00000-0000"
                                   className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
                                   value={rowDraft.phone} onChange={e => setRowDraft(d => ({ ...d, phone: formatPhone(e.target.value) }))}
-                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } }} />
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />
                                 {formError && <p className="text-xs text-red-600 font-medium mt-1">{formError}</p>}
                               </div>
                             ) : (

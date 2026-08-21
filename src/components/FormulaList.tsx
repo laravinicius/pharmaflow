@@ -25,6 +25,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [focusedIdx, setFocusedIdx] = useState(-1);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
 
@@ -119,11 +120,28 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
               <span>Data criação</span><span>Data entrega</span><span>Telefone</span>{showAndamento && <span>Andamento</span>}<span />
             </div>
           )}
-          {filtered.map(f => {
-            const tint = paymentTint[f.payment_status ?? ''] ?? 'bg-white border-zinc-200';
-            return variant === 'confirmed' ? (
-              <div key={f.id} onClick={() => onSelect?.(f)}
-                className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group cursor-pointer ${tint}`}>
+{filtered.map((f, idx) => {
+              const tint = paymentTint[f.payment_status ?? ''] ?? 'bg-white border-zinc-200';
+              const isFocused = focusedIdx === idx;
+              return variant === 'confirmed' ? (
+                <div key={f.id} onClick={() => onSelect?.(f)}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect?.(f);
+                    } else if (e.key === 'ArrowDown' && idx < filtered.length - 1) {
+                      e.preventDefault();
+                      setFocusedIdx(idx + 1);
+                    } else if (e.key === 'ArrowUp' && idx > 0) {
+                      e.preventDefault();
+                      setFocusedIdx(idx - 1);
+                    }
+                  }}
+                  onFocus={() => setFocusedIdx(idx)}
+                  onBlur={() => setFocusedIdx(-1)}
+                  className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group cursor-pointer ${tint} ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
                 <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
                   <p className="font-bold text-zinc-900">{f.customer_name}</p>
                   <div className="text-zinc-700 space-y-0.5 font-medium">
@@ -158,7 +176,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     {showRepeat && (
                       <button type="button" onClick={(e) => { e.stopPropagation(); onRepeat?.(f); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all whitespace-nowrap"
-                        style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+                        style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
                         <RefreshCw className="w-3.5 h-3.5" /> Repetir
                       </button>
                     )}
@@ -170,7 +188,23 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
               </div>
             ) : (
               <div key={f.id} onClick={() => onSelect?.(f)}
-                className="w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-3 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer">
+                tabIndex={0}
+                role="button"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect?.(f);
+                  } else if (e.key === 'ArrowDown' && idx < filtered.length - 1) {
+                    e.preventDefault();
+                    setFocusedIdx(idx + 1);
+                  } else if (e.key === 'ArrowUp' && idx > 0) {
+                    e.preventDefault();
+                    setFocusedIdx(idx - 1);
+                  }
+                }}
+                onFocus={() => setFocusedIdx(idx)}
+                onBlur={() => setFocusedIdx(-1)}
+                className={`w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-3 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
                 <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1.2fr_1fr_2fr_1.1fr] gap-2 items-center text-sm">
                   <div className="min-w-0">
                     <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
@@ -194,7 +228,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     <button type="button" disabled={confirmingId === f.id}
                       onClick={(e) => { e.stopPropagation(); handleConfirm(f); }}
                       className="px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                      style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+                      style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
                       {confirmingId === f.id ? 'Confirmando...' : 'Confirmar'}
                     </button>
                     <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">

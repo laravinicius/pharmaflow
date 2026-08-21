@@ -43,6 +43,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [deliveryStatus, setDeliveryStatus] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [customerFocusIdx, setCustomerFocusIdx] = useState(-1);
+  const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
+  const [savedFormulaFocusIdx, setSavedFormulaFocusIdx] = useState(-1);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -282,7 +285,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           {formula && locked && !confirmed && !readOnly && (
             <button type="button" onClick={() => setLocked(false)}
               className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md"
-              style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
               <RefreshCw className="w-3.5 h-3.5" /> Editar
             </button>
           )}
@@ -308,7 +311,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
       {showTemplateBanner && template && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
-          style={{ background: '#f0f4ff', border: '1px solid #c7d7f0', color: '#1F3164' }}>
+          style={{ background: '#EFF2FA', border: '1px solid #D0DCE8', color: '#243465' }}>
           <RefreshCw className="w-4 h-4 shrink-0" />
           Baseado na fórmula #{template.id} de <strong className="ml-1">{template.customer_name}</strong>.
           Verifique e ajuste antes de finalizar.
@@ -316,7 +319,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       )}
       {formula && locked && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
-          style={{ background: '#fff0f3', border: '1px solid #fecaca', color: '#C41E3C' }}>
+          style={{ background: '#FEF0F2', border: '1px solid #FED7DB', color: '#C5243E' }}>
           <AlertCircle className="w-4 h-4 shrink-0" />
           {readOnly ? 'Fórmula no histórico — visualização somente leitura.' : confirmed ? 'Fórmula confirmada — apenas pagamento, forma de pagamento e andamento podem ser alterados.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
         </div>
@@ -328,7 +331,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           {!locked && (
             <button type="button" onClick={() => setShowAddCustomer(!showAddCustomer)}
               className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
-              style={{ color: showAddCustomer ? '#C41E3C' : '#1F3164', background: showAddCustomer ? '#fff0f3' : '#f0f4ff' }}>
+              style={{ color: showAddCustomer ? '#C5243E' : '#243465', background: showAddCustomer ? '#FEF0F2' : '#EFF2FA' }}>
               <PlusCircle className="w-3 h-3" />{showAddCustomer ? 'Fechar' : '+ Novo cliente'}
             </button>
           )}
@@ -366,21 +369,37 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               placeholder="Buscar cliente por nome ou telefone..."
               value={customerQuery}
               disabled={locked}
-              onChange={e => setCustomerQuery(e.target.value)}
+              onChange={e => { setCustomerQuery(e.target.value); setCustomerFocusIdx(-1); }}
+              onKeyDown={e => {
+                if (!filteredCustomers.length) return;
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setCustomerFocusIdx(prev => (prev < filteredCustomers.length - 1 ? prev + 1 : 0));
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setCustomerFocusIdx(prev => (prev > 0 ? prev - 1 : filteredCustomers.length - 1));
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const target = customerFocusIdx >= 0 ? filteredCustomers[customerFocusIdx] : filteredCustomers[0];
+                  if (target) { setSelectedCustomerId(target.id); setCustomerQuery(''); setCustomerFocusIdx(-1); }
+                } else if (e.key === 'Escape') {
+                  setCustomerQuery(''); setCustomerFocusIdx(-1);
+                }
+              }}
             />
             {customerQuery && (
-              <button onClick={() => setCustomerQuery('')} title="Limpar busca"
+              <button onClick={() => { setCustomerQuery(''); setCustomerFocusIdx(-1); }} title="Limpar busca"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             )}
             {filteredCustomers.length > 0 && (
               <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
-                {filteredCustomers.map(c => (
-                  <button key={c.id} type="button" onClick={() => { setSelectedCustomerId(c.id); setCustomerQuery(''); }}
-                    className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
+                {filteredCustomers.map((c, idx) => (
+                  <button key={c.id} type="button" onClick={() => { setSelectedCustomerId(c.id); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
+                    className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === customerFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                     <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span className="text-sm text-zinc-800 truncate flex-1">{c.name}</span>
+                    <span className="text-sm truncate flex-1">{c.name}</span>
                     <span className="text-xs text-zinc-400 shrink-0">{c.phone}</span>
                   </button>
                 ))}
@@ -404,7 +423,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           {!locked && (
             <button type="button" onClick={() => setShowAddInsumo(!showAddInsumo)}
               className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
-              style={{ color: showAddInsumo ? '#C41E3C' : '#1F3164', background: showAddInsumo ? '#fff0f3' : '#f0f4ff' }}>
+              style={{ color: showAddInsumo ? '#C5243E' : '#243465', background: showAddInsumo ? '#FEF0F2' : '#EFF2FA' }}>
               <PlusCircle className="w-3 h-3" />{showAddInsumo ? 'Fechar' : '+ Novo insumo'}
             </button>
           )}
@@ -439,21 +458,37 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               placeholder="Buscar insumo por nome..."
               value={insumoQuery}
               disabled={locked}
-              onChange={e => setInsumoQuery(e.target.value)}
+              onChange={e => { setInsumoQuery(e.target.value); setInsumoFocusIdx(-1); }}
+              onKeyDown={e => {
+                if (!filteredInsumos.length) return;
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setInsumoFocusIdx(prev => (prev < filteredInsumos.length - 1 ? prev + 1 : 0));
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setInsumoFocusIdx(prev => (prev > 0 ? prev - 1 : filteredInsumos.length - 1));
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const target = insumoFocusIdx >= 0 ? filteredInsumos[insumoFocusIdx] : filteredInsumos[0];
+                  if (target) { setSelectedInsumoId(target.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }
+                } else if (e.key === 'Escape') {
+                  setInsumoQuery(''); setInsumoFocusIdx(-1);
+                }
+              }}
             />
             {insumoQuery && (
-              <button onClick={() => setInsumoQuery('')} title="Limpar busca"
+              <button onClick={() => { setInsumoQuery(''); setInsumoFocusIdx(-1); }} title="Limpar busca"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             )}
             {filteredInsumos.length > 0 && (
               <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
-                {filteredInsumos.map(m => (
-                  <button key={m.id} type="button" onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); }}
-                    className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
+                {filteredInsumos.map((m, idx) => (
+                  <button key={m.id} type="button" onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                    className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === insumoFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                     <ClipboardList className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span className="text-sm text-zinc-800 truncate flex-1">{m.name}</span>
+                    <span className="text-sm truncate flex-1">{m.name}</span>
                   </button>
                 ))}
               </div>
@@ -475,6 +510,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               value={quantity}
               disabled={locked}
               onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && selectedInsumoId && quantity) {
+                  e.preventDefault();
+                  addIngredient();
+                }
+              }}
             />
           </div>
           <div className="sm:w-36">
@@ -493,7 +534,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             {!locked && (
               <button type="button" disabled={!selectedInsumoId || !quantity} onClick={addIngredient}
                 className="w-full text-white py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+                style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
                 + Adicionar à fórmula
               </button>
             )}
@@ -503,7 +544,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="mt-4 pt-3 border-t border-zinc-100">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Insumos adicionados</h4>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff0f3', color: '#C41E3C' }}>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#FEF0F2', color: '#C5243E' }}>
               {items.length} {items.length === 1 ? 'insumo' : 'insumos'}
             </span>
           </div>
@@ -541,7 +582,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
           {appliedSavedFormula && (
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium mb-4"
-              style={{ background: '#f0f4ff', border: '1px solid #c7d7f0', color: '#1F3164' }}>
+              style={{ background: '#EFF2FA', border: '1px solid #D0DCE8', color: '#243465' }}>
               <RefreshCw className="w-4 h-4 shrink-0" />
               <span className="flex-1 min-w-0">
                 Fórmula salva <strong>{appliedSavedFormula.name}</strong> aplicada — os insumos da lista foram substituídos.
@@ -562,21 +603,37 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
                 placeholder="Buscar fórmula salva por nome..."
                 value={savedFormulaQuery}
-                onChange={e => setSavedFormulaQuery(e.target.value)}
+                onChange={e => { setSavedFormulaQuery(e.target.value); setSavedFormulaFocusIdx(-1); }}
+                onKeyDown={e => {
+                  if (!filteredSavedFormulas.length) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSavedFormulaFocusIdx(prev => (prev < filteredSavedFormulas.length - 1 ? prev + 1 : 0));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSavedFormulaFocusIdx(prev => (prev > 0 ? prev - 1 : filteredSavedFormulas.length - 1));
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const target = savedFormulaFocusIdx >= 0 ? filteredSavedFormulas[savedFormulaFocusIdx] : filteredSavedFormulas[0];
+                    if (target) { applySavedFormula(target); setSavedFormulaFocusIdx(-1); }
+                  } else if (e.key === 'Escape') {
+                    setSavedFormulaQuery(''); setSavedFormulaFocusIdx(-1);
+                  }
+                }}
               />
               {savedFormulaQuery && (
-                <button onClick={() => setSavedFormulaQuery('')} title="Limpar busca"
+                <button onClick={() => { setSavedFormulaQuery(''); setSavedFormulaFocusIdx(-1); }} title="Limpar busca"
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               )}
               {filteredSavedFormulas.length > 0 && (
                 <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
-                  {filteredSavedFormulas.map(f => (
-                    <button key={f.id} type="button" onClick={() => applySavedFormula(f)}
-                      className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
+                  {filteredSavedFormulas.map((f, idx) => (
+                    <button key={f.id} type="button" onClick={() => { applySavedFormula(f); setSavedFormulaFocusIdx(-1); }}
+                      className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === savedFormulaFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                       <Bookmark className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                      <span className="text-sm text-zinc-800 truncate flex-1">{f.name}</span>
+                      <span className="text-sm truncate flex-1">{f.name}</span>
                       <span className="text-xs text-zinc-400 shrink-0">
                         {f.items.length} {f.items.length === 1 ? 'insumo' : 'insumos'}
                       </span>
@@ -643,13 +700,19 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   value={bValue}
                   disabled={locked}
                   onChange={e => { setBudgetError(''); setBValue(formatCurrency(e.target.value)); }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && bQty && bValue) {
+                      e.preventDefault();
+                      addBudgetItem();
+                    }
+                  }}
                 />
               </div>
               <div className="space-y-1">
                 {!locked && (
                   <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
                     className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                    style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+                    style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
                     + Adicionar
                   </button>
                 )}
@@ -663,10 +726,26 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   const isSelected = selectedBudgetIndex === idx;
                   return (
                     <div key={idx}
-                      className={`flex items-center gap-3 p-3 rounded-xl border ${!locked ? 'cursor-pointer' : ''} ${isSelected ? 'border-red-300' : 'border-zinc-100'}`}
+                      tabIndex={locked ? -1 : 0}
+                      role="radio"
+                      aria-checked={isSelected}
+                      className={`flex items-center gap-3 p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500 ${!locked ? 'cursor-pointer' : ''} ${isSelected ? 'border-red-300' : 'border-zinc-100'}`}
                       style={{ background: isSelected ? '#fff0f3' : (idx % 2 === 0 ? '#f8faff' : '#fff') }}
-                      onClick={() => { if (!locked) setSelectedBudgetIndex(idx); }}>
-                      <input type="radio" name="budgetSelection" className="w-4 h-4 accent-[#C41E3C] shrink-0"
+                      onClick={() => { if (!locked) setSelectedBudgetIndex(idx); }}
+                      onKeyDown={e => {
+                        if (locked) return;
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault();
+                          setSelectedBudgetIndex(idx);
+                        } else if (e.key === 'ArrowDown' && idx < budgetItems.length - 1) {
+                          e.preventDefault();
+                          setSelectedBudgetIndex(idx + 1);
+                        } else if (e.key === 'ArrowUp' && idx > 0) {
+                          e.preventDefault();
+                          setSelectedBudgetIndex(idx - 1);
+                        }
+                      }}>
+                      <input type="radio" name="budgetSelection" className="w-4 h-4 accent-[#C5243E] shrink-0"
                         checked={isSelected}
                         disabled={locked}
                         onChange={() => { if (!locked) setSelectedBudgetIndex(idx); }}
@@ -803,7 +882,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div>
             <button type="button" disabled={!canSave || saving} onClick={handleSave}
               className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
               {saving ? 'Salvando...' : '💾 Salvar'}
             </button>
             <p className="text-center text-xs text-zinc-400 mt-2">
@@ -813,7 +892,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div>
             <button type="button" disabled={!canConfirm || saving} onClick={handleConfirm}
               className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+              style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
               {saving ? 'Salvando...' : '✓ Confirmar'}
             </button>
             <p className="text-center text-xs text-zinc-400 mt-2">
@@ -832,7 +911,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="md:col-span-2">
             <button type="button" disabled={saving} onClick={handleSaveConfirmed}
               className="w-full text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
               {saving ? 'Salvando...' : '💾 Salvar alterações'}
             </button>
           </div>
@@ -864,7 +943,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               </button>
               <button type="button" disabled={!cancelReason.trim() || saving} onClick={handleCancelFormula}
                 className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+                style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
                 {saving ? 'Cancelando...' : 'Confirmar cancelamento'}
               </button>
             </div>

@@ -17,4 +17,4 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
 
 /* Seleção de texto na cor da marca */
-::selection { background: #FECDD3; color: #881337; }
+::selection { background: #FED7DB; color: #8C1A3D; }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Users, Cross, ClipboardList, UserPlus, PlusCircle, LogOut,
+  Users, Cross, ClipboardList, User as UserIcon, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
   CheckCircle, History, AlertTriangle, Bookmark,
 } from 'lucide-react';
@@ -53,7 +53,7 @@ function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
           </button>
           <button type="button" onClick={onConfirm}
             className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
-            style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+            style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
             Sim, sair
           </button>
         </div>
@@ -179,7 +179,7 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-200 overflow-hidden"
           >
-            <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #C41E3C, #1F3164, #C41E3C)' }} />
+            <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #C5243E, #243465, #C5243E)' }} />
             <div className="p-8">
             <div className="flex flex-col items-center mb-8">
               <PixFarmaLogo size="lg" />
@@ -209,7 +209,7 @@ export default function App() {
               )}
               <button type="submit" disabled={loginLoading}
                 className="w-full hover:opacity-90 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-red-200"
-                style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}
+                style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}
               >
                 {loginLoading ? 'Conectando...' : 'Entrar'}
               </button>
@@ -237,7 +237,7 @@ export default function App() {
                   </button>
                   <button type="button" onClick={() => doLogin(true)} disabled={loginLoading}
                     className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60"
-                    style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+                    style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
                     {loginLoading ? 'Entrando...' : 'Entrar mesmo assim'}
                   </button>
                 </div>
@@ -285,7 +285,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             className="fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white flex items-center gap-2 pointer-events-none"
-            style={{ background: toast.type === 'success' ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#1F3164' }}
+            style={{ background: toast.type === 'success' ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#243465' }}
           >
             {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
             {toast.msg}
@@ -294,7 +294,7 @@ export default function App() {
       </AnimatePresence>
         {/* Sidebar */}
         <aside className={`border-r border-zinc-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 self-start sticky top-0 h-screen overflow-hidden`}
-          style={{ background: '#1F3164' }}>
+          style={{ background: '#243465' }}>
           <div className="p-5 flex items-center gap-3">
             <PixFarmaLogo size={isSidebarOpen ? 'md' : 'icon'} />
           </div>
@@ -327,9 +327,11 @@ export default function App() {
           <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div className={`flex items-center gap-3 p-2 rounded-lg ${isSidebarOpen ? '' : ''}`}
               style={{ background: 'rgba(255,255,255,0.07)' }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <UserPlus className="w-4 h-4 text-white opacity-70" />
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
+                style={{ background: 'rgba(255,255,255,0.15)' }}
+                onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
+                title={!isSidebarOpen ? 'Clique para abrir o menu' : ''}>
+                <UserIcon className="w-4 h-4 text-white opacity-70" />
               </div>
               {isSidebarOpen && (
                 <div className="flex-1 min-w-0">
@@ -337,10 +339,12 @@ export default function App() {
                   <p className="text-xs opacity-50 text-white capitalize">{user.role === 'admin' ? 'Administrador' : 'Funcionário'}</p>
                 </div>
               )}
-              <button onClick={handleLogout}
-                className="transition-colors text-white opacity-40 hover:opacity-100">
-                <LogOut className="w-5 h-5" />
-              </button>
+              {isSidebarOpen && (
+                <button onClick={handleLogout}
+                  className="transition-colors text-white opacity-40 hover:opacity-100">
+                  <LogOut className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
         </aside>
@@ -400,7 +404,7 @@ export default function App() {
             </ul>
             <button type="button" onClick={() => setMissingReasons(null)}
               className="mt-5 w-full py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
-              style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}>
+              style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
               Entendi
             </button>
           </div>

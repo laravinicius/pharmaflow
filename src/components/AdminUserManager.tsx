@@ -131,7 +131,7 @@ export function AdminUserManager() {
               <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{formError}</p>
             )}
             <button type="submit" disabled={saving}
-              style={{ background: isEditing ? 'linear-gradient(135deg, #1F3164, #2a4080)' : 'linear-gradient(135deg, #C41E3C, #A01830)' }}
+              style={{ background: isEditing ? 'linear-gradient(135deg, #243465, #1A2850)' : 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}
               className="w-full text-white py-2 px-3 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50 transition-all text-sm">
               {saving ? 'Salvando...' : isEditing ? '✓ Salvar alterações' : '+ Criar administrador'}
             </button>

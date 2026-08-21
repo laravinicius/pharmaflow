@@ -2,6 +2,18 @@
 
 Aplicacao desktop para operacao de fluxo farmaceutico, com frontend em React e runtime Electron.
 
+## Paleta de Cores
+
+| Cor | Hex | Uso |
+|-----|-----|-----|
+| Vermelho (Primary) | `#C5243E` | Botões primários, destaque, links, badges ativos |
+| Vermelho Escuro | `#9B1A2E` | Gradiente fim (botões vermelhos) |
+| Azul (Secondary) | `#243465` | Sidebar, botões secundários, navegação |
+| Azul Escuro | `#1A2850` | Gradiente fim (botões azuis) |
+| Azul Claro (Farma) | `#4A90D9` | Logo "Farma", elementos informativos |
+| Seleção BG | `#FED7DB` | `::selection` background |
+| Seleção Texto | `#8C1A3D` | `::selection` color |
+
 ## Estrutura do Projeto
 
 - `src/`: frontend React.

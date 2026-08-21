@@ -20,6 +20,7 @@ export function SavedFormulaManager() {
   const [selectedInsumoId, setSelectedInsumoId] = useState<number | ''>('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('mg');
+  const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
@@ -138,20 +139,37 @@ export function SavedFormulaManager() {
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-              placeholder="Buscar insumo por nome..." value={insumoQuery} onChange={e => setInsumoQuery(e.target.value)} />
+              placeholder="Buscar insumo por nome..." value={insumoQuery}
+              onChange={e => { setInsumoQuery(e.target.value); setInsumoFocusIdx(-1); }}
+              onKeyDown={e => {
+                if (!filteredInsumos.length) return;
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setInsumoFocusIdx(prev => (prev < filteredInsumos.length - 1 ? prev + 1 : 0));
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setInsumoFocusIdx(prev => (prev > 0 ? prev - 1 : filteredInsumos.length - 1));
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const target = insumoFocusIdx >= 0 ? filteredInsumos[insumoFocusIdx] : filteredInsumos[0];
+                  if (target) { setSelectedInsumoId(target.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }
+                } else if (e.key === 'Escape') {
+                  setInsumoQuery(''); setInsumoFocusIdx(-1);
+                }
+              }} />
             {insumoQuery && (
-              <button type="button" onClick={() => setInsumoQuery('')} title="Limpar busca"
+              <button type="button" onClick={() => { setInsumoQuery(''); setInsumoFocusIdx(-1); }} title="Limpar busca"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             )}
             {filteredInsumos.length > 0 && (
               <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
-                {filteredInsumos.map(m => (
-                  <button key={m.id} type="button" onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); }}
-                    className="w-full text-left px-3 py-2 hover:bg-red-50 transition-colors flex items-center gap-2">
+                {filteredInsumos.map((m, idx) => (
+                  <button key={m.id} type="button" onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                    className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === insumoFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                     <ClipboardList className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span className="text-sm text-zinc-800 truncate flex-1">{m.name}</span>
+                    <span className="text-sm truncate flex-1">{m.name}</span>
                   </button>
                 ))}
               </div>
@@ -169,7 +187,13 @@ export function SavedFormulaManager() {
               <input inputMode="numeric" maxLength={4} required
                 className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
                 placeholder="0–9999" value={quantity}
-                onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && quantity) {
+                    e.preventDefault();
+                    addItem();
+                  }
+                }} />
             </div>
             <div className="sm:w-36">
               <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
@@ -180,7 +204,7 @@ export function SavedFormulaManager() {
             </div>
             <button type="button" disabled={!quantity} onClick={addItem}
               className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'linear-gradient(135deg, #1F3164, #2a4080)' }}>
+              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
               + Adicionar
             </button>
           </div>
@@ -209,7 +233,7 @@ export function SavedFormulaManager() {
 
       {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C41E3C, #A01830)' }}
+        <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}
           className="flex-1 text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
           {saving ? '...' : editingId ? 'Atualizar' : 'Adicionar'}
         </button>

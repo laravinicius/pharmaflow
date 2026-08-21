@@ -38,3 +38,19 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 
 - Keep UI strings and new code comments in Brazilian Portuguese.
 - Never commit `dist/`, `dist-electron/`, `release/`, or the local `att.txt` / `db.txt` files.
+
+## Visual / Cores
+
+- **Paleta oficial** (definida em `src/components/Logo.tsx`):
+  - `PRIMARY` (vermelho): `#C5243E` — botões primários, ações destrutivas/confirmatórias, badges ativos, links.
+  - `SECONDARY` (azul): `#243465` — sidebar, navegação, botões secundários ("Editar", "Salvar alterações").
+  - `FARMA_COLOR` (azul claro): `#4A90D9` — texto "Farma" no logo, elementos informativos.
+- **Gradientes padrão** (usar estes valores exatos em `style={{}}`):
+  - Botão vermelho: `linear-gradient(135deg, #C5243E, #9B1A2E)`
+  - Botão azul: `linear-gradient(135deg, #243465, #1A2850)`
+- **Cores de apoio** (backgrounds sutis, bordas, texto):
+  - Light red bg: `#FEF0F2` | Light red border: `#FED7DB` | Dark red text: `#C5243E`
+  - Light blue bg: `#EFF2FA` | Light blue border: `#D0DCE8` | Dark blue text: `#243465`
+  - Seleção: `::selection { background: #FED7DB; color: #8C1A3D; }` (em `src/index.css`)
+- **Icones de navegação ativos** recebem `text-amber-400` (`#FBBF24`) via inline style no `NavItem`.
+- **Não usar** Tailwind `red-500/600/700` ou `blue-500/600/700` para as cores da marca — sempre usar os valores hex acima ou as constantes `PRIMARY`/`SECONDARY` do `Logo.tsx`.

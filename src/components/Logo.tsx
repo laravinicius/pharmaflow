@@ -1,7 +1,7 @@
 import React from 'react';
 
-export const PRIMARY = '#C41E3C';
-export const SECONDARY = '#1F3164';
+export const PRIMARY = '#C5243E';
+export const SECONDARY = '#243465';
 export const FARMA_COLOR = '#4A90D9'; // azul mais claro — visível tanto no fundo branco quanto no navy
 
 export function CrossIcon({ size = 22 }: { size?: number }) {
@@ -13,13 +13,16 @@ export function CrossIcon({ size = 22 }: { size?: number }) {
   );
 }
 
-// Logo opcional em /logo.png; se não existir, o app usa o ícone padrão
-const LOGO_SRC = '/logo.png';
+// Logo otimizado em WebP (fallback para PNG se não carregar) - versão sem background
+const LOGO_SRC = 'logo_nobg.webp';
+const LOGO_FALLBACK = 'logo_nobg.png';
 
 function LogoImage({ sizePx, rounded = 'rounded-xl' }: { sizePx: number; rounded?: string }) {
-  const [hasImage, setHasImage] = React.useState(true);
+  const [useFallback, setUseFallback] = React.useState(false);
   const gradient = `linear-gradient(135deg, ${PRIMARY} 0%, ${SECONDARY} 100%)`;
-  if (!hasImage) {
+  const src = useFallback ? LOGO_FALLBACK : LOGO_SRC;
+
+  if (!src) {
     return (
       <div className={`flex items-center justify-center shrink-0 shadow-md ${rounded}`}
         style={{ width: sizePx, height: sizePx, background: gradient }}>
@@ -28,10 +31,10 @@ function LogoImage({ sizePx, rounded = 'rounded-xl' }: { sizePx: number; rounded
     );
   }
   return (
-    <img src={LOGO_SRC} alt="PIX Farma"
+    <img src={src} alt="PIX Farma"
       className={`shrink-0 shadow-md object-contain bg-white ${rounded}`}
       style={{ width: sizePx, height: sizePx }}
-      onError={() => setHasImage(false)} />
+      onError={() => !useFallback && setUseFallback(true)} />
   );
 }
 
