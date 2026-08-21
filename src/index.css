@@ -5,6 +5,10 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: calc(112.5% * var(--font-scale, 1));
+}
+
 body {
   font-family: 'DM Sans', sans-serif;
   -webkit-font-smoothing: antialiased;

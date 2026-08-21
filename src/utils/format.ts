@@ -64,3 +64,16 @@ export function formatDateToBR(iso: string): string {
 export function stripDiacritics(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
+
+// Formata quantidade: remove zeros à direita; usa . para milhar, , para decimal
+// ex.: 2 → "2", 2.5 → "2,5", 2.500 → "2,5", 1234.5 → "1.234,5", 1000000 → "1.000.000"
+export function formatQuantity(value: number | string): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  if (Number.isInteger(n)) return n.toLocaleString('pt-BR');
+  const str = n.toString();
+  const decimals = str.split('.')[1]?.replace(/0+$/, '') ?? '';
+  return decimals
+    ? n.toLocaleString('pt-BR', { minimumFractionDigits: decimals.length, maximumFractionDigits: decimals.length })
+    : n.toLocaleString('pt-BR');
+}

@@ -5,7 +5,7 @@ import {
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
-import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics } from '../utils/format';
+import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
@@ -559,7 +559,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
                   <div className="min-w-0">
                     <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
-                    <p className="text-xs text-zinc-400">{item.quantity}{item.unit ?? 'mg'}</p>
+                    <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)}{item.unit ?? 'mg'}</p>
                   </div>
                   {!locked && (
                     <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setItemError(''); }}
@@ -751,7 +751,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                         onChange={() => { if (!locked) setSelectedBudgetIndex(idx); }}
                         onClick={e => e.stopPropagation()} />
                       <p className="text-sm text-zinc-700 flex-1 min-w-0">
-                        <strong>{bi.quantity}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <strong>{formatQuantity(bi.quantity)}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </p>
                       {!locked && (
                         <button type="button" onClick={e => { e.stopPropagation(); removeBudgetItem(idx); }}

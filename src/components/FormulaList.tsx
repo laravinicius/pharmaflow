@@ -3,7 +3,7 @@ import { RefreshCw, Search, X, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { Formula } from '../types';
-import { formatDateToBR } from '../utils/format';
+import { formatDateToBR, formatQuantity } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
 
@@ -149,7 +149,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
                   <p className="font-bold text-zinc-900">{f.customer_name}</p>
                   <div className="text-zinc-700 space-y-0.5 font-medium">
-                    {(f.budget_items ?? []).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{bi.quantity} {bi.unit}</p>)}
+                    {(f.budget_items ?? []).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
                     {(f.budget_items ?? []).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
                   <div className="text-zinc-700 space-y-0.5 tabular-nums">

@@ -114,6 +114,12 @@ export default function App() {
   const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
+  const [fontScale, setFontScale] = useState(() => Number(localStorage.getItem('pharmaflow.fontScale')) || 1);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--font-scale', String(fontScale));
+    localStorage.setItem('pharmaflow.fontScale', String(fontScale));
+  }, [fontScale]);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
     setToast({ msg, type });
@@ -424,7 +430,31 @@ export default function App() {
             </button>
 
             <div className="flex items-center gap-4">
-              <div className="text-sm text-zinc-500">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setFontScale(Math.max(0.75, fontScale - 0.125))}
+                  disabled={fontScale <= 0.75}
+                  title="Diminuir fonte"
+                  className="w-8 h-8 rounded-lg font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  style={{
+                    background: 'linear-gradient(135deg, #243465, #1A2850)',
+                  }}
+                >
+                  a&minus;
+                </button>
+                <button
+                  onClick={() => setFontScale(Math.min(1.5, fontScale + 0.125))}
+                  disabled={fontScale >= 1.5}
+                  title="Aumentar fonte"
+                  className="w-8 h-8 rounded-lg font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  style={{
+                    background: 'linear-gradient(135deg, #C5243E, #9B1A2E)',
+                  }}
+                >
+                  A+
+                </button>
+              </div>
+              <div className="text-sm text-zinc-500 text-right">
                 {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>
             </div>
