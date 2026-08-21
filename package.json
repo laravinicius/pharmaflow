@@ -8,7 +8,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build --configLoader native && electron-builder",
+    "build": "node scripts/patch-icon.js && vite build --configLoader native && electron-builder --win",
     "preview": "vite preview",
     "clean": "node -e \"const fs=require('fs'); for (const dir of ['dist','dist-electron','release']) fs.rmSync(dir, { recursive: true, force: true });\"",
     "lint": "tsc --noEmit"
@@ -24,19 +24,12 @@
       "dist",
       "dist-electron"
     ],
-    "mac": {
-      "category": "public.app-category.medical"
-    },
+    "forceCodeSigning": false,
     "win": {
+      "icon": "public/icon.ico",
       "target": [
         "dir",
         "nsis"
-      ],
-      "signAndEditExecutable": false
-    },
-    "linux": {
-      "target": [
-        "AppImage"
       ]
     }
   },
@@ -53,7 +46,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "electron": "^33.0.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^25.1.8",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

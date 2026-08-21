@@ -17,7 +17,7 @@ export function CrossIcon({ size = 22 }: { size?: number }) {
 const LOGO_SRC = 'logo_nobg.webp';
 const LOGO_FALLBACK = 'logo_nobg.png';
 
-function LogoImage({ sizePx, rounded = 'rounded-xl' }: { sizePx: number; rounded?: string }) {
+function LogoImage({ sizePx, rounded = 'rounded-xl', fillWidth = false }: { sizePx: number; rounded?: string; fillWidth?: boolean }) {
   const [useFallback, setUseFallback] = React.useState(false);
   const gradient = `linear-gradient(135deg, ${PRIMARY} 0%, ${SECONDARY} 100%)`;
   const src = useFallback ? LOGO_FALLBACK : LOGO_SRC;
@@ -32,14 +32,23 @@ function LogoImage({ sizePx, rounded = 'rounded-xl' }: { sizePx: number; rounded
   }
   return (
     <img src={src} alt="PIX Farma"
-      className={`shrink-0 shadow-md object-contain bg-white ${rounded}`}
-      style={{ width: sizePx, height: sizePx }}
+      className={`shadow-md object-contain bg-white ${rounded} ${fillWidth ? 'w-full h-auto' : 'shrink-0'}`}
+      style={fillWidth ? { maxWidth: sizePx } : { width: sizePx, height: sizePx }}
       onError={() => !useFallback && setUseFallback(true)} />
   );
 }
 
-export function PixFarmaLogo({ size = 'md' }: { size?: 'icon' | 'md' | 'lg' }) {
+export function PixFarmaLogo({ size = 'md' }: { size?: 'icon' | 'md' | 'lg' | 'sidebar' }) {
   if (size === 'icon') return <LogoImage sizePx={40} />;
+
+  if (size === 'sidebar') {
+    return (
+      <div className="w-full flex flex-col items-center gap-2">
+        <LogoImage sizePx={200} fillWidth />
+        <span className="text-[10px] text-zinc-400 font-medium tracking-widest uppercase leading-tight">Manipulação</span>
+      </div>
+    );
+  }
 
   if (size === 'lg') {
     return (

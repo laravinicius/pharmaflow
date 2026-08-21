@@ -368,8 +368,8 @@ export default function App() {
         {/* Sidebar */}
         <aside className={`border-r border-zinc-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 self-start sticky top-0 h-screen overflow-hidden`}
           style={{ background: '#243465' }}>
-          <div className="p-5 flex items-center gap-3">
-            <PixFarmaLogo size={isSidebarOpen ? 'md' : 'icon'} />
+          <div className="p-5 w-full">
+            <PixFarmaLogo size={isSidebarOpen ? 'sidebar' : 'icon'} />
           </div>
 
           {setupMode && isSidebarOpen && (

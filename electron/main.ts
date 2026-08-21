@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -144,9 +144,16 @@ const notifyDataChanged = () => {
 let pendingExitConfirm = false;
 
 const createWindow = () => {
+  const iconPath = process.env.VITE_DEV_SERVER_URL
+    ? path.join(__dirname, '../public/icon.ico')
+    : path.join(__dirname, '../dist/icon.ico');
+
+  const appIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined;
+
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600,
     title: 'PIX Farma - Manipulação',
+    icon: appIcon,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
@@ -187,6 +194,9 @@ app.on('before-quit', (event) => {
 });
 
 app.on('ready', () => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.pharmaflow.app');
+  }
   createWindow();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
