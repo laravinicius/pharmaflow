@@ -181,12 +181,18 @@ export default function App() {
   );
 
   // Mantém a sessão viva; se ela for derrubada por outro login, volta ao login
+  const isHeartbeatRunningRef = useRef(false);
+
   useEffect(() => {
     if (!user || setupMode || !sessionToken) return;
-    const timer = setInterval(async () => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const runHeartbeat = async () => {
+      if (isHeartbeatRunningRef.current) return;
+      isHeartbeatRunningRef.current = true;
       const start = performance.now();
-      heartbeatMetrics.callCount++;
       try {
+        heartbeatMetrics.callCount++;
         const res = await db.auth.heartbeat(sessionToken);
         const duration = performance.now() - start;
         heartbeatMetrics.totalDurationMs += duration;
@@ -211,9 +217,17 @@ export default function App() {
         heartbeatMetrics.failureCount++;
         heartbeatMetrics.lastError = e.message ?? 'Erro desconhecido';
         /* servidor fora do ar: mantém a sessão local */
+      } finally {
+        isHeartbeatRunningRef.current = false;
       }
-    }, 2_000);
-    return () => clearInterval(timer);
+    };
+
+    runHeartbeat();
+    timer = setInterval(runHeartbeat, 30_000);
+    return () => {
+      if (timer) clearInterval(timer);
+      isHeartbeatRunningRef.current = false;
+    };
   }, [user, setupMode, sessionToken]);
 
   useEffect(() => {
