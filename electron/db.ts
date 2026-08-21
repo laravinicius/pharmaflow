@@ -6,6 +6,57 @@ import { formatDbError, isUnsupportedAuthPluginError } from './dbError';
 
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 
+interface SqlMetrics {
+  queryCount: number;
+  totalDurationMs: number;
+  recordsReturned: number;
+  lastQuery: string | null;
+  lastDurationMs: number;
+  lastError: string | null;
+}
+
+const sqlMetrics: SqlMetrics = {
+  queryCount: 0,
+  totalDurationMs: 0,
+  recordsReturned: 0,
+  lastQuery: null,
+  lastDurationMs: 0,
+  lastError: null,
+};
+
+export function getSqlMetrics(): SqlMetrics {
+  return { ...sqlMetrics };
+}
+
+export function resetSqlMetrics(): void {
+  sqlMetrics.queryCount = 0;
+  sqlMetrics.totalDurationMs = 0;
+  sqlMetrics.recordsReturned = 0;
+  sqlMetrics.lastQuery = null;
+  sqlMetrics.lastDurationMs = 0;
+  sqlMetrics.lastError = null;
+}
+
+const logQuery = async <T>(sql: string, params: any[], fn: () => Promise<T>): Promise<T> => {
+  const start = performance.now();
+  sqlMetrics.queryCount++;
+  sqlMetrics.lastQuery = sql;
+  try {
+    const result = await fn();
+    const duration = performance.now() - start;
+    sqlMetrics.totalDurationMs += duration;
+    sqlMetrics.lastDurationMs = duration;
+    sqlMetrics.lastError = null;
+    if (Array.isArray(result)) {
+      sqlMetrics.recordsReturned += result.length;
+    }
+    return result;
+  } catch (e: any) {
+    sqlMetrics.lastError = e.message ?? 'Erro desconhecido';
+    throw e;
+  }
+};
+
 // Erros de conectividade (servidor fora do ar) ≠ erros de dados
 const isConnectionError = (e: any): boolean => {
   const msg = e instanceof Error ? e.message : String(e ?? '');
@@ -34,8 +85,10 @@ export class Db {
 
   private async q<T = any>(sql: string, params?: any[]): Promise<T> {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
-    const [rows] = await this.pool.query(sql, params);
-    return rows as T;
+    return logQuery(sql, params ?? [], async () => {
+      const [rows] = await this.pool!.query(sql, params);
+      return rows as T;
+    });
   }
 
   // ── Sessões (login único) ──────────────────────────────────────────────────────

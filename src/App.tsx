@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Users, Cross, ClipboardList, User as UserIcon, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
@@ -17,6 +17,40 @@ import { Dashboard } from './components/Dashboard';
 import { RecipeForm } from './components/RecipeForm';
 import { FormulaList } from './components/FormulaList';
 import { SavedFormulaManager } from './components/SavedFormulaManager';
+
+interface HeartbeatMetrics {
+  callCount: number;
+  successCount: number;
+  failureCount: number;
+  totalDurationMs: number;
+  lastDurationMs: number;
+  lastValid: boolean | null;
+  lastError: string | null;
+}
+
+const heartbeatMetrics: HeartbeatMetrics = {
+  callCount: 0,
+  successCount: 0,
+  failureCount: 0,
+  totalDurationMs: 0,
+  lastDurationMs: 0,
+  lastValid: null,
+  lastError: null,
+};
+
+export function getHeartbeatMetrics(): HeartbeatMetrics {
+  return { ...heartbeatMetrics };
+}
+
+export function resetHeartbeatMetrics(): void {
+  heartbeatMetrics.callCount = 0;
+  heartbeatMetrics.successCount = 0;
+  heartbeatMetrics.failureCount = 0;
+  heartbeatMetrics.totalDurationMs = 0;
+  heartbeatMetrics.lastDurationMs = 0;
+  heartbeatMetrics.lastValid = null;
+  heartbeatMetrics.lastError = null;
+}
 
 // ─── Modal de Confirmação de Saída ─────────────────────────────────────────────
 
@@ -150,15 +184,34 @@ export default function App() {
   useEffect(() => {
     if (!user || setupMode || !sessionToken) return;
     const timer = setInterval(async () => {
+      const start = performance.now();
+      heartbeatMetrics.callCount++;
       try {
         const res = await db.auth.heartbeat(sessionToken);
+        const duration = performance.now() - start;
+        heartbeatMetrics.totalDurationMs += duration;
+        heartbeatMetrics.lastDurationMs = duration;
+        heartbeatMetrics.lastValid = res.valid;
+        heartbeatMetrics.lastError = null;
+        if (res.valid) {
+          heartbeatMetrics.successCount++;
+        } else {
+          heartbeatMetrics.failureCount++;
+        }
         if (!res.valid) {
           setUser(null);
           setSetupMode(false);
           setSessionToken(null);
           setLoginError('Sua sessão foi encerrada em outro dispositivo.');
         }
-      } catch { /* servidor fora do ar: mantém a sessão local */ }
+      } catch (e: any) {
+        const duration = performance.now() - start;
+        heartbeatMetrics.totalDurationMs += duration;
+        heartbeatMetrics.lastDurationMs = duration;
+        heartbeatMetrics.failureCount++;
+        heartbeatMetrics.lastError = e.message ?? 'Erro desconhecido';
+        /* servidor fora do ar: mantém a sessão local */
+      }
     }, 2_000);
     return () => clearInterval(timer);
   }, [user, setupMode, sessionToken]);
