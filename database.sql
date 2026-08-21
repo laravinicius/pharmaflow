@@ -94,6 +94,13 @@ CREATE INDEX idx_insumos_updated ON insumos(updated_at);
 CREATE INDEX idx_formulas_updated  ON formulas(updated_at);
 CREATE INDEX idx_saved_formulas_updated ON saved_formulas(updated_at);
 
+-- Indexes for batched queries (Stage 4 - N+1 fix)
+CREATE INDEX idx_formula_items_formula_id ON formula_items(formula_id);
+CREATE INDEX idx_formula_items_insumo_id ON formula_items(insumo_id);
+CREATE INDEX idx_formula_budget_items_formula_id ON formula_budget_items(formula_id);
+CREATE INDEX idx_saved_formula_items_saved_formula_id ON saved_formula_items(saved_formula_id);
+CREATE INDEX idx_saved_formula_items_insumo_id ON saved_formula_items(insumo_id);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   user_id    INT          NOT NULL,

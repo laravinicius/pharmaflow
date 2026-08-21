@@ -292,16 +292,41 @@ export class Db {
       FROM formulas f JOIN customers c ON f.customer_id = c.id
       ORDER BY f.created_at DESC
     `);
-    for (const f of formulas) {
-      f.items = await this.q(
-        `SELECT fi.insumo_id, m.name AS insumo_name, fi.quantity, fi.unit
-         FROM formula_items fi JOIN insumos m ON fi.insumo_id = m.id
-         WHERE fi.formula_id=?`, [f.id]
-      );
-      f.budget_items = await this.q(
-        `SELECT quantity, unit, value, is_selected FROM formula_budget_items WHERE formula_id=?`, [f.id]
-      );
+
+    if (formulas.length === 0) return formulas;
+
+    const formulaIds = formulas.map(f => f.id);
+    const placeholders = formulaIds.map(() => '?').join(',');
+
+    const items = await this.q<any[]>(
+      `SELECT fi.formula_id, fi.insumo_id, m.name AS insumo_name, fi.quantity, fi.unit
+       FROM formula_items fi JOIN insumos m ON fi.insumo_id = m.id
+       WHERE fi.formula_id IN (${placeholders})`,
+      formulaIds
+    );
+
+    const budgetItems = await this.q<any[]>(
+      `SELECT formula_id, quantity, unit, value, is_selected
+       FROM formula_budget_items
+       WHERE formula_id IN (${placeholders})`,
+      formulaIds
+    );
+
+    const itemsByFormula: Record<number, any[]> = {};
+    for (const item of items) {
+      (itemsByFormula[item.formula_id] ??= []).push(item);
     }
+
+    const budgetByFormula: Record<number, any[]> = {};
+    for (const bi of budgetItems) {
+      (budgetByFormula[bi.formula_id] ??= []).push(bi);
+    }
+
+    for (const f of formulas) {
+      f.items = itemsByFormula[f.id] ?? [];
+      f.budget_items = budgetByFormula[f.id] ?? [];
+    }
+
     return formulas;
   }
 
@@ -422,13 +447,28 @@ export class Db {
     const formulas = await this.q<any[]>(
       'SELECT id, name, created_at FROM saved_formulas ORDER BY name'
     );
-    for (const f of formulas) {
-      f.items = await this.q(
-        `SELECT sfi.insumo_id, m.name AS insumo_name, sfi.quantity, sfi.unit
-         FROM saved_formula_items sfi JOIN insumos m ON sfi.insumo_id = m.id
-         WHERE sfi.saved_formula_id=?`, [f.id]
-      );
+
+    if (formulas.length === 0) return formulas;
+
+    const formulaIds = formulas.map(f => f.id);
+    const placeholders = formulaIds.map(() => '?').join(',');
+
+    const items = await this.q<any[]>(
+      `SELECT sfi.saved_formula_id, sfi.insumo_id, m.name AS insumo_name, sfi.quantity, sfi.unit
+       FROM saved_formula_items sfi JOIN insumos m ON sfi.insumo_id = m.id
+       WHERE sfi.saved_formula_id IN (${placeholders})`,
+      formulaIds
+    );
+
+    const itemsByFormula: Record<number, any[]> = {};
+    for (const item of items) {
+      (itemsByFormula[item.saved_formula_id] ??= []).push(item);
     }
+
+    for (const f of formulas) {
+      f.items = itemsByFormula[f.id] ?? [];
+    }
+
     return formulas;
   }
 
