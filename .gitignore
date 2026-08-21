@@ -43,3 +43,5 @@ cache.db
 # Project-local operational files
 att.txt
 db.txt
+
+.plans
