@@ -445,7 +445,7 @@ export class Db {
 
   async listSavedFormulas() {
     const formulas = await this.q<any[]>(
-      'SELECT id, name, created_at FROM saved_formulas ORDER BY name'
+      'SELECT id, name, budget_number, created_at FROM saved_formulas ORDER BY name'
     );
 
     if (formulas.length === 0) return formulas;
@@ -460,13 +460,30 @@ export class Db {
       formulaIds
     );
 
+    const budgetItems = await this.q<any[]>(
+      `SELECT id, saved_formula_id, quantity, unit, value
+       FROM saved_formula_budget_items
+       WHERE saved_formula_id IN (${placeholders})`,
+      formulaIds
+    );
+
     const itemsByFormula: Record<number, any[]> = {};
     for (const item of items) {
       (itemsByFormula[item.saved_formula_id] ??= []).push(item);
     }
 
+    const budgetItemsByFormula: Record<number, any[]> = {};
+    for (const item of budgetItems) {
+      (budgetItemsByFormula[item.saved_formula_id] ??= []).push({
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        value: Number(item.value),
+      });
+    }
+
     for (const f of formulas) {
       f.items = itemsByFormula[f.id] ?? [];
+      f.budget_items = budgetItemsByFormula[f.id] ?? [];
     }
 
     return formulas;
@@ -474,13 +491,19 @@ export class Db {
 
   async addSavedFormula(formula: {
     name: string;
+    budget_number?: string;
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
+    budget_items: Array<{ quantity: number; unit: string; value: number }>;
   }) {
     try {
-      const r: any = await this.q('INSERT INTO saved_formulas (name) VALUES (?)', [formula.name]);
+      const r: any = await this.q('INSERT INTO saved_formulas (name, budget_number) VALUES (?,?)', [formula.name, formula.budget_number ?? null]);
       for (const item of formula.items) {
         await this.q('INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
           [r.insertId, item.insumo_id, item.quantity, item.unit ?? 'mg']);
+      }
+      for (const b of formula.budget_items) {
+        await this.q('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
+          [r.insertId, b.quantity, b.unit, b.value]);
       }
       return { success: true, id: r.insertId };
     } catch (e) {
@@ -490,14 +513,21 @@ export class Db {
 
   async updateSavedFormula(id: number, formula: {
     name: string;
+    budget_number?: string;
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
+    budget_items: Array<{ quantity: number; unit: string; value: number }>;
   }) {
     try {
-      await this.q('UPDATE saved_formulas SET name=? WHERE id=?', [formula.name, id]);
+      await this.q('UPDATE saved_formulas SET name=?, budget_number=? WHERE id=?', [formula.name, formula.budget_number ?? null, id]);
       await this.q('DELETE FROM saved_formula_items WHERE saved_formula_id=?', [id]);
       for (const item of formula.items) {
         await this.q('INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
           [id, item.insumo_id, item.quantity, item.unit ?? 'mg']);
+      }
+      await this.q('DELETE FROM saved_formula_budget_items WHERE saved_formula_id=?', [id]);
+      for (const b of formula.budget_items) {
+        await this.q('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
+          [id, b.quantity, b.unit, b.value]);
       }
       return { success: true };
     } catch (e) {

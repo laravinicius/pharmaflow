@@ -133,7 +133,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const sfq = stripDiacritics(savedFormulaQuery.trim().toLowerCase());
   const filteredSavedFormulas = sfq
     ? allSavedFormulas
-        .filter(f => stripDiacritics((f.name ?? '').toLowerCase()).includes(sfq))
+        .filter(f => {
+          const name = stripDiacritics((f.name ?? '').toLowerCase());
+          const budgetNumber = stripDiacritics((f.budget_number ?? '').toLowerCase());
+          return name.includes(sfq) || budgetNumber.includes(sfq);
+        })
         .sort((a, b) => {
           const nameA = stripDiacritics((a.name ?? '').toLowerCase());
           const nameB = stripDiacritics((b.name ?? '').toLowerCase());
@@ -148,6 +152,10 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setAppliedSavedFormula(f);
     setSavedFormulaQuery('');
     setItemError('');
+    if (f.budget_items && f.budget_items.length > 0) {
+      setBudgetItems(f.budget_items.map(b => ({ ...b })));
+      setSelectedBudgetIndex(null);
+    }
   };
 
   const addBudgetItem = () => {
@@ -601,7 +609,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
               <input
                 className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                placeholder="Buscar fórmula salva por nome..."
+                placeholder="Buscar fórmula salva por nome ou número do orçamento..."
                 value={savedFormulaQuery}
                 onChange={e => { setSavedFormulaQuery(e.target.value); setSavedFormulaFocusIdx(-1); }}
                 onKeyDown={e => {
@@ -633,10 +641,14 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                     <button key={f.id} type="button" onClick={() => { applySavedFormula(f); setSavedFormulaFocusIdx(-1); }}
                       className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === savedFormulaFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                       <Bookmark className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                      <span className="text-sm truncate flex-1">{f.name}</span>
-                      <span className="text-xs text-zinc-400 shrink-0">
-                        {f.items.length} {f.items.length === 1 ? 'insumo' : 'insumos'}
-                      </span>
+                      <div className="flex items-center gap-2 w-full min-w-0">
+                        <span className="text-sm truncate flex-1">{f.name}</span>
+                        {f.budget_number && (
+                          <span className="text-xs text-zinc-500 shrink-0 whitespace-nowrap">
+                            {f.budget_number}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>

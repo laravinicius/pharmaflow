@@ -12,4 +12,4 @@ export interface Formula {
   delivery_status?: string; cancel_reason?: string | null;
 }
 export interface SavedFormulaItem { insumo_id: number; insumo_name?: string; quantity: number; unit?: string }
-export interface SavedFormula { id: number; name: string; created_at?: string; items: SavedFormulaItem[] }
+export interface SavedFormula { id: number; name: string; budget_number?: string; created_at?: string; items: SavedFormulaItem[]; budget_items?: BudgetItem[] }

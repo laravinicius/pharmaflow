@@ -45,3 +45,4 @@ att.txt
 db.txt
 
 .plans
+migrations/

@@ -2,24 +2,30 @@ import React, { useMemo, useState } from 'react';
 import { CheckCircle, Trash2, Search, X, PlusCircle, ClipboardList } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
-import { SavedFormula, SavedFormulaItem, Insumo } from '../types';
-import { stripDiacritics, formatQuantity } from '../utils/format';
+import { SavedFormula, SavedFormulaItem, Insumo, BudgetItem } from '../types';
+import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 
 const UNITS = ['g', 'mcg', 'mg', 'ml', 'ui'];
+const BUDGET_UNITS = ['caps', 'dose', 'g', 'ml'];
 
 export function SavedFormulaManager() {
   const { data: formulas, loading, error, reload } = useData(() => db.savedFormulas.list());
   const { data: insumos } = useData(() => db.insumos.list());
   const [name, setName] = useState('');
+  const [budgetNumber, setBudgetNumber] = useState('');
   const [items, setItems] = useState<SavedFormulaItem[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [insumoQuery, setInsumoQuery] = useState('');
   const [selectedInsumoId, setSelectedInsumoId] = useState<number | ''>('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('mg');
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
+  const [bQty, setBQty] = useState('');
+  const [bUnit, setBUnit] = useState('caps');
+  const [bValue, setBValue] = useState('');
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -28,7 +34,7 @@ export function SavedFormulaManager() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ key: 'name' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
 
-  const reset = () => { setName(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setFormError(''); setSuccess(null); };
+  const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('caps'); setBValue(''); setFormError(''); setSuccess(null); };
 
   const allFormulas = (formulas as SavedFormula[]) ?? [];
   const allInsumos = (insumos as Insumo[]) ?? [];
@@ -61,6 +67,19 @@ export function SavedFormulaManager() {
     setFormError('');
   };
 
+  const addBudgetItem = () => {
+    if (!bQty || !bValue) return;
+    const next = [...budgetItems, { quantity: Number(bQty), unit: bUnit, value: parseCurrency(bValue) }];
+    setBudgetItems(next);
+    setBQty('');
+    setBValue('');
+    setFormError('');
+  };
+
+  const removeBudgetItem = (idx: number) => {
+    setBudgetItems(budgetItems.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
@@ -69,7 +88,12 @@ export function SavedFormulaManager() {
     const dup = allFormulas.find(f => f.id !== editingId && f.name.toLowerCase() === trimmed.toLowerCase());
     if (dup) { setFormError(`Fórmula já cadastrada: ${dup.name}`); return; }
     setSaving(true); setFormError(''); setSuccess(null);
-    const payload = { name: trimmed, items: items.map(i => ({ insumo_id: i.insumo_id, quantity: i.quantity, unit: i.unit ?? 'mg' })) };
+    const payload = {
+      name: trimmed,
+      budget_number: budgetNumber.trim() || null,
+      items: items.map(i => ({ insumo_id: i.insumo_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
+      budget_items: budgetItems,
+    };
     try {
       if (editingId) {
         const res: any = await db.savedFormulas.update(editingId, payload);
@@ -101,7 +125,9 @@ export function SavedFormulaManager() {
   const startEdit = (f: SavedFormula) => {
     setEditingId(f.id);
     setName(f.name);
+    setBudgetNumber(f.budget_number ?? '');
     setItems(f.items.map(i => ({ ...i })));
+    setBudgetItems((f.budget_items ?? []).map(b => ({ ...b })));
     setTab('create');
     setFormError('');
     setSuccess(null);
@@ -118,6 +144,67 @@ export function SavedFormulaManager() {
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome da Fórmula</label>
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none"
           value={name} onChange={e => { setFormError(''); setName(e.target.value); }} placeholder="Ex: Cápsulas de Vitamina C + Zinco" />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Número do Orçamento (opcional)</label>
+        <input inputMode="numeric" maxLength={6} className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+          value={budgetNumber} onChange={e => { setFormError(''); setBudgetNumber(e.target.value.replace(/\D/g, '').slice(0, 6)); }} placeholder="Ex: 123456" />
+      </div>
+
+      <div className="border border-zinc-200 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-zinc-500 uppercase">Itens do Orçamento</h3>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="sm:w-28">
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
+            <input inputMode="numeric" maxLength={4}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
+              placeholder="0–9999" value={bQty}
+              onChange={e => { setFormError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 4)); }} />
+          </div>
+          <div className="sm:w-24">
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
+            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm"
+              value={bUnit} onChange={e => { setFormError(''); setBUnit(e.target.value); }}>
+              {BUDGET_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
+            <input inputMode="numeric"
+              className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
+              placeholder="0,00" value={bValue}
+              onChange={e => { setFormError(''); setBValue(e.target.value.replace(/[^0-9,]/g, '').replace(/,/g, '').replace(/(\d{2})$/, ',$1')); }} />
+          </div>
+          <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
+            className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+            + Adicionar
+          </button>
+        </div>
+
+        {budgetItems.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {budgetItems.map((bi, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-zinc-100"
+                style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
+                <p className="text-sm text-zinc-700 flex-1 min-w-0">
+                  <strong>{formatQuantity(bi.quantity)}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </p>
+                <button type="button" onClick={() => removeBudgetItem(idx)}
+                  className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover item do orçamento">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {budgetItems.length === 0 && (
+          <p className="text-sm text-zinc-400">Nenhum item de orçamento adicionado ainda.</p>
+        )}
       </div>
 
       <div className="border border-zinc-200 rounded-xl p-4 space-y-3">

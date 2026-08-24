@@ -72,10 +72,20 @@ CREATE TABLE IF NOT EXISTS formula_budget_items (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS saved_formulas (
-  id         INT AUTO_INCREMENT PRIMARY KEY,
-  name       VARCHAR(255) NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  name            VARCHAR(255) NOT NULL UNIQUE,
+  budget_number   VARCHAR(6)   NULL,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS saved_formula_budget_items (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  saved_formula_id INT            NOT NULL,
+  quantity         DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
+  unit             VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, dose, g, ml',
+  value            DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
+  FOREIGN KEY (saved_formula_id) REFERENCES saved_formulas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS saved_formula_items (
@@ -100,6 +110,7 @@ CREATE INDEX idx_formula_items_insumo_id ON formula_items(insumo_id);
 CREATE INDEX idx_formula_budget_items_formula_id ON formula_budget_items(formula_id);
 CREATE INDEX idx_saved_formula_items_saved_formula_id ON saved_formula_items(saved_formula_id);
 CREATE INDEX idx_saved_formula_items_insumo_id ON saved_formula_items(insumo_id);
+CREATE INDEX idx_saved_formula_budget_items_saved_formula_id ON saved_formula_budget_items(saved_formula_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
   id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -116,3 +127,19 @@ CREATE INDEX idx_sessions_last_seen ON sessions(last_seen);
 -- Default admin user (password: admin123)
 INSERT IGNORE INTO users (name, username, password, role)
 VALUES ('Administrador', 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'admin');
+
+-- Migration: replace single budget fields with budget_items table (run on existing databases)
+CREATE TABLE IF NOT EXISTS saved_formula_budget_items (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  saved_formula_id INT            NOT NULL,
+  quantity         DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
+  unit             VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, dose, g, ml',
+  value            DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
+  FOREIGN KEY (saved_formula_id) REFERENCES saved_formulas(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+ALTER TABLE saved_formulas
+  DROP COLUMN IF EXISTS budget_number,
+  DROP COLUMN IF EXISTS quantity,
+  DROP COLUMN IF EXISTS unit,
+  DROP COLUMN IF EXISTS value;
