@@ -149,12 +149,12 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
                   <p className="font-bold text-zinc-900">{f.customer_name}</p>
                   <div className="text-zinc-700 space-y-0.5 font-medium">
-                    {(f.budget_items ?? []).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
-                    {(f.budget_items ?? []).length === 0 && <p className="text-zinc-400">—</p>}
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
                   <div className="text-zinc-700 space-y-0.5 tabular-nums">
-                    {(f.budget_items ?? []).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
-                    {(f.budget_items ?? []).length === 0 && <p className="text-zinc-400">—</p>}
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
                   <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
                   <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>

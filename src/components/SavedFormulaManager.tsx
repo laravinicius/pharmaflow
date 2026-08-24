@@ -318,7 +318,7 @@ export function SavedFormulaManager() {
                 style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
                 <div className="min-w-0">
                   <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
-                  <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)}{item.unit ?? 'mg'}</p>
+                  <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
                 </div>
                 <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setFormError(''); }}
                   className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover insumo">
@@ -430,7 +430,7 @@ export function SavedFormulaManager() {
                             <HighlightMatch text={f.name} query={search} />
                           </td>
                           <td className="px-4 py-3 text-zinc-600 text-sm max-w-xs">
-                            {f.items.map(i => `${i.insumo_name} ${formatQuantity(i.quantity)}${i.unit ?? 'mg'}`).join(', ')}
+                            {f.items.map(i => `${i.insumo_name} ${formatQuantity(i.quantity)} ${i.unit ?? 'mg'}`).join(', ')}
                           </td>
                           <td className="px-4 py-3 text-zinc-500 text-sm">{f.created_at ? new Date(f.created_at).toLocaleString('pt-BR') : '—'}</td>
                           <td className="px-4 py-3 text-right space-x-3">

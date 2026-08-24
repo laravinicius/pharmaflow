@@ -113,6 +113,7 @@ function AppInner() {
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
   const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
   const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
+  const [autoUnlockFormula, setAutoUnlockFormula] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
   const [fontScale, setFontScale] = useState(() => Number(localStorage.getItem('pharmaflow.fontScale')) || 1);
@@ -121,6 +122,10 @@ function AppInner() {
     document.documentElement.style.setProperty('--font-scale', String(fontScale));
     localStorage.setItem('pharmaflow.fontScale', String(fontScale));
   }, [fontScale]);
+
+  useEffect(() => {
+    if (!viewingFormula) setAutoUnlockFormula(false);
+  }, [viewingFormula]);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
     setToast({ msg, type });
@@ -467,7 +472,7 @@ function AppInner() {
               {activeTab === 'dashboard' && <Dashboard user={user} onNavigate={setActiveTab} />}
               {activeTab === 'admin' && <AdminPanel user={user} />}
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
-              {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab(dest); }} />}
+              {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} initialLocked={!autoUnlockFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setAutoUnlockFormula(false); setActiveTab(dest); }} />}
               {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
               {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setActiveTab('formulaDetail'); } }} />}
               {activeTab === 'confirmed' && <FormulaList screenKey="confirmed" variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />}
@@ -501,11 +506,17 @@ function AppInner() {
                 </li>
               ))}
             </ul>
-            <button type="button" onClick={() => setMissingReasons(null)}
-              className="mt-5 w-full py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
-              style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
-              Entendi
-            </button>
+            <div className="mt-5 flex gap-3">
+              <button type="button" onClick={() => setMissingReasons(null)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
+                Entendi
+              </button>
+              <button type="button" onClick={() => { setMissingReasons(null); setAutoUnlockFormula(true); }}
+                className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
+                style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+                Editar
+              </button>
+            </div>
           </div>
         </div>
       )}

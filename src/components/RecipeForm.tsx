@@ -10,7 +10,7 @@ import { useData } from '../hooks/useData';
 import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
 
-export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; onComplete: (dest: 'pending' | 'confirmed') => void }) {
+export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; onComplete: (dest: 'pending' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
   const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
   const { data: savedFormulas } = useData(() => db.savedFormulas.list());
@@ -39,7 +39,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [paymentStatus, setPaymentStatus] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [saving, setSaving] = useState(false);
-  const [locked, setLocked] = useState(Boolean(formula));
+  const [locked, setLocked] = useState(formula ? initialLocked : false);
   const [deliveryStatus, setDeliveryStatus] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -62,7 +62,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       setPaymentStatus(formula.payment_status ?? '');
       setPaymentMethod(formula.payment_method ?? '');
       setDeliveryStatus(formula.delivery_status ?? '');
-      setLocked(true);
     }
   }, [formula]);
 
@@ -73,6 +72,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       setShowTemplateBanner(true);
     }
   }, [template]);
+
+  useEffect(() => {
+    if (formula) {
+      setLocked(initialLocked);
+    }
+  }, [formula, initialLocked]);
 
   const clearForm = () => {
     setSelectedCustomerId('');
@@ -567,7 +572,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
                   <div className="min-w-0">
                     <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
-                    <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)}{item.unit ?? 'mg'}</p>
+                    <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
                   </div>
                   {!locked && (
                     <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setItemError(''); }}
