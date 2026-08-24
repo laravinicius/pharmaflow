@@ -14,13 +14,17 @@ export function CrossIcon({ size = 22 }: { size?: number }) {
 }
 
 // Logo otimizado em WebP (fallback para PNG se não carregar) - versão sem background
-const LOGO_SRC = 'logo_nobg.webp';
-const LOGO_FALLBACK = 'logo_nobg.png';
+const LOGO_SRC_WHITE = 'logo_white_nobg.webp';
+const LOGO_FALLBACK_WHITE = 'logo_white_nobg.png';
+const LOGO_SRC_ORIGINAL = 'logo_nobg.webp';
+const LOGO_FALLBACK_ORIGINAL = 'logo_nobg.png';
 
-function LogoImage({ sizePx, rounded = 'rounded-xl', fillWidth = false }: { sizePx: number; rounded?: string; fillWidth?: boolean }) {
+function LogoImage({ sizePx, rounded = 'rounded-xl', fillWidth = false, variant = 'white' }: { sizePx: number; rounded?: string; fillWidth?: boolean; variant?: 'white' | 'original' }) {
   const [useFallback, setUseFallback] = React.useState(false);
   const gradient = `linear-gradient(135deg, ${PRIMARY} 0%, ${SECONDARY} 100%)`;
-  const src = useFallback ? LOGO_FALLBACK : LOGO_SRC;
+  const src = useFallback
+    ? (variant === 'original' ? LOGO_FALLBACK_ORIGINAL : LOGO_FALLBACK_WHITE)
+    : (variant === 'original' ? LOGO_SRC_ORIGINAL : LOGO_SRC_WHITE);
 
   if (!src) {
     return (
@@ -32,19 +36,19 @@ function LogoImage({ sizePx, rounded = 'rounded-xl', fillWidth = false }: { size
   }
   return (
     <img src={src} alt="PIX Farma"
-      className={`shadow-md object-contain bg-white ${rounded} ${fillWidth ? 'w-full h-auto' : 'shrink-0'}`}
+      className={`shadow-md object-contain ${rounded} ${fillWidth ? 'w-full h-auto' : 'shrink-0'}`}
       style={fillWidth ? { maxWidth: sizePx } : { width: sizePx, height: sizePx }}
       onError={() => !useFallback && setUseFallback(true)} />
   );
 }
 
 export function PixFarmaLogo({ size = 'md' }: { size?: 'icon' | 'md' | 'lg' | 'sidebar' }) {
-  if (size === 'icon') return <LogoImage sizePx={40} />;
+  if (size === 'icon') return <LogoImage sizePx={40} variant="white" />;
 
   if (size === 'sidebar') {
     return (
       <div className="w-full flex flex-col items-center gap-2">
-        <LogoImage sizePx={200} fillWidth />
+        <LogoImage sizePx={200} fillWidth variant="white" />
         <span className="text-[10px] text-zinc-400 font-medium tracking-widest uppercase leading-tight">Manipulação</span>
       </div>
     );
@@ -52,21 +56,13 @@ export function PixFarmaLogo({ size = 'md' }: { size?: 'icon' | 'md' | 'lg' | 's
 
   if (size === 'lg') {
     return (
-      <div className="flex flex-col items-center gap-3">
-        <LogoImage sizePx={80} rounded="rounded-2xl" />
-        <div className="text-center">
-          <div className="text-2xl font-black tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
-            <span style={{ color: PRIMARY }}>Pix</span><span style={{ color: FARMA_COLOR }}>Farma</span>
-          </div>
-          <div className="text-xs text-zinc-400 font-medium tracking-widest uppercase mt-0.5">Sistema de Manipulação</div>
-        </div>
-      </div>
+      <LogoImage sizePx={448} fillWidth variant="original" />
     );
   }
 
   return (
     <div className="flex items-center gap-3">
-      <LogoImage sizePx={40} />
+      <LogoImage sizePx={40} variant="white" />
       <div>
         <div className="font-black text-lg leading-tight tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
           <span style={{ color: PRIMARY }}>Pix</span><span style={{ color: FARMA_COLOR }}>Farma</span>

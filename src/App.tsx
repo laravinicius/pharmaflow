@@ -245,15 +245,17 @@ function AppInner() {
   if (!user) {
     return (
       <>
-        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
-        <motion.div
+        <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
+          <div className="w-full max-w-md mb-4">
+            <PixFarmaLogo size="lg" />
+          </div>
+          <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-200 overflow-hidden"
           >
             <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #C5243E, #243465, #C5243E)' }} />
             <div className="p-8">
             <div className="flex flex-col items-center mb-8">
-              <PixFarmaLogo size="lg" />
               <p className="text-zinc-500 text-sm mt-2">Acesse sua conta para continuar</p>
             </div>
             <form onSubmit={handleLogin} className="space-y-4">
