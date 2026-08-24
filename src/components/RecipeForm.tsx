@@ -514,7 +514,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               inputMode="numeric"
               maxLength={4}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="0–9999"
+              placeholder="0"
               value={quantity}
               disabled={locked}
               onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))}
@@ -687,7 +687,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   inputMode="numeric"
                   maxLength={3}
                   className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-                  placeholder="0–999"
+                  placeholder="0"
                   value={bQty}
                   disabled={locked}
                   onChange={e => { setBudgetError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 3)); }}
@@ -708,7 +708,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 <input
                   inputMode="numeric"
                   className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-                  placeholder="0,00"
+                  placeholder="0"
                   value={bValue}
                   disabled={locked}
                   onChange={e => { setBudgetError(''); setBValue(formatCurrency(e.target.value)); }}

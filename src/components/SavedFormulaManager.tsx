@@ -173,7 +173,7 @@ export function SavedFormulaManager() {
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
             <input inputMode="numeric" maxLength={4}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
-              placeholder="0–9999" value={bQty}
+              placeholder="0" value={bQty}
               onChange={e => { setFormError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 4)); }} />
           </div>
           <div className="sm:w-24">
@@ -187,7 +187,7 @@ export function SavedFormulaManager() {
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
             <input inputMode="numeric"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
-              placeholder="0,00" value={bValue}
+              placeholder="0" value={bValue}
               onChange={e => { setFormError(''); setBValue(e.target.value.replace(/[^0-9,]/g, '').replace(/,/g, '').replace(/(\d{2})$/, ',$1')); }} />
           </div>
           <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
@@ -285,7 +285,7 @@ export function SavedFormulaManager() {
               <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
               <input inputMode="numeric" maxLength={4} required
                 className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
-                placeholder="0–9999" value={quantity}
+                placeholder="0" value={quantity}
                 onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && quantity) {
