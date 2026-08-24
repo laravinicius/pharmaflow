@@ -7,9 +7,12 @@ import { stripDiacritics } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
+import { AdminAuthModal } from './AdminAuthModal';
+import { useAuth } from '../context/AuthContext';
 
 export function InsumoManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (m: Insumo) => void } = {}) {
   const { data: insumos, loading, error, reload } = useData(() => db.insumos.list());
+  const { sessionToken } = useAuth();
   const [name, setName] = useState('');
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState('');
@@ -19,6 +22,8 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
   const [tab, setTab] = useState<'list' | 'create'>('list');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ key: 'name' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const reset = () => { setName(''); setFormError(''); setSuccess(null); };
 
@@ -41,10 +46,16 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Excluir este insumo?')) return;
-    const res: any = await db.insumos.remove(id);
+    setPendingDeleteId(id);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async (adminCreds?: { username: string; password: string }, token?: string) => {
+    if (pendingDeleteId === null) return;
+    const res: any = await db.insumos.remove(pendingDeleteId, adminCreds, token ?? sessionToken ?? undefined);
     if (!res?.success) { setFormError(res?.error ?? 'Erro ao excluir.'); return; }
     reload();
+    setPendingDeleteId(null);
   };
 
   const handleRowSave = async () => {
@@ -208,6 +219,13 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
           </div>
         )}
       </div>
+      <AdminAuthModal
+        isOpen={deleteModalOpen}
+        onClose={() => { setDeleteModalOpen(false); setPendingDeleteId(null); }}
+        onConfirm={handleDeleteConfirm}
+        title="Excluir insumo"
+        message="Esta ação não pode ser desfeita. O insumo será removido permanentemente."
+      />
     </motion.div>
   );
 }

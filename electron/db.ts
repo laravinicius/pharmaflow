@@ -2,6 +2,17 @@ import crypto from 'crypto';
 import mysql from 'mysql2/promise';
 import { formatDbError, isUnsupportedAuthPluginError } from './dbError';
 
+interface AdminVerifyResult {
+  success: boolean;
+  user?: { id: number; name: string; username: string; role: string };
+  error?: string;
+}
+
+interface SessionUserResult {
+  user?: { id: number; name: string; username: string; role: string };
+  error?: string;
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
@@ -117,6 +128,42 @@ export class Db {
       [Db.SESSION_TTL_SECONDS]);
   }
 
+  // ── Admin Verification ──────────────────────────────────────────────────────────
+
+  async verifyAdmin(username: string, password: string): Promise<AdminVerifyResult> {
+    try {
+      const rows = await this.q<any[]>(
+        'SELECT id, name, username, role FROM users WHERE username = ? AND password = ? AND role = ?',
+        [username, hash(password), 'admin']
+      );
+      if (rows.length === 0) {
+        return { success: false, error: 'Credenciais de administrador inválidas' };
+      }
+      return { success: true, user: rows[0] };
+    } catch (e) {
+      return { success: false, error: friendlyError(e) };
+    }
+  }
+
+  async getSessionUser(token: string): Promise<SessionUserResult> {
+    if (!this.pool) return { error: 'Sem conexão com o servidor' };
+    try {
+      const rows = await this.q<any[]>(
+        `SELECT u.id, u.name, u.username, u.role
+         FROM sessions s
+         JOIN users u ON s.user_id = u.id
+         WHERE s.token = ? AND s.last_seen >= NOW() - INTERVAL ? SECOND`,
+        [token, Db.SESSION_TTL_SECONDS]
+      );
+      if (rows.length === 0) {
+        return { error: 'Sessão inválida ou expirada' };
+      }
+      return { user: rows[0] };
+    } catch (e) {
+      return { error: friendlyError(e) };
+    }
+  }
+
   // ── Auth ──────────────────────────────────────────────────────────────────────
 
   async login(username: string, password: string, force = false): Promise<{
@@ -197,13 +244,30 @@ export class Db {
     }
   }
 
-  async deleteUser(id: number) {
+  async deleteUser(id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) {
     try {
+      const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
+      if (!adminCheck.success) return { success: false, error: adminCheck.error };
+
       await this.q('DELETE FROM users WHERE id = ?', [id]);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
     }
+  }
+
+  private async checkAdminAccess(adminCreds?: { username: string; password: string }, sessionToken?: string) {
+    if (adminCreds?.username && adminCreds?.password) {
+      return this.verifyAdmin(adminCreds.username, adminCreds.password);
+    }
+    if (sessionToken) {
+      const sessionResult = await this.getSessionUser(sessionToken);
+      if (sessionResult.user?.role === 'admin') {
+        return { success: true, user: sessionResult.user };
+      }
+      return { success: false, error: 'Credenciais de administrador inválidas' };
+    }
+    return { success: false, error: 'Credenciais de administrador inválidas' };
   }
 
   // ── Clientes ──────────────────────────────────────────────────────────────────
@@ -230,8 +294,11 @@ export class Db {
     }
   }
 
-  async deleteCustomer(id: number) {
+  async deleteCustomer(id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) {
     try {
+      const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
+      if (!adminCheck.success) return { success: false, error: adminCheck.error };
+
       await this.q('DELETE FROM customers WHERE id = ?', [id]);
       return { success: true };
     } catch (e) {
@@ -263,8 +330,11 @@ export class Db {
     }
   }
 
-  async deleteInsumo(id: number) {
+  async deleteInsumo(id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) {
     try {
+      const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
+      if (!adminCheck.success) return { success: false, error: adminCheck.error };
+
       const inUse = await this.q<any[]>('SELECT 1 FROM formula_items WHERE insumo_id=? LIMIT 1', [id]);
       const inSaved = await this.q<any[]>('SELECT 1 FROM saved_formula_items WHERE insumo_id=? LIMIT 1', [id]);
       if (inUse.length > 0 || inSaved.length > 0) {
@@ -436,9 +506,16 @@ export class Db {
     return { success: true };
   }
 
-  async deleteFormula(id: number) {
-    await this.q('DELETE FROM formulas WHERE id=?', [id]);
-    return { success: true };
+  async deleteFormula(id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) {
+    try {
+      const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
+      if (!adminCheck.success) return { success: false, error: adminCheck.error };
+
+      await this.q('DELETE FROM formulas WHERE id=?', [id]);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: friendlyError(e) };
+    }
   }
 
   // ── Fórmulas Salvas ──────────────────────────────────────────────────────────
@@ -535,8 +612,11 @@ export class Db {
     }
   }
 
-  async deleteSavedFormula(id: number) {
+  async deleteSavedFormula(id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) {
     try {
+      const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
+      if (!adminCheck.success) return { success: false, error: adminCheck.error };
+
       await this.q('DELETE FROM saved_formulas WHERE id=?', [id]);
       return { success: true };
     } catch (e) {

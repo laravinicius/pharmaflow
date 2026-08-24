@@ -7,9 +7,12 @@ import { formatPhone, isValidPhone, stripDiacritics } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
+import { AdminAuthModal } from './AdminAuthModal';
+import { useAuth } from '../context/AuthContext';
 
 export function CustomerManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (c: Customer) => void } = {}) {
   const { data: customers, loading, error, reload } = useData(() => db.customers.list());
+  const { sessionToken } = useAuth();
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<number | null>(null);
@@ -20,6 +23,8 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
   const [tab, setTab] = useState<'list' | 'create'>('list');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ key: 'name' | 'phone' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const reset = () => { setForm({ firstName: '', lastName: '', phone: '' }); setEditingId(null); setFormError(''); setSuccess(null); };
 
@@ -56,11 +61,17 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Excluir este cliente?')) return;
+    setPendingDeleteId(id);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async (adminCreds?: { username: string; password: string }, token?: string) => {
+    if (pendingDeleteId === null) return;
     try {
-      const res: any = await db.customers.remove(id);
+      const res: any = await db.customers.remove(pendingDeleteId, adminCreds, token ?? sessionToken ?? undefined);
       if (res?.success === false) { setFormError(res.error ?? 'Erro ao excluir.'); return; }
       reload();
+      setPendingDeleteId(null);
     } catch (err: any) {
       setFormError(err.message ?? 'Erro ao excluir.');
     }
@@ -257,6 +268,13 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
           </div>
         )}
       </div>
+      <AdminAuthModal
+        isOpen={deleteModalOpen}
+        onClose={() => { setDeleteModalOpen(false); setPendingDeleteId(null); }}
+        onConfirm={handleDeleteConfirm}
+        title="Excluir cliente"
+        message="Esta ação não pode ser desfeita. O cliente será removido permanentemente."
+      />
     </motion.div>
   );
 }

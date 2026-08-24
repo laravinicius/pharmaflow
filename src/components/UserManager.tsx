@@ -5,6 +5,8 @@ import { db } from '../services/lanDatabase';
 import { User } from '../types';
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
+import { AdminAuthModal } from './AdminAuthModal';
+import { useAuth } from '../context/AuthContext';
 
 export function AdminPanel({ user }: { user: User }) {
   return (
@@ -20,11 +22,14 @@ export function AdminPanel({ user }: { user: User }) {
 
 export function UserManager({ user }: { user: User }) {
   const { data: users, loading, error, reload } = useData(() => db.users.list());
+  const { sessionToken } = useAuth();
   const emptyForm = { name: '', username: '', password: '', role: 'employee' as 'admin' | 'employee' };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const reset = () => {
     setForm(emptyForm);
@@ -87,15 +92,21 @@ export function UserManager({ user }: { user: User }) {
   const handleDelete = async (u: any) => {
     if (u.role === 'admin') { alert('Administradores não podem ser excluídos.'); return; }
     if (u.username === user.username) { alert('Você não pode excluir seu próprio usuário.'); return; }
-    if (!confirm('Excluir este funcionário? Ele não conseguirá mais fazer login.')) return;
     // Cancela edição se for o mesmo usuário sendo deletado
     if (editingId === u.id) reset();
+    setPendingDeleteId(u.id);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async (adminCreds?: { username: string; password: string }, token?: string) => {
+    if (pendingDeleteId === null) return;
     try {
-      const res: any = await db.users.remove(u.id);
+      const res: any = await db.users.remove(pendingDeleteId, adminCreds, token ?? sessionToken ?? undefined);
       if (res?.success === false) { setFormError(res.error ?? 'Erro ao excluir.'); return; }
       reload();
+      setPendingDeleteId(null);
     } catch (err: any) {
-      alert('Erro ao excluir: ' + (err?.message ?? 'tente novamente.'));
+      setFormError(err?.message ?? 'Erro ao excluir.');
     }
   };
 
@@ -230,6 +241,13 @@ export function UserManager({ user }: { user: User }) {
           )}
         </div>
       )}
+      <AdminAuthModal
+        isOpen={deleteModalOpen}
+        onClose={() => { setDeleteModalOpen(false); setPendingDeleteId(null); }}
+        onConfirm={handleDeleteConfirm}
+        title="Excluir funcionário"
+        message="Esta ação não pode ser desfeita. O funcionário não conseguirá mais fazer login."
+      />
     </div>
   );
 }

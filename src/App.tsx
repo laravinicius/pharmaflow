@@ -17,6 +17,8 @@ import { Dashboard } from './components/Dashboard';
 import { RecipeForm } from './components/RecipeForm';
 import { FormulaList } from './components/FormulaList';
 import { SavedFormulaManager } from './components/SavedFormulaManager';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AdminAuthModal } from './components/AdminAuthModal';
 
 interface HeartbeatMetrics {
   callCount: number;
@@ -98,10 +100,9 @@ function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
 
 // ─── App Principal ─────────────────────────────────────────────────────────────
 
-export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+function AppInner() {
+  const { user, sessionToken, setAuth, clearAuth } = useAuth();
   const [setupMode, setSetupMode] = useState(false);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [loginConflict, setLoginConflict] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'insumos' | 'savedFormulas' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -131,8 +132,7 @@ export default function App() {
     try {
       const res = await db.auth.login(loginForm.username, loginForm.password, force);
       if (res.success) {
-        setUser(res.user);
-        setSessionToken(res.sessionToken ?? null);
+        setAuth(res.user, res.sessionToken ?? null);
         setSetupMode(res.setupMode === true);
         setActiveTab('dashboard');
         setLoginConflict(false);
@@ -163,9 +163,8 @@ export default function App() {
       await db.app.confirmExit();
     } else if (exitContext === 'logout') {
       if (sessionToken) await db.auth.logout(sessionToken).catch(() => {});
-      setUser(null);
+      clearAuth();
       setSetupMode(false);
-      setSessionToken(null);
       setActiveTab('dashboard');
     }
     setShowExitConfirm(false);
@@ -211,9 +210,8 @@ export default function App() {
           heartbeatMetrics.failureCount++;
         }
         if (!res.valid) {
-          setUser(null);
+          clearAuth();
           setSetupMode(false);
-          setSessionToken(null);
           setLoginError('Sua sessão foi encerrada em outro dispositivo.');
         }
       } catch (e: any) {
@@ -509,6 +507,14 @@ export default function App() {
       )}
       {exitModal}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   );
 }
 

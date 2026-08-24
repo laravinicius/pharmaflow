@@ -7,6 +7,8 @@ import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency } from '
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
+import { AdminAuthModal } from './AdminAuthModal';
+import { useAuth } from '../context/AuthContext';
 
 const UNITS = ['g', 'mcg', 'mg', 'ml', 'ui'];
 const BUDGET_UNITS = ['caps', 'dose', 'g', 'ml'];
@@ -14,6 +16,7 @@ const BUDGET_UNITS = ['caps', 'dose', 'g', 'ml'];
 export function SavedFormulaManager() {
   const { data: formulas, loading, error, reload } = useData(() => db.savedFormulas.list());
   const { data: insumos } = useData(() => db.insumos.list());
+  const { sessionToken } = useAuth();
   const [name, setName] = useState('');
   const [budgetNumber, setBudgetNumber] = useState('');
   const [items, setItems] = useState<SavedFormulaItem[]>([]);
@@ -33,6 +36,8 @@ export function SavedFormulaManager() {
   const [tab, setTab] = useState<'list' | 'create'>('list');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ key: 'name' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('caps'); setBValue(''); setFormError(''); setSuccess(null); };
 
@@ -112,11 +117,17 @@ export function SavedFormulaManager() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Excluir esta fórmula salva?')) return;
+    setPendingDeleteId(id);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async (adminCreds?: { username: string; password: string }, token?: string) => {
+    if (pendingDeleteId === null) return;
     try {
-      const res: any = await db.savedFormulas.remove(id);
+      const res: any = await db.savedFormulas.remove(pendingDeleteId, adminCreds, token ?? sessionToken ?? undefined);
       if (res?.success === false) { setFormError(res.error ?? 'Erro ao excluir.'); return; }
       reload();
+      setPendingDeleteId(null);
     } catch (err: any) {
       setFormError(err.message ?? 'Erro ao excluir.');
     }
@@ -438,6 +449,13 @@ export function SavedFormulaManager() {
           </div>
         )}
       </div>
+      <AdminAuthModal
+        isOpen={deleteModalOpen}
+        onClose={() => { setDeleteModalOpen(false); setPendingDeleteId(null); }}
+        onConfirm={handleDeleteConfirm}
+        title="Excluir fórmula salva"
+        message="Esta ação não pode ser desfeita. A fórmula salva será removida permanentemente."
+      />
     </motion.div>
   );
 }

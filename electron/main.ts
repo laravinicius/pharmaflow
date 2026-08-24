@@ -77,21 +77,21 @@ setInterval(() => { db.cleanupStaleSessions().catch(() => {}); }, 60_000);
 ipcMain.handle('users:list',   ()          => db.listUsers());
 ipcMain.handle('users:add',    async (_, u)      => { const r = await db.addUser(u); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('users:update', async (_, id, u)  => { const r = await db.updateUser(id, u); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('users:delete', async (_, id)     => { const r = await db.deleteUser(id); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('users:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteUser(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Clientes ────────────────────────────────────────────────────────────────
 
 ipcMain.handle('customers:list',   ()           => db.listCustomers());
 ipcMain.handle('customers:add',    async (_, c)        => { const r = await db.addCustomer(c); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('customers:update', async (_, id, c)    => { const r = await db.updateCustomer(id, c); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('customers:delete', async (_, id)       => { const r = await db.deleteCustomer(id); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('customers:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteCustomer(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Insumos ─────────────────────────────────────────────────────────────────
 
 ipcMain.handle('insumos:list',   ()        => db.listInsumos());
 ipcMain.handle('insumos:add',    async (_, name) => { const r = await db.addInsumo(name); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('insumos:update', async (_, id, name) => { const r = await db.updateInsumo(id, name); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('insumos:delete', async (_, id)   => { const r = await db.deleteInsumo(id); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('insumos:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteInsumo(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Fórmulas ────────────────────────────────────────────────────────────────
 
@@ -100,14 +100,14 @@ ipcMain.handle('formulas:add',           async (_, f)          => { const r = aw
 ipcMain.handle('formulas:update',        async (_, id, f)      => { const r = await db.updateFormula(id, f); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:update-status', async (_, id, status) => { const r = await db.updateFormulaStatus(id, status); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:update-delivery-status', async (_, id, deliveryStatus) => { const r = await db.updateFormulaDeliveryStatus(id, deliveryStatus); notifyDataChanged(); return r; });
-ipcMain.handle('formulas:delete',        async (_, id)         => { const r = await db.deleteFormula(id); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:delete',        async (_, id, adminCreds, sessionToken) => { const r = await db.deleteFormula(id, adminCreds, sessionToken); notifyDataChanged(); return r; });
 
 // ─── Fórmulas Salvas ─────────────────────────────────────────────────────────
 
 ipcMain.handle('savedFormulas:list',   ()           => db.listSavedFormulas());
 ipcMain.handle('savedFormulas:add',    async (_, f)       => { const r = await db.addSavedFormula(f); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('savedFormulas:update', async (_, id, f)   => { const r = await db.updateSavedFormula(id, f); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('savedFormulas:delete', async (_, id)      => { const r = await db.deleteSavedFormula(id); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('savedFormulas:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteSavedFormula(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Configurações ───────────────────────────────────────────────────────────
 
