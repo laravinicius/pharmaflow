@@ -27,7 +27,7 @@ export function SavedFormulaManager() {
   const [unit, setUnit] = useState('mg');
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [bQty, setBQty] = useState('');
-  const [bUnit, setBUnit] = useState('caps');
+  const [bUnit, setBUnit] = useState('dose');
   const [bValue, setBValue] = useState('');
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [saving, setSaving] = useState(false);
@@ -39,7 +39,7 @@ export function SavedFormulaManager() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
-  const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('caps'); setBValue(''); setFormError(''); setSuccess(null); };
+  const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('dose'); setBValue(''); setFormError(''); setSuccess(null); };
 
   const allFormulas = (formulas as SavedFormula[]) ?? [];
   const allInsumos = (insumos as Insumo[]) ?? [];

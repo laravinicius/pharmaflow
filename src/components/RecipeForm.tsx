@@ -29,7 +29,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [appliedSavedFormula, setAppliedSavedFormula] = useState<SavedFormula | null>(null);
   const [budgetNumber, setBudgetNumber] = useState('');
   const [bQty, setBQty] = useState('');
-  const [bUnit, setBUnit] = useState('caps');
+  const [bUnit, setBUnit] = useState('dose');
   const [bValue, setBValue] = useState('');
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [selectedBudgetIndex, setSelectedBudgetIndex] = useState<number | null>(null);
@@ -95,7 +95,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setAppliedSavedFormula(null);
     setBudgetNumber('');
     setBQty('');
-    setBUnit('caps');
+    setBUnit('dose');
     setBValue('');
     setBudgetItems([]);
     setSelectedBudgetIndex(null);
@@ -702,8 +702,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
                 <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                   value={bUnit} disabled={locked} onChange={e => setBUnit(e.target.value)}>
-                  <option value="caps">caps</option>
                   <option value="dose">dose</option>
+                  <option value="caps">caps</option>
                   <option value="g">g</option>
                   <option value="ml">ml</option>
                 </select>
