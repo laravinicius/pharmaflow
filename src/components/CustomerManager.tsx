@@ -30,7 +30,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValidPhone(form.phone)) { setFormError('Informe o celular completo, com DDD.'); return; }
+    if (!isValidPhone(form.phone)) { setFormError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
     const rawPhone = form.phone.replace(/\D/g, '');
     const formatted = formatPhone(form.phone);
     // Verificação de duplicata local
@@ -79,7 +79,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
 
   const handleRowSave = async () => {
     if (editingRow === null) return;
-    if (!isValidPhone(rowDraft.phone)) { setFormError('Informe o celular completo, com DDD.'); return; }
+    if (!isValidPhone(rowDraft.phone)) { setFormError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
     const formatted = formatPhone(rowDraft.phone);
     setSaving(true); setFormError('');
     try {

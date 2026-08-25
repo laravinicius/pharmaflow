@@ -372,12 +372,12 @@ export function SavedFormulaManager() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold text-zinc-900">Fórmulas Salvas</h2>
+        <h2 className="text-3xl font-bold text-zinc-900">Fórmulas</h2>
         <p className="text-zinc-500">Gerencie as fórmulas prontas da farmácia.</p>
       </div>
       <div className="flex items-center gap-4 border-b border-zinc-200">
         <button onClick={() => { setTab('list'); }} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'list' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
-          Lista de Fórmulas Salvas
+          Lista de Fórmulas
           {tab === 'list' && <motion.div layoutId="activeSaved" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
         </button>
         <button onClick={() => setTab('create')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'create' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>

@@ -607,7 +607,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           )}
 
           {allSavedFormulas.length === 0 ? (
-            <p className="text-sm text-zinc-400">Nenhuma fórmula salva cadastrada. Cadastre uma na tela "Fórmulas Salvas".</p>
+            <p className="text-sm text-zinc-400">Nenhuma fórmula salva cadastrada. Cadastre uma na tela "Fórmulas".</p>
           ) : (
             <div className="relative">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />

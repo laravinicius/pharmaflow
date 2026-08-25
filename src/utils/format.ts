@@ -12,8 +12,7 @@ export function formatPhone(value: string): string {
 }
 
 export function isValidPhone(value: string): boolean {
-  const len = value.replace(/\D/g, '').length;
-  return len === 10 || len === 11;
+  return value.replace(/\D/g, '').length === 11;
 }
 
 // Máscara de moeda (R$): dígitos digitados viram centavos — ex.: "123456" → "1.234,56"
