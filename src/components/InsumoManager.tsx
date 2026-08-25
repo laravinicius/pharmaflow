@@ -84,7 +84,7 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
       )}
       <div className="flex-1 min-w-[200px]">
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Insumo</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value); }} placeholder="Ex: Amoxicilina" />
+        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} placeholder="Ex: Amoxicilina" />
         {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
       </div>
       <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
@@ -183,7 +183,7 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
                             {editingRow === m.id ? (
                               <div>
                                 <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                                  value={rowDraft} onChange={e => setRowDraft(e.target.value)}
+                                  value={rowDraft} onChange={e => setRowDraft(e.target.value.toUpperCase())}
                                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft(''); setFormError(''); } }} />
                                 {formError && <p className="text-xs text-red-600 font-medium mt-1">{formError}</p>}
                               </div>

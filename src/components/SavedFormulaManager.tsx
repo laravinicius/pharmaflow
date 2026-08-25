@@ -154,7 +154,7 @@ export function SavedFormulaManager() {
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome da Fórmula</label>
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none"
-          value={name} onChange={e => { setFormError(''); setName(e.target.value); }} placeholder="Ex: Cápsulas de Vitamina C + Zinco" />
+          value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} placeholder="Ex: Cápsulas de Vitamina C + Zinco" />
       </div>
 
       <div>

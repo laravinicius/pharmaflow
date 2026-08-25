@@ -136,11 +136,11 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
       )}
         <div className={compact ? '' : 'md:col-span-1'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} />
+        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value.toUpperCase() })} />
       </div>
       <div className={compact ? '' : 'md:col-span-1'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Sobrenome</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} />
+        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value.toUpperCase() })} />
       </div>
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Celular</label>
@@ -221,7 +221,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
                           <td className="px-4 py-3 font-medium text-zinc-900">
                             {editingRow === c.id ? (
                               <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                                value={rowDraft.name} onChange={e => setRowDraft(d => ({ ...d, name: e.target.value }))}
+                                value={rowDraft.name} onChange={e => setRowDraft(d => ({ ...d, name: e.target.value.toUpperCase() }))}
                                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />
                             ) : (
                               <HighlightMatch text={c.name} query={search} />
