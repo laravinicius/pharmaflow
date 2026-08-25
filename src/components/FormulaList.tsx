@@ -66,7 +66,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       .filter(f => !statusFilter || f.status === statusFilter)
       .filter(f =>
         f.customer_name.toLowerCase().includes(searchLower) ||
-        (f.pharmacist_name || '').toLowerCase().includes(searchLower) ||
+        (f.attendant_name || '').toLowerCase().includes(searchLower) ||
         String(f.id).includes(searchLower)
       );
   }, [all, statuses, statusFilter, searchLower]);
@@ -107,7 +107,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm min-w-[260px]"
-              placeholder="Buscar cliente, farmacêutico ou ID..." value={search} onChange={e => setSearch(e.target.value)} />
+              placeholder="Buscar cliente, funcionário ou ID..." value={search} onChange={e => setSearch(e.target.value)} />
             {search && (
               <button onClick={() => setSearch('')} title="Limpar busca"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
@@ -220,7 +220,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                     {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
                   </div>
-                  <p className="text-zinc-700 truncate">{f.pharmacist_name || '—'}</p>
+                  <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
                   <p className="text-zinc-500 whitespace-nowrap">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
                   <div className="min-w-0">
                     <p className="text-zinc-600 truncate">

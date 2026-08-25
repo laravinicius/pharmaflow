@@ -353,9 +353,8 @@ export class Db {
     const formulas = await this.q<any[]>(`
       SELECT f.id, f.customer_id, c.name AS customer_name,
              COALESCE(f.customer_phone,'') AS customer_phone,
-             COALESCE(f.pharmacist_name,'') AS pharmacist_name,
-             COALESCE(f.budget_number,'') AS budget_number,
              COALESCE(f.attendant_name,'') AS attendant_name,
+             COALESCE(f.budget_number,'') AS budget_number,
              f.delivery_date, COALESCE(f.payment_status,'') AS payment_status,
              f.payment_method, COALESCE(f.delivery_status,'') AS delivery_status,
              f.cancel_reason, f.status, f.created_at
@@ -402,11 +401,10 @@ export class Db {
 
   async addFormula(formula: {
     customer_id: number;
-    pharmacist_name: string;
+    attendant_name: string;
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_number?: string;
     budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
-    attendant_name?: string;
     delivery_date?: string | null;
     payment_status?: string;
     payment_method?: string | null;
@@ -420,11 +418,11 @@ export class Db {
       await conn.beginTransaction();
       const customer = await this.q<any[]>('SELECT phone FROM customers WHERE id=?', [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
-      const [r]: any = await conn.query(
-        `INSERT INTO formulas (customer_id, customer_phone, pharmacist_name, budget_number, attendant_name, delivery_date, payment_status, payment_method, delivery_status, cancel_reason, status)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-        [formula.customer_id, customerPhone, formula.pharmacist_name, formula.budget_number ?? '',
-         formula.attendant_name ?? '', formula.delivery_date ?? null, formula.payment_status ?? '',
+const [r]: any = await conn.query(
+        `INSERT INTO formulas (customer_id, customer_phone, attendant_name, budget_number, delivery_date, payment_status, payment_method, delivery_status, cancel_reason, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
+         formula.delivery_date ?? null, formula.payment_status ?? '',
          formula.payment_method ?? null, formula.delivery_status ?? '', formula.cancel_reason ?? null,
          formula.status ?? 'pending']
       );
@@ -448,11 +446,10 @@ export class Db {
 
   async updateFormula(id: number, formula: {
     customer_id: number;
-    pharmacist_name: string;
+    attendant_name: string;
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_number?: string;
     budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
-    attendant_name?: string;
     delivery_date?: string | null;
     payment_status?: string;
     payment_method?: string | null;
@@ -467,9 +464,9 @@ export class Db {
       const customer = await this.q<any[]>('SELECT phone FROM customers WHERE id=?', [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
       await conn.query(
-        `UPDATE formulas SET customer_id=?, customer_phone=?, pharmacist_name=?, budget_number=?, attendant_name=?, delivery_date=?, payment_status=?, payment_method=?, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
-        [formula.customer_id, customerPhone, formula.pharmacist_name, formula.budget_number ?? '',
-         formula.attendant_name ?? '', formula.delivery_date ?? null, formula.payment_status ?? '',
+        `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, payment_method=?, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
+        [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
+         formula.delivery_date ?? null, formula.payment_status ?? '',
          formula.payment_method ?? null, formula.delivery_status ?? '', formula.cancel_reason ?? null,
          formula.status ?? 'pending', id]
       );

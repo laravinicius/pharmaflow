@@ -190,11 +190,10 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       : budgetItems.map((bi, i) => ({ ...bi, is_selected: selectedBudgetIndex === i }));
     return {
       customer_id: selectedCustomerId as number,
-      pharmacist_name: user.name,
+      attendant_name: user.name,
       items: items.map(i => ({ insumo_id: i.insumo_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
       budget_number: budgetNumber || undefined,
       budget_items: payloadBudgetItems.length > 0 ? payloadBudgetItems : undefined,
-      attendant_name: attendantName || undefined,
       delivery_date: parseDateBR(deliveryDate),
       payment_status: paymentStatus || undefined,
       payment_method: paymentMethod || null,
@@ -292,7 +291,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <h2 className="text-2xl font-bold text-zinc-900">
             {formula ? `Fórmula #${formula.id}` : template ? 'Repetir Fórmula' : 'Nova Fórmula'}
           </h2>
-          <p className="text-zinc-500 text-sm">Farmacêutico: <strong>{user.name}</strong></p>
+          <p className="text-zinc-500 text-sm">Funcionário: <strong>{user.name}</strong></p>
         </div>
         <div className="flex items-center gap-3">
           {formula && locked && !confirmed && !readOnly && (
