@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Users, Cross, ClipboardList, User as UserIcon, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
@@ -118,6 +118,29 @@ function AppInner() {
   const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
   const [fontScale, setFontScale] = useState(() => Number(localStorage.getItem('pharmaflow.fontScale')) || 1);
 
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleInactivityLogoutRef = useRef<() => Promise<void>>();
+  const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+
+  const handleInactivityLogout = useCallback(async () => {
+    if (sessionToken) {
+      await db.auth.logout(sessionToken).catch(() => {});
+    }
+    clearAuth();
+    setSetupMode(false);
+    setActiveTab('dashboard');
+    setLoginError('Sessão encerrada por inatividade (5 min).');
+  }, [sessionToken, clearAuth]);
+
+  useEffect(() => {
+    handleInactivityLogoutRef.current = handleInactivityLogout;
+  }, [handleInactivityLogout]);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    inactivityTimerRef.current = setTimeout(() => handleInactivityLogoutRef.current?.(), INACTIVITY_TIMEOUT_MS);
+  }, []);
+
   useEffect(() => {
     document.documentElement.style.setProperty('--font-scale', String(fontScale));
     localStorage.setItem('pharmaflow.fontScale', String(fontScale));
@@ -126,6 +149,23 @@ function AppInner() {
   useEffect(() => {
     if (!viewingFormula) setAutoUnlockFormula(false);
   }, [viewingFormula]);
+
+  useEffect(() => {
+    if (!user || setupMode || !sessionToken) return;
+
+    const activityEvents = ['mousemove', 'keydown', 'click', 'touchstart'] as const;
+
+    const handleActivity = () => resetInactivityTimer();
+
+    activityEvents.forEach(event => window.addEventListener(event, handleActivity, { passive: true }));
+
+    resetInactivityTimer();
+
+    return () => {
+      activityEvents.forEach(event => window.removeEventListener(event, handleActivity));
+      if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    };
+  }, [user, setupMode, sessionToken, resetInactivityTimer]);
 
   const showToast = (msg: string, type: 'success' | 'info' = 'success') => {
     setToast({ msg, type });

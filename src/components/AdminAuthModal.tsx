@@ -41,12 +41,26 @@ export function AdminAuthModal({ isOpen, onClose, onConfirm, title = 'Confirmaç
 
   const handleAutoSubmit = async () => {
     setLoading(true);
+    let timedOut = false;
+    const timeoutMs = 30000;
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        timedOut = true;
+        reject(new Error('Tempo limite excedido. A operação demorou demais.'));
+      }, timeoutMs)
+    );
+
     try {
-      await onConfirm(undefined, sessionToken ?? undefined);
+      await Promise.race([onConfirm(undefined, sessionToken ?? undefined), timeoutPromise]);
       onClose();
     } catch (err: any) {
-      setError(err?.message ?? 'Erro ao verificar permissões.');
-      setAutoSubmit(false);
+      if (timedOut) {
+        setError(err.message);
+        setAutoSubmit(false);
+      } else {
+        setError(err?.message ?? 'Erro ao verificar permissões.');
+        setAutoSubmit(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -74,10 +88,17 @@ export function AdminAuthModal({ isOpen, onClose, onConfirm, title = 'Confirmaç
 
   if (currentUserIsAdmin && autoSubmit && loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center" onClick={e => e.stopPropagation()}>
           <Loader2 className="w-8 h-8 text-red-600 animate-spin mx-auto mb-3" />
           <p className="text-sm text-zinc-600">Verificando permissões de administrador...</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-4 px-4 py-2 text-sm font-medium text-zinc-600 hover:text-red-600 transition-colors underline"
+          >
+            Cancelar
+          </button>
         </div>
       </div>
     );
