@@ -78,11 +78,15 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
   };
   const showRepeat = !!onRepeat;
-  const gridCols = showAndamento
-    ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.2fr_0.6fr]'
-    : showRepeat
-      ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.6fr]'
-      : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
+  const gridCols = variant === 'confirmed'
+    ? showAndamento
+      ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_0.7fr_0.7fr_1.5fr_0.6fr]'
+      : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.6fr]'
+    : showAndamento
+      ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]'
+      : showRepeat
+        ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.6fr]'
+        : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
 
   return (
     <motion.div key={screenKey} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
@@ -121,7 +125,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           {filtered.length > 0 && variant === 'confirmed' && (
             <div className={`hidden md:grid ${gridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
               <span>Cliente</span><span>Quantidade</span><span>Valor</span><span>Atendente PM</span>
-              <span>Data criação</span><span>Data entrega</span><span>Telefone</span>{showAndamento && <span>Andamento</span>}<span />
+              <span>Data criação</span><span>Data entrega</span>{showAndamento && <span>Andamento</span>}<span />
             </div>
           )}
 {filtered.map((f, idx) => {
@@ -147,7 +151,10 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   onBlur={() => setFocusedIdx(-1)}
                   className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group cursor-pointer ${tint} ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
                 <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
-                  <p className="font-bold text-zinc-900">{f.customer_name}</p>
+                  <div className="min-w-0">
+                    <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
+                    {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
+                  </div>
                   <div className="text-zinc-700 space-y-0.5 font-medium">
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
@@ -159,7 +166,6 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
                   <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
                   <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
-                  <p className="text-zinc-700 whitespace-nowrap">{f.customer_phone || '—'}</p>
                   {showAndamento && (
                     <div className="flex justify-end">
                       <select
@@ -167,7 +173,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                         disabled={!f.payment_status || updatingStatusId === f.id}
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                         onChange={(e) => handleDeliveryStatusChange(f, e.target.value)}
-                        className="w-full max-w-[170px] px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
+                        className="w-full px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
                         <option value="">Selecione...</option>
                         <option value="em_producao">Em produção</option>
                         <option value="aguardando_retirada">Aguardando retirada</option>

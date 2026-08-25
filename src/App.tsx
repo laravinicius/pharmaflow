@@ -118,6 +118,14 @@ function AppInner() {
   const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
   const [fontScale, setFontScale] = useState(() => Number(localStorage.getItem('pharmaflow.fontScale')) || 1);
 
+  const isTabActive = useCallback((tab: string) => {
+    if (activeTab === tab) return true;
+    if (tab === 'pending' && activeTab === 'formulaDetail') return true;
+    if (tab === 'confirmed' && activeTab === 'confirmedDetail') return true;
+    if (tab === 'history' && activeTab === 'historyDetail') return true;
+    return false;
+  }, [activeTab]);
+
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleInactivityLogoutRef = useRef<() => Promise<void>>();
   const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -429,16 +437,16 @@ function AppInner() {
           <nav className="flex-1 px-4 space-y-1">
             {!setupMode && (
               <>
-                <NavItem icon={<ClipboardList />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<PlusCircle />} label="Nova Fórmula" active={activeTab === 'recipe'} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Clock />} label="Pendentes" active={activeTab === 'pending'} onClick={() => setActiveTab('pending')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={activeTab === 'confirmed'} onClick={() => setActiveTab('confirmed')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<History />} label="Histórico" active={activeTab === 'history'} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Users />} label="Clientes" active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Cross />} label="Insumos" active={activeTab === 'insumos'} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Bookmark />} label="Fórmulas Salvas" active={activeTab === 'savedFormulas'} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<ClipboardList />} label="Dashboard" active={isTabActive('dashboard')} onClick={() => setActiveTab('dashboard')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<PlusCircle />} label="Nova Fórmula" active={isTabActive('recipe')} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Clock />} label="Pendentes" active={isTabActive('pending')} onClick={() => setActiveTab('pending')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={isTabActive('confirmed')} onClick={() => setActiveTab('confirmed')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<History />} label="Histórico" active={isTabActive('history')} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Users />} label="Clientes" active={isTabActive('customers')} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Cross />} label="Insumos" active={isTabActive('insumos')} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Bookmark />} label="Fórmulas Salvas" active={isTabActive('savedFormulas')} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
                 {user.role === 'admin' && (
-                  <NavItem icon={<Settings />} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
+                  <NavItem icon={<Settings />} label="Administração" active={isTabActive('admin')} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
                 )}
               </>
             )}
