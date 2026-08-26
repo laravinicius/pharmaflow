@@ -788,7 +788,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <h3 className="font-semibold text-zinc-900 text-sm mb-4">4. Informações</h3>
         <div>
-          <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Atendente da PM</label>
+          <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Atendente</label>
           <input
             type="text"
             maxLength={100}
