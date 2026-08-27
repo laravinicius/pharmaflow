@@ -423,7 +423,8 @@ const [r]: any = await conn.query(
          VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
          formula.delivery_date ?? null, formula.payment_status ?? '',
-         formula.payment_method ?? null, formula.delivery_status ?? '', formula.cancel_reason ?? null,
+         formula.payment_method ?? null, formula.status === 'confirmed' ? 'em_producao' : (formula.delivery_status ?? ''),
+         formula.cancel_reason ?? null,
          formula.status ?? 'pending']
       );
       for (const item of formula.items) {
@@ -491,7 +492,11 @@ const [r]: any = await conn.query(
   }
 
   async updateFormulaStatus(id: number, status: string) {
-    await this.q('UPDATE formulas SET status=? WHERE id=?', [status, id]);
+    if (status === 'confirmed') {
+      await this.q('UPDATE formulas SET status=?, delivery_status=? WHERE id=?', [status, 'em_producao', id]);
+    } else {
+      await this.q('UPDATE formulas SET status=? WHERE id=?', [status, id]);
+    }
     return { success: true };
   }
 

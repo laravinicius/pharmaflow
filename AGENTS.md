@@ -20,7 +20,7 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 ## Database Schema
 
 - `database.sql` = single source of truth. **Always update it.**
-- **Always create a migration file in `migrations/` when changing `database.sql`** — sequential naming: `NNNN_descriptive_name.sql` (e.g., `0016_saved_formulas_budget_fields.sql`). Migrations are for existing databases; `database.sql` is source of truth for fresh installs.
+- **Do NOT create migration files** — the database will be recreated from `database.sql` on every change.
 - Passwords = SHA-256 hex (`hash()` in `electron/db.ts`). Roles: `admin` / `employee`.
 
 ---

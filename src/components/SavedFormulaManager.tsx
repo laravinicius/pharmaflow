@@ -3,11 +3,12 @@ import { CheckCircle, Trash2, Search, X, PlusCircle, ClipboardList } from 'lucid
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { SavedFormula, SavedFormulaItem, Insumo, BudgetItem } from '../types';
-import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency } from '../utils/format';
+import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency, formatQuantityInput, parseQuantity } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
+import { InsumoManager } from './InsumoManager';
 import { useAuth } from '../context/AuthContext';
 
 const UNITS = ['g', 'mcg', 'mg', 'ml', 'ui'];
@@ -15,7 +16,7 @@ const BUDGET_UNITS = ['caps', 'dose', 'g', 'ml'];
 
 export function SavedFormulaManager() {
   const { data: formulas, loading, error, reload } = useData(() => db.savedFormulas.list());
-  const { data: insumos } = useData(() => db.insumos.list());
+  const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
   const { sessionToken } = useAuth();
   const [name, setName] = useState('');
   const [budgetNumber, setBudgetNumber] = useState('');
@@ -38,6 +39,7 @@ export function SavedFormulaManager() {
   const [sort, setSort] = useState<{ key: 'name' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [showAddInsumo, setShowAddInsumo] = useState(false);
 
   const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('dose'); setBValue(''); setFormError(''); setSuccess(null); };
 
@@ -64,7 +66,7 @@ export function SavedFormulaManager() {
       setFormError('Este insumo já foi adicionado à fórmula.');
       return;
     }
-    setItems([...items, { insumo_id: Number(selectedInsumoId), insumo_name: selectedInsumo?.name ?? '', quantity: Number(quantity), unit }]);
+    setItems([...items, { insumo_id: Number(selectedInsumoId), insumo_name: selectedInsumo?.name ?? '', quantity: parseQuantity(quantity), unit }]);
     setSelectedInsumoId('');
     setInsumoQuery('');
     setQuantity('');
@@ -74,7 +76,7 @@ export function SavedFormulaManager() {
 
   const addBudgetItem = () => {
     if (!bQty || !bValue) return;
-    const next = [...budgetItems, { quantity: Number(bQty), unit: bUnit, value: parseCurrency(bValue) }];
+    const next = [...budgetItems, { quantity: parseQuantity(bQty), unit: bUnit, value: parseCurrency(bValue) }];
     setBudgetItems(next);
     setBQty('');
     setBValue('');
@@ -144,6 +146,17 @@ export function SavedFormulaManager() {
     setSuccess(null);
   };
 
+  const addInsumoBlock = (
+    <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
+      <InsumoManager compact onCreated={(m: Insumo) => {
+        reloadInsumos();
+        setSelectedInsumoId(m.id);
+        setShowAddInsumo(false);
+        setInsumoQuery('');
+      }} />
+    </div>
+  );
+
   const formBlock = (
     <form onSubmit={handleSubmit} className="space-y-4">
       {success && (
@@ -171,10 +184,10 @@ export function SavedFormulaManager() {
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="sm:w-28">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
-            <input inputMode="numeric" maxLength={4}
+            <input inputMode="numeric" maxLength={8}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
               placeholder="0" value={bQty}
-              onChange={e => { setFormError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 4)); }} />
+              onChange={e => { setFormError(''); setBQty(formatQuantityInput(e.target.value)); }} />
           </div>
           <div className="sm:w-24">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
@@ -220,6 +233,8 @@ export function SavedFormulaManager() {
 
       <div className="border border-zinc-200 rounded-xl p-4 space-y-3">
         <h3 className="text-xs font-semibold text-zinc-500 uppercase">Composição</h3>
+
+        {showAddInsumo && addInsumoBlock}
 
         {selectedInsumo ? (
           <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 bg-zinc-50">
@@ -274,7 +289,17 @@ export function SavedFormulaManager() {
               </div>
             )}
             {mq && filteredInsumos.length === 0 && (
-              <p className="text-xs text-zinc-400 mt-1 px-1">Nenhum insumo encontrado.</p>
+              <div className="px-1 mt-1">
+                <p className="text-xs text-zinc-400 mb-2">Nenhum insumo encontrado.</p>
+                <button
+                  type="button"
+                  onClick={() => { setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                  className="w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <PlusCircle className="w-4 h-4 shrink-0" />
+                  Criar novo insumo "{insumoQuery.trim()}"
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -283,10 +308,10 @@ export function SavedFormulaManager() {
           <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
             <div className="sm:w-32">
               <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
-              <input inputMode="numeric" maxLength={4} required
+              <input inputMode="numeric" maxLength={8} required
                 className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
                 placeholder="0" value={quantity}
-                onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onChange={e => setQuantity(formatQuantityInput(e.target.value))}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && quantity) {
                     e.preventDefault();
@@ -381,7 +406,7 @@ export function SavedFormulaManager() {
           {tab === 'list' && <motion.div layoutId="activeSaved" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
         </button>
         <button onClick={() => setTab('create')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'create' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
-          Cadastro de fórmula salva
+          Cadastro de fórmula
           {tab === 'create' && <motion.div layoutId="activeSaved" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
         </button>
       </div>

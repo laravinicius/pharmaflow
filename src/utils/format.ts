@@ -76,3 +76,18 @@ export function formatQuantity(value: number | string): string {
     ? n.toLocaleString('pt-BR', { minimumFractionDigits: decimals.length, maximumFractionDigits: decimals.length })
     : n.toLocaleString('pt-BR');
 }
+
+// Máscara de quantidade ao digitar: aceita até 6 dígitos, insere separador de milhar (.)
+// ex.: "123456" → "123.456", "1234" → "1.234", "12" → "12"
+export function formatQuantityInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 6);
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+// Converte quantidade com máscara de volta para número
+// ex.: "123.456" → 123456, "1.234" → 1234
+export function parseQuantity(value: string): number {
+  const digits = value.replace(/\D/g, '');
+  return digits ? Number(digits) : 0;
+}

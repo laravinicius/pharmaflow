@@ -5,7 +5,7 @@ import {
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
-import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity } from '../utils/format';
+import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
@@ -89,7 +89,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setSelectedInsumoId('');
     setQuantity('');
     setUnit('mg');
-    setShowAddInsumo(false);
     setItemError('');
     setSavedFormulaQuery('');
     setAppliedSavedFormula(null);
@@ -340,13 +339,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-zinc-900 text-sm">1. Cliente</h3>
-          {!locked && (
-            <button type="button" onClick={() => setShowAddCustomer(!showAddCustomer)}
-              className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
-              style={{ color: showAddCustomer ? '#C5243E' : '#243465', background: showAddCustomer ? '#FEF0F2' : '#EFF2FA' }}>
-              <PlusCircle className="w-3 h-3" />{showAddCustomer ? 'Fechar' : '+ Novo cliente'}
-            </button>
-          )}
         </div>
 
         {showAddCustomer && (
@@ -419,7 +411,17 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             )}
             {q || qDigits ? (
               filteredCustomers.length === 0 && (
-                <p className="text-xs text-zinc-400 mt-1 px-1">Nenhum cliente encontrado.</p>
+                <div className="px-1 mt-1">
+                  <p className="text-xs text-zinc-400 mb-2">Nenhum cliente encontrado.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddCustomer(true); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
+                    className="w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <PlusCircle className="w-4 h-4 shrink-0" />
+                    Criar novo cliente "{customerQuery.trim()}"
+                  </button>
+                </div>
               )
             ) : (
               <p className="text-xs text-zinc-400 mt-1 px-1">Digite para buscar por nome ou telefone.</p>
@@ -432,20 +434,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       <div className={`bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm ${locked ? 'lg:col-span-2' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-zinc-900 text-sm">2.1 Insumo</h3>
-          {!locked && (
-            <button type="button" onClick={() => setShowAddInsumo(!showAddInsumo)}
-              className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg transition-colors font-medium"
-              style={{ color: showAddInsumo ? '#C5243E' : '#243465', background: showAddInsumo ? '#FEF0F2' : '#EFF2FA' }}>
-              <PlusCircle className="w-3 h-3" />{showAddInsumo ? 'Fechar' : '+ Novo insumo'}
-            </button>
-          )}
         </div>
-
-        {showAddInsumo && (
-          <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
-            <InsumoManager compact onCreated={(m: Insumo) => { reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); }} />
-          </div>
-        )}
 
         {selectedInsumo ? (
           <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 bg-zinc-50 mb-4">
@@ -464,6 +453,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           </div>
         ) : (
           <div className="relative mb-4">
+            {showAddInsumo && (
+              <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
+                <InsumoManager compact onCreated={(m: Insumo) => { reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); }} />
+              </div>
+            )}
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
@@ -506,7 +500,21 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               </div>
             )}
             {mq && filteredInsumos.length === 0 && (
-              <p className="text-xs text-zinc-400 mt-1 px-1">Nenhum insumo encontrado.</p>
+              <div className="px-1 mt-1">
+                <p className="text-xs text-zinc-400 mb-2">Nenhum insumo encontrado.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddInsumo(true);
+                    setInsumoQuery('');
+                    setInsumoFocusIdx(-1);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <PlusCircle className="w-4 h-4 shrink-0" />
+                  Criar novo insumo "{insumoQuery.trim()}"
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -516,12 +524,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
             <input
               inputMode="numeric"
-              maxLength={4}
+              maxLength={8}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
               placeholder="0"
               value={quantity}
               disabled={locked}
-              onChange={e => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onChange={e => setQuantity(formatQuantityInput(e.target.value))}
               onKeyDown={e => {
                 if (e.key === 'Enter' && selectedInsumoId && quantity) {
                   e.preventDefault();
