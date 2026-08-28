@@ -77,6 +77,12 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     nao_pago: 'bg-red-50 border-red-200',
     pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
   };
+  const paymentTintFocused: Record<string, string> = {
+    pago: 'bg-emerald-100 border-emerald-300',
+    parcial: 'bg-amber-100 border-amber-300',
+    nao_pago: 'bg-red-100 border-red-300',
+    pagar_na_retirada: 'bg-cyan-100 border-cyan-300',
+  };
   const showRepeat = !!onRepeat;
   const gridCols = variant === 'confirmed'
     ? showAndamento
@@ -130,7 +136,9 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           )}
 {filtered.map((f, idx) => {
               const tint = paymentTint[f.payment_status ?? ''] ?? 'bg-white border-zinc-200';
+              const tintFocused = paymentTintFocused[f.payment_status ?? ''] ?? 'bg-zinc-50 border-zinc-200';
               const isFocused = focusedIdx === idx;
+              const cardTint = isFocused ? tintFocused : tint;
               return variant === 'confirmed' ? (
                 <div key={f.id} onClick={() => onSelect?.(f)}
                   tabIndex={0}
@@ -149,53 +157,53 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   }}
                   onFocus={() => setFocusedIdx(idx)}
                   onBlur={() => setFocusedIdx(-1)}
-                  className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group cursor-pointer ${tint} ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
-                <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
-                  <div className="min-w-0">
-                    <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
-                    {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
-                  </div>
-                  <div className="text-zinc-700 space-y-0.5 font-medium">
-                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
-                    {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
-                  </div>
-                  <div className="text-zinc-700 space-y-0.5 tabular-nums">
-                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
-                    {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
-                  </div>
-                  <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
-                  <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
-                  <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
-                  {showAndamento && (
-                    <div className="flex justify-end">
-                      <select
-                        value={f.delivery_status ?? ''}
-                        disabled={!f.payment_status || updatingStatusId === f.id}
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                        onChange={(e) => handleDeliveryStatusChange(f, e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
-                        <option value="">Selecione...</option>
-                        <option value="em_producao">Em produção</option>
-                        <option value="aguardando_retirada">Aguardando retirada</option>
-                        <option value="aguardando_envio">Aguardando envio</option>
-                        <option value="entregue">Entregue</option>
-                      </select>
+                  className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group cursor-pointer ${cardTint} focus:outline-none`}>
+                  <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
+                    <div className="min-w-0">
+                      <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
+                      {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
                     </div>
-                  )}
-                  <div className="flex justify-end items-center gap-2">
-                    {showRepeat && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); onRepeat?.(f); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all whitespace-nowrap"
-                        style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
-                        <RefreshCw className="w-3.5 h-3.5" /> Repetir
-                      </button>
+                    <div className="text-zinc-700 space-y-0.5 font-medium">
+                      {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
+                      {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
+                    </div>
+                    <div className="text-zinc-700 space-y-0.5 tabular-nums">
+                      {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
+                      {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
+                    </div>
+                    <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
+                    <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
+                    {showAndamento && (
+                      <div className="flex justify-end">
+                        <select
+                          value={f.delivery_status ?? ''}
+                          disabled={!f.payment_status || updatingStatusId === f.id}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onChange={(e) => handleDeliveryStatusChange(f, e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
+                          <option value="">Selecione...</option>
+                          <option value="em_producao">Em produção</option>
+                          <option value="aguardando_retirada">Aguardando retirada</option>
+                          <option value="aguardando_envio">Aguardando envio</option>
+                          <option value="entregue">Entregue</option>
+                        </select>
+                      </div>
                     )}
-                    <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
-                      <ChevronRight className="w-4 h-4" />
+                    <div className="flex justify-end items-center gap-2">
+                      {showRepeat && (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onRepeat?.(f); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all whitespace-nowrap"
+                          style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+                          <RefreshCw className="w-3.5 h-3.5" /> Repetir
+                        </button>
+                      )}
+                      <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
+                        <ChevronRight className="w-4 h-4" />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
             ) : (
               <div key={f.id} onClick={() => onSelect?.(f)}
                 tabIndex={0}
