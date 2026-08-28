@@ -27,8 +27,8 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
 
   const reset = () => { setName(''); setFormError(''); setSuccess(null); };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
     const dup = (insumos as Insumo[])?.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
@@ -93,7 +93,27 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
     </form>
   );
 
-  if (compact) return formBlock;
+  if (compact) {
+    return (
+      <div className="flex flex-wrap gap-3 items-end bg-zinc-50 p-4 rounded-xl border border-zinc-100">
+        {success && (
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 w-full">
+            <CheckCircle className="w-3.5 h-3.5 shrink-0" /> {success}
+          </p>
+        )}
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Insumo</label>
+          <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} placeholder="Ex: Amoxicilina" />
+          {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
+        </div>
+        <button type="button" onClick={() => handleSubmit()} disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
+          {saving ? '...' : 'Adicionar'}
+        </button>
+      </div>
+    );
+  }
+
+  return formBlock;
 
   const available = (insumos as Insumo[]) ?? [];
   const q = stripDiacritics(search.trim().toLowerCase());
