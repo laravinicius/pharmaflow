@@ -7,6 +7,7 @@ import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
 import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput } from '../utils/format';
 import { useData } from '../hooks/useData';
+import { useFormDraft } from '../context/FormDraftContext';
 import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
 
@@ -47,6 +48,52 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [savedFormulaFocusIdx, setSavedFormulaFocusIdx] = useState(-1);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const pendingCustomerName = useRef('');
+  const pendingInsumoName = useRef('');
+  const { getDraft, saveDraft, removeDraft } = useFormDraft();
+  const DRAFT_KEY = 'recipe-new';
+  const isDraftMode = !formula && !readOnly;
+
+  const draftRef = useRef({ selectedCustomerId, items, budgetNumber, budgetItems, selectedBudgetIndex, attendantName, deliveryDate, paymentStatus, paymentMethod });
+  const skipFirstCleanupRef = useRef(true);
+  useEffect(() => {
+    draftRef.current = { selectedCustomerId, items, budgetNumber, budgetItems, selectedBudgetIndex, attendantName, deliveryDate, paymentStatus, paymentMethod };
+  });
+
+  useEffect(() => {
+    if (!isDraftMode) return;
+    const draft = getDraft<{
+      selectedCustomerId: number | '';
+      items: FormulaItem[];
+      budgetNumber: string;
+      budgetItems: BudgetItem[];
+      selectedBudgetIndex: number | null;
+      attendantName: string;
+      deliveryDate: string;
+      paymentStatus: string;
+      paymentMethod: string;
+    }>(DRAFT_KEY);
+    if (!draft) return;
+    if (draft.selectedCustomerId !== undefined) setSelectedCustomerId(draft.selectedCustomerId);
+    if (draft.items?.length) setItems(draft.items);
+    if (draft.budgetNumber) setBudgetNumber(draft.budgetNumber);
+    if (draft.budgetItems?.length) setBudgetItems(draft.budgetItems);
+    if (draft.selectedBudgetIndex != null) setSelectedBudgetIndex(draft.selectedBudgetIndex);
+    if (draft.attendantName) setAttendantName(draft.attendantName);
+    if (draft.deliveryDate) setDeliveryDate(draft.deliveryDate);
+    if (draft.paymentStatus) setPaymentStatus(draft.paymentStatus);
+    if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (!isDraftMode) return;
+      if (skipFirstCleanupRef.current) { skipFirstCleanupRef.current = false; return; }
+      saveDraft(DRAFT_KEY, draftRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDraftMode]);
 
   useEffect(() => {
     if (formula) {
@@ -206,7 +253,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setSaving(true);
     try {
       if (formula) await db.formulas.update(formula.id, buildPayload('pending'));
-      else await db.formulas.add(buildPayload('pending'));
+      else { await db.formulas.add(buildPayload('pending')); removeDraft(DRAFT_KEY); }
       onComplete('pending');
     } catch (err: any) {
       alert('Erro ao salvar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
@@ -218,7 +265,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setSaving(true);
     try {
       if (formula) await db.formulas.update(formula.id, buildPayload('confirmed', true));
-      else await db.formulas.add(buildPayload('confirmed', true));
+      else { await db.formulas.add(buildPayload('confirmed', true)); removeDraft(DRAFT_KEY); }
       onComplete('confirmed');
     } catch (err: any) {
       alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
@@ -343,7 +390,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
         {showAddCustomer && (
           <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
-            <CustomerManager compact onCreated={(c: Customer) => { reloadCustomers(); setSelectedCustomerId(c.id); setShowAddCustomer(false); setCustomerQuery(''); }} />
+            <CustomerManager compact initialName={pendingCustomerName.current} onCreated={async (c: Customer) => { await reloadCustomers(); setSelectedCustomerId(c.id); setShowAddCustomer(false); setCustomerQuery(''); }} />
           </div>
         )}
 
@@ -370,7 +417,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="Buscar cliente por nome ou telefone..."
               value={customerQuery}
               disabled={locked}
               onChange={e => { setCustomerQuery(e.target.value); setCustomerFocusIdx(-1); }}
@@ -415,7 +461,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   <p className="text-xs text-zinc-400 mb-2">Nenhum cliente encontrado.</p>
                   <button
                     type="button"
-                    onClick={() => { setShowAddCustomer(true); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
+                    onClick={() => { pendingCustomerName.current = customerQuery.trim(); setShowAddCustomer(true); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
                     className="w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
                   >
                     <PlusCircle className="w-4 h-4 shrink-0" />
@@ -455,13 +501,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="relative mb-4">
             {showAddInsumo && (
               <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
-                <InsumoManager compact onCreated={(m: Insumo) => { reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); }} />
+                <InsumoManager compact initialName={pendingInsumoName.current} onCreated={async (m: Insumo) => { await reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); }} />
               </div>
             )}
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="Buscar insumo por nome..."
               value={insumoQuery}
               disabled={locked}
               onChange={e => { setInsumoQuery(e.target.value); setInsumoFocusIdx(-1); }}
@@ -505,6 +550,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 <button
                   type="button"
                   onClick={() => {
+                    pendingInsumoName.current = insumoQuery.trim();
                     setShowAddInsumo(true);
                     setInsumoQuery('');
                     setInsumoFocusIdx(-1);
@@ -526,7 +572,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               inputMode="numeric"
               maxLength={8}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="0"
               value={quantity}
               disabled={locked}
               onChange={e => setQuantity(formatQuantityInput(e.target.value))}
@@ -621,7 +666,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
               <input
                 className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                placeholder="Buscar fórmula salva por nome ou número do orçamento..."
                 value={savedFormulaQuery}
                 onChange={e => { setSavedFormulaQuery(e.target.value); setSavedFormulaFocusIdx(-1); }}
                 onKeyDown={e => {
@@ -684,7 +728,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               inputMode="numeric"
               maxLength={6}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="000000"
               value={budgetNumber}
               disabled={locked}
               onChange={e => setBudgetNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -699,7 +742,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   inputMode="numeric"
                   maxLength={3}
                   className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-                  placeholder="0"
                   value={bQty}
                   disabled={locked}
                   onChange={e => { setBudgetError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 3)); }}
@@ -720,7 +762,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 <input
                   inputMode="numeric"
                   className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-                  placeholder="0"
                   value={bValue}
                   disabled={locked}
                   onChange={e => { setBudgetError(''); setBValue(formatCurrency(e.target.value)); }}
@@ -801,7 +842,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             type="text"
             maxLength={100}
             className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-            placeholder="Nome do atendente..."
             value={attendantName}
             disabled={locked}
             onChange={e => setAttendantName(e.target.value)}
@@ -820,7 +860,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 type="text"
                 inputMode="numeric"
                 maxLength={10}
-                placeholder="DD/MM/AAAA"
                 className="w-full pr-10 px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 value={deliveryDate}
                 disabled={locked}
@@ -957,7 +996,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Justificativa (obrigatória)</label>
             <textarea
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm min-h-[90px] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder="Informe o motivo do cancelamento..."
               value={cancelReason} disabled={saving}
               onChange={e => setCancelReason(e.target.value)} />
             <div className="flex gap-3 mt-4">

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User } from '../types';
 import { useData } from '../hooks/useData';
+import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { AdminAuthModal } from './AdminAuthModal';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +31,27 @@ export function UserManager({ user }: { user: User }) {
   const [formError, setFormError] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const { getDraft, saveDraft, removeDraft } = useFormDraft();
+  const DRAFT_KEY = 'userManager';
+
+  const draftRef = useRef(form);
+  const skipFirstCleanupRef = useRef(true);
+  useEffect(() => { draftRef.current = form; });
+
+  useEffect(() => {
+    const draft = getDraft<{ form: typeof emptyForm }>(DRAFT_KEY);
+    if (!draft?.form) return;
+    setForm(draft.form);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (skipFirstCleanupRef.current) { skipFirstCleanupRef.current = false; return; }
+      saveDraft(DRAFT_KEY, { form: draftRef.current });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const reset = () => {
     setForm(emptyForm);
@@ -80,6 +102,7 @@ export function UserManager({ user }: { user: User }) {
           return;
         }
       }
+      removeDraft(DRAFT_KEY);
       reset();
       reload();
     } catch (err: any) {
@@ -134,7 +157,6 @@ export function UserManager({ user }: { user: User }) {
             <input
               required
               type="text"
-              placeholder="Ex: João Silva"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -146,7 +168,6 @@ export function UserManager({ user }: { user: User }) {
             <input
               required
               type="text"
-              placeholder="Ex: joao"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
               value={form.username}
               onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
@@ -160,7 +181,6 @@ export function UserManager({ user }: { user: User }) {
             <input
               required={!isEditing}
               type="password"
-              placeholder={isEditing ? 'Deixe em branco para manter' : '••••••••'}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
               value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))}

@@ -72,7 +72,7 @@ export function SettingsManager() {
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-zinc-700 mb-1">IP do Servidor</label>
-              <input type="text" className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={config.host} onChange={e => setConfig({ ...config, host: e.target.value })} placeholder="192.168.1.50" />
+              <input type="text" className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={config.host} onChange={e => setConfig({ ...config, host: e.target.value })} />
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-1">Porta</label>
@@ -86,7 +86,7 @@ export function SettingsManager() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-1">Senha</label>
-              <input type="password" className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={config.password} onChange={e => setConfig({ ...config, password: e.target.value })} placeholder="Digite para alterar" />
+              <input type="password" className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={config.password} onChange={e => setConfig({ ...config, password: e.target.value })} />
             </div>
           </div>
           <div>

@@ -155,6 +155,12 @@ const createWindow = () => {
     title: 'PIX Farma - Manipulação',
     icon: appIcon,
     autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#243465',
+      symbolColor: '#FFFFFF',
+      height: 30,
+    },
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: false,

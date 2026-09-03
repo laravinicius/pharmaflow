@@ -105,14 +105,14 @@ export function AdminUserManager() {
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome completo</label>
-            <input required type="text" placeholder="Ex: João Silva"
+            <input required type="text"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Usuário de acesso</label>
-            <input required type="text" placeholder="Ex: joao (evite usar admin)"
+            <input required type="text"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
               value={form.username}
               onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
@@ -121,7 +121,7 @@ export function AdminUserManager() {
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">
               Senha {isEditing && <span className="text-zinc-400 font-normal normal-case">(em branco = não altera)</span>}
             </label>
-            <input required={!isEditing} type="password" placeholder={isEditing ? 'Deixe em branco para manter' : '••••••••'}
+            <input required={!isEditing} type="password"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white"
               value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />

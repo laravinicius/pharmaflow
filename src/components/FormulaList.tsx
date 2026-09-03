@@ -113,7 +113,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm min-w-[260px]"
-              placeholder="Buscar cliente, funcionário ou ID..." value={search} onChange={e => setSearch(e.target.value)} />
+              value={search} onChange={e => setSearch(e.target.value)} />
             {search && (
               <button onClick={() => setSearch('')} title="Limpar busca"
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">

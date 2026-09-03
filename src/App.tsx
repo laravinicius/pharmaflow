@@ -18,6 +18,7 @@ import { RecipeForm } from './components/RecipeForm';
 import { FormulaList } from './components/FormulaList';
 import { SavedFormulaManager } from './components/SavedFormulaManager';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { FormDraftProvider, useFormDraft } from './context/FormDraftContext';
 import { AdminAuthModal } from './components/AdminAuthModal';
 
 interface HeartbeatMetrics {
@@ -102,6 +103,7 @@ function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
 
 function AppInner() {
   const { user, sessionToken, setAuth, clearAuth } = useAuth();
+  const { clearDrafts } = useFormDraft();
   const [setupMode, setSetupMode] = useState(false);
   const [loginConflict, setLoginConflict] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'insumos' | 'savedFormulas' | 'settings'>('dashboard');
@@ -134,11 +136,12 @@ function AppInner() {
     if (sessionToken) {
       await db.auth.logout(sessionToken).catch(() => {});
     }
+    clearDrafts();
     clearAuth();
     setSetupMode(false);
     setActiveTab('dashboard');
     setLoginError('Sessão encerrada por inatividade (5 min).');
-  }, [sessionToken, clearAuth]);
+  }, [sessionToken, clearAuth, clearDrafts]);
 
   useEffect(() => {
     handleInactivityLogoutRef.current = handleInactivityLogout;
@@ -185,6 +188,7 @@ function AppInner() {
     try {
       const res = await db.auth.login(loginForm.username, loginForm.password, force);
       if (res.success) {
+        clearDrafts();
         setAuth(res.user, res.sessionToken ?? null);
         setSetupMode(res.setupMode === true);
         setActiveTab('dashboard');
@@ -216,6 +220,7 @@ function AppInner() {
       await db.app.confirmExit();
     } else if (exitContext === 'logout') {
       if (sessionToken) await db.auth.logout(sessionToken).catch(() => {});
+      clearDrafts();
       clearAuth();
       setSetupMode(false);
       setActiveTab('dashboard');
@@ -263,6 +268,7 @@ function AppInner() {
           heartbeatMetrics.failureCount++;
         }
         if (!res.valid) {
+          clearDrafts();
           clearAuth();
           setSetupMode(false);
           setLoginError('Sua sessão foi encerrada em outro dispositivo.');
@@ -298,7 +304,7 @@ function AppInner() {
   if (!user) {
     return (
       <>
-        <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-200 overflow-hidden"
@@ -341,6 +347,12 @@ function AppInner() {
               >
                 {loginLoading ? 'Conectando...' : 'Entrar'}
               </button>
+              <button type="button"
+                onClick={() => { setExitContext('window-close'); setShowExitConfirm(true); }}
+                className="w-full py-2.5 rounded-lg border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
+              >
+                Sair
+              </button>
             </form>
             </div>
           </motion.div>
@@ -381,7 +393,7 @@ function AppInner() {
   if (setupMode) {
     return (
       <>
-        <div className="min-h-screen flex flex-col bg-zinc-50">
+        <div className="flex-1 min-h-0 flex flex-col bg-zinc-50">
           <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-8 shrink-0">
             <PixFarmaLogo size="md" />
             <button
@@ -402,7 +414,7 @@ function AppInner() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col">
+    <>
       <div className="flex flex-1 min-h-0">
 
       {/* Toast de notificação */}
@@ -412,7 +424,7 @@ function AppInner() {
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white flex items-center gap-2 pointer-events-none"
+            className="fixed top-10 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white flex items-center gap-2 pointer-events-none"
             style={{ background: toast.type === 'success' ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#243465' }}
           >
             {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
@@ -421,7 +433,7 @@ function AppInner() {
         )}
       </AnimatePresence>
         {/* Sidebar */}
-        <aside className={`border-r border-zinc-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 self-start sticky top-0 h-screen overflow-hidden`}
+        <aside className={`border-r border-zinc-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 h-full overflow-hidden`}
           style={{ background: '#243465' }}>
           <div className="p-5 w-full">
             <PixFarmaLogo size={isSidebarOpen ? 'sidebar' : 'icon'} />
@@ -569,14 +581,19 @@ function AppInner() {
         </div>
       )}
       {exitModal}
-    </div>
+    </>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <FormDraftProvider>
+        <div className="h-screen overflow-hidden bg-zinc-50 flex flex-col pt-[30px]">
+          <div className="titlebar">PIX Farma</div>
+          <AppInner />
+        </div>
+      </FormDraftProvider>
     </AuthProvider>
   );
 }

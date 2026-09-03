@@ -12,6 +12,28 @@ html {
 body {
   font-family: 'DM Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Titlebar drag region */
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  -webkit-app-region: drag;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  background: #243465;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
 }
 
 /* Scrollbar discreta */

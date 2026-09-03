@@ -1,19 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, Trash2, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { Customer } from '../types';
 import { formatPhone, isValidPhone, stripDiacritics } from '../utils/format';
 import { useData } from '../hooks/useData';
+import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
+import { ConfirmModal } from './ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 
-export function CustomerManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (c: Customer) => void } = {}) {
+export function CustomerManager({ compact = false, onCreated, initialName }: { compact?: boolean; onCreated?: (c: Customer) => void; initialName?: string } = {}) {
   const { data: customers, loading, error, reload } = useData(() => db.customers.list());
   const { sessionToken } = useAuth();
-  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
+  const [form, setForm] = useState({ firstName: initialName ?? '', lastName: '', phone: '' });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState({ name: '', phone: '' });
@@ -25,6 +27,33 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
   const [sort, setSort] = useState<{ key: 'name' | 'phone' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<{ name: string; phone: string } | null>(null);
+  const { getDraft, saveDraft, removeDraft } = useFormDraft();
+  const DRAFT_KEY = 'customer';
+  const isDraftMode = !compact;
+
+  const draftRef = useRef({ form, tab });
+  const skipFirstCleanupRef = useRef(true);
+  useEffect(() => { draftRef.current = { form, tab }; });
+
+  useEffect(() => {
+    if (!isDraftMode) return;
+    const draft = getDraft<{ form: { firstName: string; lastName: string; phone: string }; tab: 'list' | 'create' }>(DRAFT_KEY);
+    if (!draft) return;
+    if (draft.form) setForm(draft.form);
+    if (draft.tab) setTab(draft.tab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (!isDraftMode) return;
+      if (skipFirstCleanupRef.current) { skipFirstCleanupRef.current = false; return; }
+      saveDraft(DRAFT_KEY, draftRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDraftMode]);
 
   const reset = () => { setForm({ firstName: '', lastName: '', phone: '' }); setEditingId(null); setFormError(''); setSuccess(null); };
 
@@ -44,19 +73,37 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
       if (editingId) {
         const res: any = await db.customers.update(editingId, payload);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
+        removeDraft(DRAFT_KEY);
         reset(); reload();
       } else {
-        const res: any = await db.customers.add(payload);
-        if (res?.success === false) {
-          setFormError(res.error ?? 'Erro ao salvar.');
-        } else {
-          if (onCreated) onCreated({ id: res.id, ...payload });
-          reset(); reload();
-          setSuccess('Cliente cadastrado com sucesso!');
-        }
+        setPendingPayload(payload);
+        setSaving(false);
+        setConfirmOpen(true);
       }
     } catch (err: any) {
       setFormError(err.message ?? 'Erro ao salvar.');
+    } finally { setSaving(false); }
+  };
+
+  const handleCreateConfirm = async () => {
+    if (pendingPayload === null) return;
+    setSaving(true); setFormError(''); setSuccess(null);
+    try {
+      const res: any = await db.customers.add(pendingPayload);
+      if (res?.success === false) {
+        setFormError(res.error ?? 'Erro ao salvar.');
+        setPendingPayload(null);
+        return;
+      }
+      if (onCreated) onCreated({ id: res.id, ...pendingPayload });
+      setConfirmOpen(false);
+      setPendingPayload(null);
+      removeDraft(DRAFT_KEY);
+      reset(); reload();
+      setSuccess('Cliente cadastrado com sucesso!');
+    } catch (err: any) {
+      setFormError(err.message ?? 'Erro ao salvar.');
+      setPendingPayload(null);
     } finally { setSaving(false); }
   };
 
@@ -144,7 +191,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
       </div>
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Celular</label>
-        <input required inputMode="numeric" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => { setFormError(''); setForm({ ...form, phone: formatPhone(e.target.value) }); }} placeholder="(00) 00000-0000" maxLength={15} />
+        <input required inputMode="numeric" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => { setFormError(''); setForm({ ...form, phone: formatPhone(e.target.value) }); }} maxLength={15} />
       </div>
       <div className="space-y-1">
         {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
@@ -158,7 +205,19 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
     </form>
   );
 
-  if (compact) return formBlock;
+  if (compact) return (
+    <>
+      {formBlock}
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingPayload(null); }}
+        onConfirm={handleCreateConfirm}
+        title="Criar cliente"
+        message="Deseja realmente cadastrar este novo cliente?"
+        confirmLabel="Confirmar cadastro"
+      />
+    </>
+  );
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
@@ -189,7 +248,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                     <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm w-full"
-                      placeholder="Buscar por nome ou celular..." value={search} onChange={e => setSearch(e.target.value)} />
+                      value={search} onChange={e => setSearch(e.target.value)} />
                     {search && (
                       <button onClick={() => setSearch('')} title="Limpar busca"
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
@@ -230,7 +289,7 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
                           <td className="px-4 py-3 text-zinc-600">
                             {editingRow === c.id ? (
                               <div>
-                                <input inputMode="numeric" maxLength={15} placeholder="(00) 00000-0000"
+                                <input inputMode="numeric" maxLength={15}
                                   className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
                                   value={rowDraft.phone} onChange={e => setRowDraft(d => ({ ...d, phone: formatPhone(e.target.value) }))}
                                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />
@@ -274,6 +333,14 @@ export function CustomerManager({ compact = false, onCreated }: { compact?: bool
         onConfirm={handleDeleteConfirm}
         title="Excluir cliente"
         message="Esta ação não pode ser desfeita. O cliente será removido permanentemente."
+      />
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingPayload(null); }}
+        onConfirm={handleCreateConfirm}
+        title="Criar cliente"
+        message="Deseja realmente cadastrar este novo cliente?"
+        confirmLabel="Confirmar cadastro"
       />
     </motion.div>
   );

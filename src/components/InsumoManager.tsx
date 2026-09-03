@@ -1,19 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, Trash2, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { Insumo } from '../types';
 import { stripDiacritics } from '../utils/format';
 import { useData } from '../hooks/useData';
+import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
+import { ConfirmModal } from './ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 
-export function InsumoManager({ compact = false, onCreated }: { compact?: boolean; onCreated?: (m: Insumo) => void } = {}) {
+export function InsumoManager({ compact = false, onCreated, initialName }: { compact?: boolean; onCreated?: (m: Insumo) => void; initialName?: string } = {}) {
   const { data: insumos, loading, error, reload } = useData(() => db.insumos.list());
   const { sessionToken } = useAuth();
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialName ?? '');
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -24,6 +26,33 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
   const [sort, setSort] = useState<{ key: 'name' | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingName, setPendingName] = useState<string | null>(null);
+  const { getDraft, saveDraft, removeDraft } = useFormDraft();
+  const DRAFT_KEY = 'insumo';
+  const isDraftMode = !compact;
+
+  const draftRef = useRef({ name, tab });
+  const skipFirstCleanupRef = useRef(true);
+  useEffect(() => { draftRef.current = { name, tab }; });
+
+  useEffect(() => {
+    if (!isDraftMode) return;
+    const draft = getDraft<{ name: string; tab: 'list' | 'create' }>(DRAFT_KEY);
+    if (!draft) return;
+    if (draft.name) setName(draft.name);
+    if (draft.tab) setTab(draft.tab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (!isDraftMode) return;
+      if (skipFirstCleanupRef.current) { skipFirstCleanupRef.current = false; return; }
+      saveDraft(DRAFT_KEY, draftRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDraftMode]);
 
   const reset = () => { setName(''); setFormError(''); setSuccess(null); };
 
@@ -35,13 +64,29 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
     if (dup) { setFormError(`Insumo já cadastrado: ${dup.name}`); return; }
     setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const res: any = await db.insumos.add(trimmed);
-      if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
-      if (onCreated) onCreated({ id: res.id, name: trimmed });
+      setPendingName(trimmed);
+      setSaving(false);
+      setConfirmOpen(true);
+    } catch (err: any) {
+      setFormError(err.message ?? 'Erro ao salvar.');
+    } finally { setSaving(false); }
+  };
+
+  const handleCreateConfirm = async () => {
+    if (pendingName === null) return;
+    setSaving(true); setFormError(''); setSuccess(null);
+    try {
+      const res: any = await db.insumos.add(pendingName);
+      if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); setPendingName(null); return; }
+      if (onCreated) onCreated({ id: res.id, name: pendingName });
+      setConfirmOpen(false);
+      setPendingName(null);
+      removeDraft(DRAFT_KEY);
       reset(); reload();
       setSuccess('Insumo cadastrado com sucesso!');
     } catch (err: any) {
       setFormError(err.message ?? 'Erro ao salvar.');
+      setPendingName(null);
     } finally { setSaving(false); }
   };
 
@@ -84,7 +129,7 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
       )}
       <div className="flex-1 min-w-[200px]">
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Insumo</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} placeholder="Ex: Amoxicilina" />
+        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} />
         {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
       </div>
       <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
@@ -95,25 +140,33 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
 
   if (compact) {
     return (
-      <div className="flex flex-wrap gap-3 items-end bg-zinc-50 p-4 rounded-xl border border-zinc-100">
-        {success && (
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 w-full">
-            <CheckCircle className="w-3.5 h-3.5 shrink-0" /> {success}
-          </p>
-        )}
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Insumo</label>
-          <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} placeholder="Ex: Amoxicilina" />
-          {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
+      <>
+        <div className="flex flex-wrap gap-3 items-end bg-zinc-50 p-4 rounded-xl border border-zinc-100">
+          {success && (
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 w-full">
+              <CheckCircle className="w-3.5 h-3.5 shrink-0" /> {success}
+            </p>
+          )}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Insumo</label>
+            <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} />
+            {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
+          </div>
+          <button type="button" onClick={() => handleSubmit()} disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
+            {saving ? '...' : 'Adicionar'}
+          </button>
         </div>
-        <button type="button" onClick={() => handleSubmit()} disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
-          {saving ? '...' : 'Adicionar'}
-        </button>
-      </div>
+        <ConfirmModal
+          isOpen={confirmOpen}
+          onClose={() => { setConfirmOpen(false); setPendingName(null); }}
+          onConfirm={handleCreateConfirm}
+          title="Criar insumo"
+          message="Deseja realmente cadastrar este novo insumo?"
+          confirmLabel="Confirmar cadastro"
+        />
+      </>
     );
   }
-
-  return formBlock;
 
   const available = (insumos as Insumo[]) ?? [];
   const q = stripDiacritics(search.trim().toLowerCase());
@@ -171,7 +224,7 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                     <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm w-full"
-                      placeholder="Buscar por nome..." value={search} onChange={e => setSearch(e.target.value)} />
+                      value={search} onChange={e => setSearch(e.target.value)} />
                     {search && (
                       <button onClick={() => setSearch('')} title="Limpar busca"
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
@@ -245,6 +298,14 @@ export function InsumoManager({ compact = false, onCreated }: { compact?: boolea
         onConfirm={handleDeleteConfirm}
         title="Excluir insumo"
         message="Esta ação não pode ser desfeita. O insumo será removido permanentemente."
+      />
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingName(null); }}
+        onConfirm={handleCreateConfirm}
+        title="Criar insumo"
+        message="Deseja realmente cadastrar este novo insumo?"
+        confirmLabel="Confirmar cadastro"
       />
     </motion.div>
   );

@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { CheckCircle, Trash2, Search, X, PlusCircle, ClipboardList } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { SavedFormula, SavedFormulaItem, Insumo, BudgetItem } from '../types';
 import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency, formatQuantityInput, parseQuantity } from '../utils/format';
 import { useData } from '../hooks/useData';
+import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
@@ -31,6 +32,7 @@ export function SavedFormulaManager() {
   const [bUnit, setBUnit] = useState('dose');
   const [bValue, setBValue] = useState('');
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
+  const pendingInsumoName = useRef('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
@@ -40,6 +42,34 @@ export function SavedFormulaManager() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [showAddInsumo, setShowAddInsumo] = useState(false);
+  const { getDraft, saveDraft, removeDraft } = useFormDraft();
+  const DRAFT_KEY = 'savedFormula';
+
+  const draftRef = useRef({ name, budgetNumber, items, budgetItems, tab });
+  const skipFirstCleanupRef = useRef(true);
+  useEffect(() => { draftRef.current = { name, budgetNumber, items, budgetItems, tab }; });
+
+  useEffect(() => {
+    const draft = getDraft<{
+      name: string; budgetNumber: string; items: SavedFormulaItem[];
+      budgetItems: BudgetItem[]; tab: 'list' | 'create';
+    }>(DRAFT_KEY);
+    if (!draft) return;
+    if (draft.name) setName(draft.name);
+    if (draft.budgetNumber) setBudgetNumber(draft.budgetNumber);
+    if (draft.items?.length) setItems(draft.items);
+    if (draft.budgetItems?.length) setBudgetItems(draft.budgetItems);
+    if (draft.tab) setTab(draft.tab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (skipFirstCleanupRef.current) { skipFirstCleanupRef.current = false; return; }
+      saveDraft(DRAFT_KEY, draftRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('dose'); setBValue(''); setFormError(''); setSuccess(null); };
 
@@ -105,10 +135,12 @@ export function SavedFormulaManager() {
       if (editingId) {
         const res: any = await db.savedFormulas.update(editingId, payload);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
+        removeDraft(DRAFT_KEY);
         reset(); setTab('list');
       } else {
         const res: any = await db.savedFormulas.add(payload);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
+        removeDraft(DRAFT_KEY);
         reset();
         setSuccess('Fórmula salva cadastrada com sucesso!');
       }
@@ -148,8 +180,8 @@ export function SavedFormulaManager() {
 
   const addInsumoBlock = (
     <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
-      <InsumoManager compact onCreated={(m: Insumo) => {
-        reloadInsumos();
+      <InsumoManager compact initialName={pendingInsumoName.current} onCreated={async (m: Insumo) => {
+        await reloadInsumos();
         setSelectedInsumoId(m.id);
         setShowAddInsumo(false);
         setInsumoQuery('');
@@ -167,13 +199,13 @@ export function SavedFormulaManager() {
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome da Fórmula</label>
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none"
-          value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} placeholder="Ex: Cápsulas de Vitamina C + Zinco" />
+          value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} />
       </div>
 
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Número do Orçamento (opcional)</label>
         <input inputMode="numeric" maxLength={6} className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-          value={budgetNumber} onChange={e => { setFormError(''); setBudgetNumber(e.target.value.replace(/\D/g, '').slice(0, 6)); }} placeholder="Ex: 123456" />
+          value={budgetNumber} onChange={e => { setFormError(''); setBudgetNumber(e.target.value.replace(/\D/g, '').slice(0, 6)); }} />
       </div>
 
       <div className="border border-zinc-200 rounded-xl p-4 space-y-3">
@@ -186,7 +218,7 @@ export function SavedFormulaManager() {
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
             <input inputMode="numeric" maxLength={8}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
-              placeholder="0" value={bQty}
+              value={bQty}
               onChange={e => { setFormError(''); setBQty(formatQuantityInput(e.target.value)); }} />
           </div>
           <div className="sm:w-24">
@@ -200,7 +232,7 @@ export function SavedFormulaManager() {
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
             <input inputMode="numeric"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
-              placeholder="0" value={bValue}
+              value={bValue}
               onChange={e => { setFormError(''); setBValue(e.target.value.replace(/[^0-9,]/g, '').replace(/,/g, '').replace(/(\d{2})$/, ',$1')); }} />
           </div>
           <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
@@ -253,7 +285,7 @@ export function SavedFormulaManager() {
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-              placeholder="Buscar insumo por nome..." value={insumoQuery}
+              value={insumoQuery}
               onChange={e => { setInsumoQuery(e.target.value); setInsumoFocusIdx(-1); }}
               onKeyDown={e => {
                 if (!filteredInsumos.length) return;
@@ -293,7 +325,7 @@ export function SavedFormulaManager() {
                 <p className="text-xs text-zinc-400 mb-2">Nenhum insumo encontrado.</p>
                 <button
                   type="button"
-                  onClick={() => { setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                  onClick={() => { pendingInsumoName.current = insumoQuery.trim(); setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
                   className="w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
                 >
                   <PlusCircle className="w-4 h-4 shrink-0" />
@@ -310,7 +342,7 @@ export function SavedFormulaManager() {
               <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
               <input inputMode="numeric" maxLength={8} required
                 className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
-                placeholder="0" value={quantity}
+                value={quantity}
                 onChange={e => setQuantity(formatQuantityInput(e.target.value))}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && quantity) {
@@ -423,7 +455,7 @@ export function SavedFormulaManager() {
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
                     <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm w-full"
-                      placeholder="Buscar por nome..." value={search} onChange={e => setSearch(e.target.value)} />
+                      value={search} onChange={e => setSearch(e.target.value)} />
                     {search && (
                       <button onClick={() => setSearch('')} title="Limpar busca"
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
