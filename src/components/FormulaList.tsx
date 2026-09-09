@@ -5,6 +5,7 @@ import { db } from '../services/lanDatabase';
 import { Formula } from '../types';
 import { formatDateToBR, formatQuantity } from '../utils/format';
 import { useData } from '../hooks/useData';
+import { useAuth } from '../context/AuthContext';
 import { LoadingState, ErrorState } from './Feedback';
 
 // Verifica quais requisitos faltam para a fórmula poder ser confirmada
@@ -23,6 +24,7 @@ export function getMissingReasons(f: Formula): string[] {
 
 export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, onSelect, onConfirm, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
+  const { sessionToken } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [focusedIdx, setFocusedIdx] = useState(-1);
@@ -34,7 +36,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     if (reasons.length === 0) {
       setConfirmingId(f.id);
       try {
-        await db.formulas.updateStatus(f.id, 'confirmed');
+        await db.formulas.updateStatus(f.id, 'confirmed', sessionToken ?? undefined);
         reload();
       } catch (err: any) {
         alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
@@ -48,7 +50,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const handleDeliveryStatusChange = async (f: Formula, deliveryStatus: string) => {
     setUpdatingStatusId(f.id);
     try {
-      await db.formulas.updateDeliveryStatus(f.id, deliveryStatus);
+      await db.formulas.updateDeliveryStatus(f.id, deliveryStatus, sessionToken ?? undefined);
       reload();
     } catch (err: any) {
       alert('Erro ao atualizar o andamento: ' + (err?.message ?? 'verifique a conexão com o servidor.'));

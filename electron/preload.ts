@@ -9,35 +9,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Usuários
   listUsers:   ()    => ipcRenderer.invoke('users:list'),
-  addUser:     (u: any) => ipcRenderer.invoke('users:add', u),
-  updateUser:  (id: number, u: any) => ipcRenderer.invoke('users:update', id, u),
+  addUser:     (u: any, sessionToken?: string) => ipcRenderer.invoke('users:add', u, sessionToken),
+  updateUser:  (id: number, u: any, sessionToken?: string) => ipcRenderer.invoke('users:update', id, u, sessionToken),
   deleteUser:  (id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) => ipcRenderer.invoke('users:delete', id, adminCreds, sessionToken),
 
   // Clientes
   listCustomers:   ()              => ipcRenderer.invoke('customers:list'),
-  addCustomer:     (c: any)        => ipcRenderer.invoke('customers:add', c),
-  updateCustomer:  (id: number, c: any) => ipcRenderer.invoke('customers:update', id, c),
+  addCustomer:     (c: any, sessionToken?: string)        => ipcRenderer.invoke('customers:add', c, sessionToken),
+  updateCustomer:  (id: number, c: any, sessionToken?: string) => ipcRenderer.invoke('customers:update', id, c, sessionToken),
   deleteCustomer:  (id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) => ipcRenderer.invoke('customers:delete', id, adminCreds, sessionToken),
 
   // Insumos
   listInsumos:   ()           => ipcRenderer.invoke('insumos:list'),
-  addInsumo:     (name: string) => ipcRenderer.invoke('insumos:add', name),
-  updateInsumo:  (id: number, name: string) => ipcRenderer.invoke('insumos:update', id, name),
+  addInsumo:     (name: string, sessionToken?: string) => ipcRenderer.invoke('insumos:add', name, sessionToken),
+  updateInsumo:  (id: number, name: string, sessionToken?: string) => ipcRenderer.invoke('insumos:update', id, name, sessionToken),
   deleteInsumo:  (id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) => ipcRenderer.invoke('insumos:delete', id, adminCreds, sessionToken),
 
   // Fórmulas
   listFormulas:         ()                        => ipcRenderer.invoke('formulas:list'),
-  addFormula:           (f: any)                  => ipcRenderer.invoke('formulas:add', f),
-  updateFormula:        (id: number, f: any)      => ipcRenderer.invoke('formulas:update', id, f),
-  updateFormulaStatus:  (id: number, s: string)   => ipcRenderer.invoke('formulas:update-status', id, s),
-  updateFormulaDeliveryStatus: (id: number, s: string) => ipcRenderer.invoke('formulas:update-delivery-status', id, s),
+  addFormula:           (f: any, sessionToken?: string)                  => ipcRenderer.invoke('formulas:add', f, sessionToken),
+  updateFormula:        (id: number, f: any, sessionToken?: string)      => ipcRenderer.invoke('formulas:update', id, f, sessionToken),
+  updateFormulaStatus:  (id: number, s: string, sessionToken?: string)   => ipcRenderer.invoke('formulas:update-status', id, s, sessionToken),
+  updateFormulaDeliveryStatus: (id: number, s: string, sessionToken?: string) => ipcRenderer.invoke('formulas:update-delivery-status', id, s, sessionToken),
   deleteFormula:        (id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) => ipcRenderer.invoke('formulas:delete', id, adminCreds, sessionToken),
 
   // Fórmulas Salvas
   listSavedFormulas:   ()                => ipcRenderer.invoke('savedFormulas:list'),
-  addSavedFormula:     (f: any)          => ipcRenderer.invoke('savedFormulas:add', f),
-  updateSavedFormula:  (id: number, f: any) => ipcRenderer.invoke('savedFormulas:update', id, f),
+  addSavedFormula:     (f: any, sessionToken?: string)          => ipcRenderer.invoke('savedFormulas:add', f, sessionToken),
+  updateSavedFormula:  (id: number, f: any, sessionToken?: string) => ipcRenderer.invoke('savedFormulas:update', id, f, sessionToken),
   deleteSavedFormula:  (id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) => ipcRenderer.invoke('savedFormulas:delete', id, adminCreds, sessionToken),
+
+  // Logs de auditoria
+  listLogs: (filters?: any) => ipcRenderer.invoke('logs:list', filters),
 
   // Atualização ao vivo — avisa quando os dados mudam no servidor
   onDataChanged: (cb: () => void) => {

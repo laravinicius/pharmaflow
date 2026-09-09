@@ -10,10 +10,8 @@ import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
 import { InsumoManager } from './InsumoManager';
+import { UnitCycle, INGREDIENT_UNITS, BUDGET_UNITS } from './UnitCycle';
 import { useAuth } from '../context/AuthContext';
-
-const UNITS = ['g', 'mcg', 'mg', 'ml', 'ui'];
-const BUDGET_UNITS = ['caps', 'dose', 'g', 'ml'];
 
 export function SavedFormulaManager() {
   const { data: formulas, loading, error, reload } = useData(() => db.savedFormulas.list());
@@ -33,6 +31,10 @@ export function SavedFormulaManager() {
   const [bValue, setBValue] = useState('');
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const pendingInsumoName = useRef('');
+  const insumoQueryRef = useRef<HTMLInputElement>(null);
+  const quantityRef = useRef<HTMLInputElement>(null);
+  const bQtyRef = useRef<HTMLInputElement>(null);
+  const insumoListRef = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
@@ -90,6 +92,15 @@ export function SavedFormulaManager() {
       });
   }, [allInsumos, mq]);
 
+  const focusListOption = (idx: number) => {
+    insumoListRef.current?.querySelector<HTMLButtonElement>(`[data-idx="${idx}"]`)?.focus();
+  };
+  const moveListFocus = (idx: number, dir: 1 | -1, length: number) => {
+    const ni = dir === 1 ? (idx < length - 1 ? idx + 1 : 0) : (idx > 0 ? idx - 1 : length - 1);
+    setInsumoFocusIdx(ni);
+    focusListOption(ni);
+  };
+
   const addItem = () => {
     if (!selectedInsumoId || !quantity) return;
     if (items.find(i => i.insumo_id === Number(selectedInsumoId))) {
@@ -102,6 +113,7 @@ export function SavedFormulaManager() {
     setQuantity('');
     setUnit('mg');
     setFormError('');
+    requestAnimationFrame(() => insumoQueryRef.current?.focus());
   };
 
   const addBudgetItem = () => {
@@ -111,6 +123,7 @@ export function SavedFormulaManager() {
     setBQty('');
     setBValue('');
     setFormError('');
+    requestAnimationFrame(() => bQtyRef.current?.focus());
   };
 
   const removeBudgetItem = (idx: number) => {
@@ -133,12 +146,12 @@ export function SavedFormulaManager() {
     };
     try {
       if (editingId) {
-        const res: any = await db.savedFormulas.update(editingId, payload);
+        const res: any = await db.savedFormulas.update(editingId, payload, sessionToken ?? undefined);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
         removeDraft(DRAFT_KEY);
         reset(); setTab('list');
       } else {
-        const res: any = await db.savedFormulas.add(payload);
+        const res: any = await db.savedFormulas.add(payload, sessionToken ?? undefined);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
         removeDraft(DRAFT_KEY);
         reset();
@@ -185,6 +198,7 @@ export function SavedFormulaManager() {
         setSelectedInsumoId(m.id);
         setShowAddInsumo(false);
         setInsumoQuery('');
+        requestAnimationFrame(() => quantityRef.current?.focus());
       }} />
     </div>
   );
@@ -216,24 +230,27 @@ export function SavedFormulaManager() {
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="sm:w-28">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
-            <input inputMode="numeric" maxLength={8}
+            <input ref={bQtyRef} inputMode="numeric" maxLength={8}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
               value={bQty}
               onChange={e => { setFormError(''); setBQty(formatQuantityInput(e.target.value)); }} />
           </div>
-          <div className="sm:w-24">
+          <div className="sm:w-40">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
-            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm"
-              value={bUnit} onChange={e => { setFormError(''); setBUnit(e.target.value); }}>
-              {BUDGET_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
+            <UnitCycle value={bUnit} onChange={setBUnit} options={BUDGET_UNITS} />
           </div>
           <div className="flex-1">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
             <input inputMode="numeric"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
               value={bValue}
-              onChange={e => { setFormError(''); setBValue(e.target.value.replace(/[^0-9,]/g, '').replace(/,/g, '').replace(/(\d{2})$/, ',$1')); }} />
+              onChange={e => { setFormError(''); setBValue(e.target.value.replace(/[^0-9,]/g, '').replace(/,/g, '').replace(/(\d{2})$/, ',$1')); }}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && bQty && bValue) {
+                  e.preventDefault();
+                  addBudgetItem();
+                }
+              }} />
           </div>
           <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
             className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -284,21 +301,27 @@ export function SavedFormulaManager() {
         ) : (
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-            <input className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+            <input ref={insumoQueryRef} className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
               value={insumoQuery}
               onChange={e => { setInsumoQuery(e.target.value); setInsumoFocusIdx(-1); }}
               onKeyDown={e => {
-                if (!filteredInsumos.length) return;
-                if (e.key === 'ArrowDown') {
+                if (e.key === 'ArrowDown' && filteredInsumos.length) {
                   e.preventDefault();
                   setInsumoFocusIdx(prev => (prev < filteredInsumos.length - 1 ? prev + 1 : 0));
-                } else if (e.key === 'ArrowUp') {
+                } else if (e.key === 'ArrowUp' && filteredInsumos.length) {
                   e.preventDefault();
                   setInsumoFocusIdx(prev => (prev > 0 ? prev - 1 : filteredInsumos.length - 1));
                 } else if (e.key === 'Enter') {
-                  e.preventDefault();
-                  const target = insumoFocusIdx >= 0 ? filteredInsumos[insumoFocusIdx] : filteredInsumos[0];
-                  if (target) { setSelectedInsumoId(target.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }
+                  if (filteredInsumos.length) {
+                    e.preventDefault();
+                    const targetIdx = insumoFocusIdx >= 0 && insumoFocusIdx < filteredInsumos.length ? insumoFocusIdx : 0;
+                    setInsumoFocusIdx(targetIdx);
+                    focusListOption(targetIdx);
+                  } else if (insumoQuery.trim()) {
+                    e.preventDefault();
+                    pendingInsumoName.current = insumoQuery.trim();
+                    setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1);
+                  }
                 } else if (e.key === 'Escape') {
                   setInsumoQuery(''); setInsumoFocusIdx(-1);
                 }
@@ -310,9 +333,27 @@ export function SavedFormulaManager() {
               </button>
             )}
             {filteredInsumos.length > 0 && (
-              <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+              <div ref={insumoListRef} className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
                 {filteredInsumos.map((m, idx) => (
-                  <button key={m.id} type="button" onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                  <button key={m.id} type="button" data-idx={idx}
+                    onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        moveListFocus(idx, 1, filteredInsumos.length);
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        moveListFocus(idx, -1, filteredInsumos.length);
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1);
+                        requestAnimationFrame(() => quantityRef.current?.focus());
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setInsumoQuery(''); setInsumoFocusIdx(-1);
+                        insumoQueryRef.current?.focus();
+                      }
+                    }}
                     className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === insumoFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                     <ClipboardList className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                     <span className="text-sm truncate flex-1">{m.name}</span>
@@ -340,23 +381,14 @@ export function SavedFormulaManager() {
           <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
             <div className="sm:w-32">
               <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
-              <input inputMode="numeric" maxLength={8} required
+              <input ref={quantityRef} inputMode="numeric" maxLength={8} required
                 className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
                 value={quantity}
-                onChange={e => setQuantity(formatQuantityInput(e.target.value))}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && quantity) {
-                    e.preventDefault();
-                    addItem();
-                  }
-                }} />
+                onChange={e => setQuantity(formatQuantityInput(e.target.value))} />
             </div>
-            <div className="sm:w-36">
+            <div className="sm:w-40">
               <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
-              <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm"
-                value={unit} onChange={e => setUnit(e.target.value)}>
-                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
+              <UnitCycle value={unit} onChange={setUnit} options={INGREDIENT_UNITS} />
             </div>
             <button type="button" disabled={!quantity} onClick={addItem}
               className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"

@@ -20,6 +20,7 @@ import { SavedFormulaManager } from './components/SavedFormulaManager';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FormDraftProvider, useFormDraft } from './context/FormDraftContext';
 import { AdminAuthModal } from './components/AdminAuthModal';
+import { handleEnterAsTab } from './utils/enterNavigation';
 
 interface HeartbeatMetrics {
   callCount: number;
@@ -65,8 +66,9 @@ function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
 }) {
   if (!show || !context) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}
+      onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -84,7 +86,7 @@ function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
           {context === 'window-close' ? 'Deseja realmente sair do aplicativo?' : 'Deseja realmente sair da conta?'}
         </p>
         <div className="flex gap-3">
-          <button type="button" onClick={onCancel}
+          <button type="button" onClick={onCancel} autoFocus
             className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
             Cancelar
           </button>
@@ -334,6 +336,12 @@ function AppInner() {
                   className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none transition-all"
                   value={loginForm.password}
                   onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !loginLoading) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                 />
               </div>
               {loginError && (
@@ -358,8 +366,9 @@ function AppInner() {
           </motion.div>
 
           {loginConflict && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setLoginConflict(false)}>
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setLoginConflict(false)}
+              onKeyDown={e => { if (e.key === 'Escape') setLoginConflict(false); }}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
                     <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -371,7 +380,7 @@ function AppInner() {
                 </div>
                 <p className="text-sm text-zinc-700 mb-4">Deseja entrar mesmo assim? A sessão do outro dispositivo será encerrada.</p>
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setLoginConflict(false)}
+                  <button type="button" onClick={() => setLoginConflict(false)} autoFocus
                     className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
                     Cancelar
                   </button>
@@ -547,8 +556,9 @@ function AppInner() {
       </div>
 
       {missingReasons && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setMissingReasons(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setMissingReasons(null)}
+          onKeyDown={e => { if (e.key === 'Escape') setMissingReasons(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -567,7 +577,7 @@ function AppInner() {
               ))}
             </ul>
             <div className="mt-5 flex gap-3">
-              <button type="button" onClick={() => setMissingReasons(null)}
+              <button type="button" onClick={() => setMissingReasons(null)} autoFocus
                 className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
                 Entendi
               </button>
@@ -589,7 +599,7 @@ export default function App() {
   return (
     <AuthProvider>
       <FormDraftProvider>
-        <div className="h-screen overflow-hidden bg-zinc-50 flex flex-col pt-[30px]">
+        <div className="h-screen overflow-hidden bg-zinc-50 flex flex-col pt-[30px]" onKeyDown={handleEnterAsTab}>
           <div className="titlebar">PIX Farma</div>
           <AppInner />
         </div>

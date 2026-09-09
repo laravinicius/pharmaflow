@@ -76,7 +76,7 @@ export function InsumoManager({ compact = false, onCreated, initialName }: { com
     if (pendingName === null) return;
     setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const res: any = await db.insumos.add(pendingName);
+      const res: any = await db.insumos.add(pendingName, sessionToken ?? undefined);
       if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); setPendingName(null); return; }
       if (onCreated) onCreated({ id: res.id, name: pendingName });
       setConfirmOpen(false);
@@ -111,7 +111,7 @@ export function InsumoManager({ compact = false, onCreated, initialName }: { com
     if (dup) { setFormError(`Insumo já cadastrado: ${dup.name}`); return; }
     setSaving(true); setFormError('');
     try {
-      const res: any = await db.insumos.update(editingRow, trimmed);
+      const res: any = await db.insumos.update(editingRow, trimmed, sessionToken ?? undefined);
       if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
       setEditingRow(null); setRowDraft('');
       reload();
@@ -149,7 +149,7 @@ export function InsumoManager({ compact = false, onCreated, initialName }: { com
           )}
           <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Insumo</label>
-            <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} />
+            <input required autoFocus className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} />
             {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
           </div>
           <button type="button" onClick={() => handleSubmit()} disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">

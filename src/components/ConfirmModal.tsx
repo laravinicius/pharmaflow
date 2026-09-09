@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmModalProps {
@@ -11,10 +11,17 @@ interface ConfirmModalProps {
 }
 
 export function ConfirmModal({ isOpen, title, message, confirmLabel = 'Confirmar', onConfirm, onClose }: ConfirmModalProps) {
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) confirmRef.current?.focus();
+  }, [isOpen]);
+
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
@@ -38,6 +45,7 @@ export function ConfirmModal({ isOpen, title, message, confirmLabel = 'Confirmar
             Cancelar
           </button>
           <button
+            ref={confirmRef}
             type="button"
             onClick={onConfirm}
             className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"

@@ -85,7 +85,7 @@ export function UserManager({ user }: { user: User }) {
           username: form.username.trim(),
           password: form.password.trim() || undefined,
           role: form.role,
-        });
+        }, sessionToken ?? undefined);
         if (res && res.success === false) {
           setFormError(res.error ?? 'Erro ao salvar. Tente novamente.');
           return;
@@ -96,7 +96,7 @@ export function UserManager({ user }: { user: User }) {
           username: form.username.trim(),
           password: form.password.trim(),
           role: form.role,
-        });
+        }, sessionToken ?? undefined);
         if (res && res.success === false) {
           setFormError(res.error ?? 'Erro ao salvar. Tente novamente.');
           return;

@@ -43,6 +43,9 @@ const initPool = () => {
     waitForConnections: true, connectionLimit: 10, connectTimeout: 5000,
     dateStrings: true,
   });
+  pool.on('connection', (conn) => {
+    (conn as any).query("SET time_zone = '-03:00'", () => {});
+  });
   db.setPool(pool);
 };
 
@@ -52,6 +55,7 @@ initPool();
 
 ipcMain.handle('auth:login', async (_, username: string, password: string, force = false) => {
   if (hasMasterSetupCredentials && username === MASTER_USERNAME && password === MASTER_PASSWORD) {
+    await db.logAction('Configuração', 'login', 'system', null, 'Login no modo configuração (admin/admin123).');
     return {
       success: true, setupMode: true,
       user: { id: 0, name: 'Configuração', username: MASTER_USERNAME, role: 'admin' },
@@ -75,39 +79,43 @@ setInterval(() => { db.cleanupStaleSessions().catch(() => {}); }, 60_000);
 // ─── Usuários ────────────────────────────────────────────────────────────────
 
 ipcMain.handle('users:list',   ()          => db.listUsers());
-ipcMain.handle('users:add',    async (_, u)      => { const r = await db.addUser(u); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('users:update', async (_, id, u)  => { const r = await db.updateUser(id, u); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('users:add',    async (_, u, sessionToken)      => { const r = await db.addUser(u, sessionToken); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('users:update', async (_, id, u, sessionToken)  => { const r = await db.updateUser(id, u, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('users:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteUser(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Clientes ────────────────────────────────────────────────────────────────
 
 ipcMain.handle('customers:list',   ()           => db.listCustomers());
-ipcMain.handle('customers:add',    async (_, c)        => { const r = await db.addCustomer(c); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('customers:update', async (_, id, c)    => { const r = await db.updateCustomer(id, c); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('customers:add',    async (_, c, sessionToken)        => { const r = await db.addCustomer(c, sessionToken); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('customers:update', async (_, id, c, sessionToken)    => { const r = await db.updateCustomer(id, c, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('customers:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteCustomer(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Insumos ─────────────────────────────────────────────────────────────────
 
 ipcMain.handle('insumos:list',   ()        => db.listInsumos());
-ipcMain.handle('insumos:add',    async (_, name) => { const r = await db.addInsumo(name); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('insumos:update', async (_, id, name) => { const r = await db.updateInsumo(id, name); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('insumos:add',    async (_, name, sessionToken) => { const r = await db.addInsumo(name, sessionToken); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('insumos:update', async (_, id, name, sessionToken) => { const r = await db.updateInsumo(id, name, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('insumos:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteInsumo(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Fórmulas ────────────────────────────────────────────────────────────────
 
 ipcMain.handle('formulas:list',          ()              => db.listFormulas());
-ipcMain.handle('formulas:add',           async (_, f)          => { const r = await db.addFormula(f); notifyDataChanged(); return r; });
-ipcMain.handle('formulas:update',        async (_, id, f)      => { const r = await db.updateFormula(id, f); notifyDataChanged(); return r; });
-ipcMain.handle('formulas:update-status', async (_, id, status) => { const r = await db.updateFormulaStatus(id, status); notifyDataChanged(); return r; });
-ipcMain.handle('formulas:update-delivery-status', async (_, id, deliveryStatus) => { const r = await db.updateFormulaDeliveryStatus(id, deliveryStatus); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:add',           async (_, f, sessionToken)          => { const r = await db.addFormula(f, sessionToken); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:update',        async (_, id, f, sessionToken)      => { const r = await db.updateFormula(id, f, sessionToken); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:update-status', async (_, id, status, sessionToken) => { const r = await db.updateFormulaStatus(id, status, sessionToken); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:update-delivery-status', async (_, id, deliveryStatus, sessionToken) => { const r = await db.updateFormulaDeliveryStatus(id, deliveryStatus, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:delete',        async (_, id, adminCreds, sessionToken) => { const r = await db.deleteFormula(id, adminCreds, sessionToken); notifyDataChanged(); return r; });
 
 // ─── Fórmulas Salvas ─────────────────────────────────────────────────────────
 
 ipcMain.handle('savedFormulas:list',   ()           => db.listSavedFormulas());
-ipcMain.handle('savedFormulas:add',    async (_, f)       => { const r = await db.addSavedFormula(f); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('savedFormulas:update', async (_, id, f)   => { const r = await db.updateSavedFormula(id, f); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('savedFormulas:add',    async (_, f, sessionToken)       => { const r = await db.addSavedFormula(f, sessionToken); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('savedFormulas:update', async (_, id, f, sessionToken)   => { const r = await db.updateSavedFormula(id, f, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('savedFormulas:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteSavedFormula(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
+
+// ─── Logs de auditoria ───────────────────────────────────────────────────────
+
+ipcMain.handle('logs:list', (_, filters) => db.listLogs(filters));
 
 // ─── Configurações ───────────────────────────────────────────────────────────
 
@@ -119,7 +127,10 @@ ipcMain.handle('config:get', () => {
 ipcMain.handle('config:save', (_, newConfig: Partial<DbConfig>) => {
   dbConfig = { ...dbConfig, ...newConfig };
   fs.writeFileSync(configPath, JSON.stringify(dbConfig, null, 2));
-  initPool();
+initPool();
+pool.on('connection', (conn) => {
+  conn.query("SET time_zone = '-03:00'").catch(() => {});
+});
   return { success: true };
 });
 

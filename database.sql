@@ -133,6 +133,23 @@ CREATE INDEX idx_saved_formula_budget_items_saved_formula_id ON saved_formula_bu
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 CREATE INDEX idx_sessions_last_seen ON sessions(last_seen);
 
+CREATE TABLE IF NOT EXISTS action_logs (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NULL,
+  user_name  VARCHAR(255) NOT NULL DEFAULT '',
+  action     VARCHAR(50)  NOT NULL COMMENT 'login, logout, add, update, delete, update_status, update_delivery_status',
+  entity     VARCHAR(50)  NOT NULL COMMENT 'users, customers, insumos, formulas, saved_formulas, system',
+  entity_id  INT NULL,
+  details    TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_action_logs_created ON action_logs(created_at);
+CREATE INDEX idx_action_logs_user    ON action_logs(user_id);
+CREATE INDEX idx_action_logs_action  ON action_logs(action);
+CREATE INDEX idx_action_logs_entity  ON action_logs(entity);
+
 -- Seed admin user (matches migration 0001_create_admin_user.sql)
 -- ROTATE THIS PASSWORD after first deployment — see security note at top of file.
 INSERT IGNORE INTO users (name, username, password, role)

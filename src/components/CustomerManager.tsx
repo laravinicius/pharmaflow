@@ -71,7 +71,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
     try {
       const payload = { name: `${form.firstName} ${form.lastName}`.trim(), phone: formatted };
       if (editingId) {
-        const res: any = await db.customers.update(editingId, payload);
+        const res: any = await db.customers.update(editingId, payload, sessionToken ?? undefined);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
         removeDraft(DRAFT_KEY);
         reset(); reload();
@@ -89,7 +89,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
     if (pendingPayload === null) return;
     setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const res: any = await db.customers.add(pendingPayload);
+      const res: any = await db.customers.add(pendingPayload, sessionToken ?? undefined);
       if (res?.success === false) {
         setFormError(res.error ?? 'Erro ao salvar.');
         setPendingPayload(null);
@@ -130,7 +130,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
     const formatted = formatPhone(rowDraft.phone);
     setSaving(true); setFormError('');
     try {
-      const res: any = await db.customers.update(editingRow, { name: rowDraft.name, phone: formatted });
+      const res: any = await db.customers.update(editingRow, { name: rowDraft.name, phone: formatted }, sessionToken ?? undefined);
       if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
       setEditingRow(null); setRowDraft({ name: '', phone: '' });
       reload();
@@ -183,7 +183,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
       )}
         <div className={compact ? '' : 'md:col-span-1'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value.toUpperCase() })} />
+        <input required autoFocus={compact} className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value.toUpperCase() })} />
       </div>
       <div className={compact ? '' : 'md:col-span-1'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Sobrenome</label>

@@ -109,7 +109,14 @@ export class Db {
 
   async revokeSession(token: string): Promise<void> {
     if (!this.pool) return;
+    const rows = await this.q<any[]>(
+      'SELECT u.id, u.name FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ?',
+      [token]
+    );
     await this.q('DELETE FROM sessions WHERE token = ?', [token]);
+    if (rows.length > 0) {
+      await this.logAction({ id: rows[0].id, name: rows[0].name }, 'logout', 'system', rows[0].id, 'Sessão encerrada (logout).');
+    }
   }
 
   // Renova last_seen e informa se a sessão ainda existe (foi derrubada por outro login)
@@ -126,6 +133,76 @@ export class Db {
   async cleanupStaleSessions(): Promise<void> {
     await this.q('DELETE FROM sessions WHERE last_seen < NOW() - INTERVAL ? SECOND',
       [Db.SESSION_TTL_SECONDS]);
+  }
+
+  // ── Logs de auditoria ────────────────────────────────────────────────────────
+
+  // Resolve o usuário dono da sessão a partir do token (null + 'Configuração' p/ setup)
+  private async resolveActor(token?: string): Promise<{ id: number | null; name: string }> {
+    if (!token || !this.pool) return { id: null, name: 'Configuração' };
+    try {
+      const rows = await this.q<any[]>(
+        'SELECT u.id, u.name FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ?',
+        [token]
+      );
+      if (rows.length === 0) return { id: null, name: 'Configuração' };
+      return { id: rows[0].id, name: rows[0].name };
+    } catch {
+      return { id: null, name: 'Configuração' };
+    }
+  }
+
+  // Grava um log de auditoria — best-effort, nunca quebra a operação
+  async logAction(
+    actor: { id: number | null; name: string } | string | undefined,
+    action: string,
+    entity: string,
+    entityId?: number | null,
+    details?: string
+  ): Promise<void> {
+    try {
+      let userId: number | null = null;
+      let userName = '';
+      if (typeof actor === 'string') {
+        userName = actor;
+      } else if (actor) {
+        userId = actor.id ?? null;
+        userName = actor.name;
+      }
+      await this.q(
+        'INSERT INTO action_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?,?,?,?,?,?)',
+        [userId, userName, action, entity, entityId ?? null, details ?? '']
+      );
+    } catch { /* log de auditoria falho não pode quebrar a ação */ }
+  }
+
+  async listLogs(filters: {
+    userId?: number; action?: string; entity?: string;
+    from?: string; to?: string; search?: string;
+    page?: number; pageSize?: number;
+  } = {}): Promise<{ rows: any[]; total: number }> {
+    const where: string[] = [];
+    const params: any[] = [];
+    if (filters.userId) { where.push('user_id = ?'); params.push(filters.userId); }
+    if (filters.action) { where.push('action = ?'); params.push(filters.action); }
+    if (filters.entity) { where.push('entity = ?'); params.push(filters.entity); }
+    if (filters.from) { where.push('DATE(created_at) >= ?'); params.push(filters.from); }
+    if (filters.to) { where.push('DATE(created_at) <= ?'); params.push(filters.to); }
+    if (filters.search && filters.search.trim() !== '') {
+      where.push("CONCAT(COALESCE(user_name,''), ' ', COALESCE(details,'')) LIKE ?");
+      params.push(`%${filters.search.trim()}%`);
+    }
+    const whereSql = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
+    const page = Math.max(1, filters.page ?? 1);
+    const pageSize = Math.min(200, Math.max(1, filters.pageSize ?? 50));
+    const offset = (page - 1) * pageSize;
+    const countRows: any = await this.q('SELECT COUNT(*) AS c FROM action_logs ' + whereSql, params);
+    const total = Number(countRows[0]?.c ?? 0);
+    const rows = await this.q(
+      'SELECT * FROM action_logs ' + whereSql + ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+      [...params, pageSize, offset]
+    );
+    return { rows, total };
   }
 
   // ── Admin Verification ──────────────────────────────────────────────────────────
@@ -204,6 +281,7 @@ export class Db {
       await conn.commit();
       conn.release();
       conn = null;
+      await this.logAction({ id: user.id, name: user.name }, 'login', 'system', user.id, `Login de ${user.name} (${user.username}).`);
       return { success: true, user, sessionToken: token };
     } catch (e) {
       if (conn) { await conn.rollback(); conn.release(); }
@@ -217,19 +295,21 @@ export class Db {
     return this.q('SELECT id, name, username, role FROM users ORDER BY name');
   }
 
-  async addUser(user: { name: string; username: string; password: string; role: string }) {
+  async addUser(user: { name: string; username: string; password: string; role: string }, sessionToken?: string) {
     try {
       const dup = await this.q<any[]>('SELECT id FROM users WHERE username = ?', [user.username]);
       if (dup.length > 0) return { success: false, error: 'Usuário já existe.' };
       const r: any = await this.q('INSERT INTO users (name, username, password, role) VALUES (?,?,?,?)',
         [user.name, user.username, hash(user.password), user.role]);
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'add', 'users', r.insertId, `Usuário criado: ${user.name} (${user.username}).`);
       return { success: true, id: r.insertId };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
     }
   }
 
-  async updateUser(id: number, user: { name: string; username: string; password?: string; role: string }) {
+  async updateUser(id: number, user: { name: string; username: string; password?: string; role: string }, sessionToken?: string) {
     try {
       if (user.password && user.password.trim() !== '') {
         await this.q('UPDATE users SET name=?, username=?, password=?, role=? WHERE id=?',
@@ -238,6 +318,8 @@ export class Db {
         await this.q('UPDATE users SET name=?, username=?, role=? WHERE id=?',
           [user.name, user.username, user.role, id]);
       }
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'update', 'users', id, `Usuário atualizado: ${user.name} (${user.username}).`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -249,7 +331,12 @@ export class Db {
       const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
+      const target = await this.q<any[]>('SELECT name FROM users WHERE id = ?', [id]);
       await this.q('DELETE FROM users WHERE id = ?', [id]);
+      const actor = adminCheck.user
+        ? { id: adminCheck.user.id, name: adminCheck.user.name }
+        : (adminCreds?.username ?? 'Configuração');
+      await this.logAction(actor, 'delete', 'users', id, `Usuário excluído: ${target[0]?.name ?? id}.`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -276,18 +363,22 @@ export class Db {
     return this.q('SELECT id, name, phone, created_at FROM customers ORDER BY name');
   }
 
-  async addCustomer(c: { name: string; phone: string }) {
+  async addCustomer(c: { name: string; phone: string }, sessionToken?: string) {
     try {
       const r: any = await this.q('INSERT INTO customers (name, phone) VALUES (?,?)', [c.name, c.phone]);
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'add', 'customers', r.insertId, `Cliente adicionado: ${c.name} (tel: ${c.phone}).`);
       return { success: true, id: r.insertId };
     } catch (e) {
       return { success: false, error: 'Celular já cadastrado no servidor.' };
     }
   }
 
-  async updateCustomer(id: number, c: { name: string; phone: string }) {
+  async updateCustomer(id: number, c: { name: string; phone: string }, sessionToken?: string) {
     try {
       await this.q('UPDATE customers SET name=?, phone=? WHERE id=?', [c.name, c.phone, id]);
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'update', 'customers', id, `Cliente atualizado: ${c.name} (tel: ${c.phone}).`);
       return { success: true };
     } catch (e) {
       return { success: false, error: 'Celular já cadastrado no servidor.' };
@@ -299,7 +390,12 @@ export class Db {
       const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
+      const target = await this.q<any[]>('SELECT name, phone FROM customers WHERE id = ?', [id]);
       await this.q('DELETE FROM customers WHERE id = ?', [id]);
+      const actor = adminCheck.user
+        ? { id: adminCheck.user.id, name: adminCheck.user.name }
+        : (adminCreds?.username ?? 'Configuração');
+      await this.logAction(actor, 'delete', 'customers', id, `Cliente excluído: ${target[0]?.name ?? id} (tel: ${target[0]?.phone ?? ''}).`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -312,18 +408,22 @@ export class Db {
     return this.q('SELECT id, name, created_at FROM insumos ORDER BY name');
   }
 
-  async addInsumo(name: string) {
+  async addInsumo(name: string, sessionToken?: string) {
     try {
       const r: any = await this.q('INSERT INTO insumos (name) VALUES (?)', [name]);
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'add', 'insumos', r.insertId, `Insumo adicionado: ${name}.`);
       return { success: true, id: r.insertId };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
     }
   }
 
-  async updateInsumo(id: number, name: string) {
+  async updateInsumo(id: number, name: string, sessionToken?: string) {
     try {
       await this.q('UPDATE insumos SET name=? WHERE id=?', [name, id]);
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'update', 'insumos', id, `Insumo atualizado: ${name}.`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -340,7 +440,12 @@ export class Db {
       if (inUse.length > 0 || inSaved.length > 0) {
         return { success: false, error: 'Insumo em uso por fórmulas cadastradas. Não é possível excluir.' };
       }
+      const target = await this.q<any[]>('SELECT name FROM insumos WHERE id = ?', [id]);
       await this.q('DELETE FROM insumos WHERE id=?', [id]);
+      const actor = adminCheck.user
+        ? { id: adminCheck.user.id, name: adminCheck.user.name }
+        : (adminCreds?.username ?? 'Configuração');
+      await this.logAction(actor, 'delete', 'insumos', id, `Insumo excluído: ${target[0]?.name ?? id}.`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -411,7 +516,7 @@ export class Db {
     delivery_status?: string;
     cancel_reason?: string | null;
     status?: string;
-  }) {
+  }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
     const conn = await this.pool.getConnection();
     try {
@@ -436,6 +541,8 @@ const [r]: any = await conn.query(
           [r.insertId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
       }
       await conn.commit();
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'add', 'formulas', r.insertId, `Fórmula criada (id ${r.insertId}).`);
       return { success: true, id: r.insertId };
     } catch (e) {
       await conn.rollback();
@@ -457,7 +564,7 @@ const [r]: any = await conn.query(
     delivery_status?: string;
     cancel_reason?: string | null;
     status?: string;
-  }) {
+  }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
     const conn = await this.pool.getConnection();
     try {
@@ -482,6 +589,8 @@ const [r]: any = await conn.query(
           [id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
       }
       await conn.commit();
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'update', 'formulas', id, `Fórmula atualizada (id ${id}).`);
       return { success: true };
     } catch (e) {
       await conn.rollback();
@@ -491,20 +600,24 @@ const [r]: any = await conn.query(
     }
   }
 
-  async updateFormulaStatus(id: number, status: string) {
+  async updateFormulaStatus(id: number, status: string, sessionToken?: string) {
     if (status === 'confirmed') {
       await this.q('UPDATE formulas SET status=?, delivery_status=? WHERE id=?', [status, 'em_producao', id]);
     } else {
       await this.q('UPDATE formulas SET status=? WHERE id=?', [status, id]);
     }
+    const actor = await this.resolveActor(sessionToken);
+    await this.logAction(actor, 'update_status', 'formulas', id, `Status da fórmula ${id} alterado para ${status}.`);
     return { success: true };
   }
 
-  async updateFormulaDeliveryStatus(id: number, deliveryStatus: string) {
+  async updateFormulaDeliveryStatus(id: number, deliveryStatus: string, sessionToken?: string) {
     await this.q(
       `UPDATE formulas SET delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' ELSE status END WHERE id=?`,
       [deliveryStatus, deliveryStatus, id]
     );
+    const actor = await this.resolveActor(sessionToken);
+    await this.logAction(actor, 'update_delivery_status', 'formulas', id, `Andamento da fórmula ${id} alterado para ${deliveryStatus}.`);
     return { success: true };
   }
 
@@ -514,6 +627,10 @@ const [r]: any = await conn.query(
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
       await this.q('DELETE FROM formulas WHERE id=?', [id]);
+      const actor = adminCheck.user
+        ? { id: adminCheck.user.id, name: adminCheck.user.name }
+        : (adminCreds?.username ?? 'Configuração');
+      await this.logAction(actor, 'delete', 'formulas', id, `Fórmula excluída (id ${id}).`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -573,7 +690,7 @@ const [r]: any = await conn.query(
     budget_number?: string;
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_items: Array<{ quantity: number; unit: string; value: number }>;
-  }) {
+  }, sessionToken?: string) {
     try {
       const r: any = await this.q('INSERT INTO saved_formulas (name, budget_number) VALUES (?,?)', [formula.name, formula.budget_number ?? null]);
       for (const item of formula.items) {
@@ -584,6 +701,8 @@ const [r]: any = await conn.query(
         await this.q('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
           [r.insertId, b.quantity, b.unit, b.value]);
       }
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'add', 'saved_formulas', r.insertId, `Fórmula salva adicionada: ${formula.name}.`);
       return { success: true, id: r.insertId };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -595,7 +714,7 @@ const [r]: any = await conn.query(
     budget_number?: string;
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_items: Array<{ quantity: number; unit: string; value: number }>;
-  }) {
+  }, sessionToken?: string) {
     try {
       await this.q('UPDATE saved_formulas SET name=?, budget_number=? WHERE id=?', [formula.name, formula.budget_number ?? null, id]);
       await this.q('DELETE FROM saved_formula_items WHERE saved_formula_id=?', [id]);
@@ -608,6 +727,8 @@ const [r]: any = await conn.query(
         await this.q('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
           [id, b.quantity, b.unit, b.value]);
       }
+      const actor = await this.resolveActor(sessionToken);
+      await this.logAction(actor, 'update', 'saved_formulas', id, `Fórmula salva atualizada: ${formula.name}.`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };
@@ -619,7 +740,12 @@ const [r]: any = await conn.query(
       const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
+      const target = await this.q<any[]>('SELECT name FROM saved_formulas WHERE id = ?', [id]);
       await this.q('DELETE FROM saved_formulas WHERE id=?', [id]);
+      const actor = adminCheck.user
+        ? { id: adminCheck.user.id, name: adminCheck.user.name }
+        : (adminCreds?.username ?? 'Configuração');
+      await this.logAction(actor, 'delete', 'saved_formulas', id, `Fórmula salva excluída: ${target[0]?.name ?? id}.`);
       return { success: true };
     } catch (e) {
       return { success: false, error: friendlyError(e) };

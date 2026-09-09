@@ -7,14 +7,17 @@ import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
 import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput } from '../utils/format';
 import { useData } from '../hooks/useData';
+import { useAuth } from '../context/AuthContext';
 import { useFormDraft } from '../context/FormDraftContext';
 import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
+import { UnitCycle, INGREDIENT_UNITS, BUDGET_UNITS } from './UnitCycle';
 
 export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; onComplete: (dest: 'pending' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
   const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
   const { data: savedFormulas } = useData(() => db.savedFormulas.list());
+  const { sessionToken } = useAuth();
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [items, setItems] = useState<FormulaItem[]>([]);
   const [customerQuery, setCustomerQuery] = useState('');
@@ -48,6 +51,15 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [savedFormulaFocusIdx, setSavedFormulaFocusIdx] = useState(-1);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const insumoQueryRef = useRef<HTMLInputElement>(null);
+  const quantityRef = useRef<HTMLInputElement>(null);
+  const bQtyRef = useRef<HTMLInputElement>(null);
+  const budgetNumberRef = useRef<HTMLInputElement>(null);
+  const customerQueryRef = useRef<HTMLInputElement>(null);
+  const savedFormulaQueryRef = useRef<HTMLInputElement>(null);
+  const customerListRef = useRef<HTMLDivElement>(null);
+  const insumoListRef = useRef<HTMLDivElement>(null);
+  const savedFormulaListRef = useRef<HTMLDivElement>(null);
   const pendingCustomerName = useRef('');
   const pendingInsumoName = useRef('');
   const { getDraft, saveDraft, removeDraft } = useFormDraft();
@@ -178,6 +190,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setInsumoQuery('');
     setQuantity('');
     setItemError('');
+    requestAnimationFrame(() => insumoQueryRef.current?.focus());
   };
 
   const allSavedFormulas = (savedFormulas as SavedFormula[]) ?? [];
@@ -216,6 +229,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setBQty('');
     setBValue('');
     setBudgetError('');
+    requestAnimationFrame(() => bQtyRef.current?.focus());
   };
 
   const removeBudgetItem = (idx: number) => {
@@ -252,8 +266,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     if (!canSave) return;
     setSaving(true);
     try {
-      if (formula) await db.formulas.update(formula.id, buildPayload('pending'));
-      else { await db.formulas.add(buildPayload('pending')); removeDraft(DRAFT_KEY); }
+      if (formula) await db.formulas.update(formula.id, buildPayload('pending'), sessionToken ?? undefined);
+      else { await db.formulas.add(buildPayload('pending'), sessionToken ?? undefined); removeDraft(DRAFT_KEY); }
       onComplete('pending');
     } catch (err: any) {
       alert('Erro ao salvar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
@@ -264,8 +278,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     if (!canConfirm) return;
     setSaving(true);
     try {
-      if (formula) await db.formulas.update(formula.id, buildPayload('confirmed', true));
-      else { await db.formulas.add(buildPayload('confirmed', true)); removeDraft(DRAFT_KEY); }
+      if (formula) await db.formulas.update(formula.id, buildPayload('confirmed', true), sessionToken ?? undefined);
+      else { await db.formulas.add(buildPayload('confirmed', true), sessionToken ?? undefined); removeDraft(DRAFT_KEY); }
       onComplete('confirmed');
     } catch (err: any) {
       alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
@@ -278,7 +292,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     try {
       await db.formulas.update(formula.id, buildPayload(
         deliveryStatus === 'entregue' ? 'delivered' : 'confirmed'
-      ));
+      ), sessionToken ?? undefined);
       onComplete('confirmed');
     } catch (err: any) {
       alert('Erro ao salvar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
@@ -294,7 +308,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         cancel_reason: cancelReason.trim(),
         payment_status: paymentStatus || undefined,
         payment_method: paymentMethod || null,
-      });
+      }, sessionToken ?? undefined);
       onComplete('confirmed');
     } catch (err: any) {
       alert('Erro ao cancelar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
@@ -330,8 +344,17 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         })
     : [];
 
+  const focusListOption = (listRef: React.RefObject<HTMLDivElement | null>, idx: number) => {
+    listRef.current?.querySelector<HTMLButtonElement>(`[data-idx="${idx}"]`)?.focus();
+  };
+  const moveListFocus = (listRef: React.RefObject<HTMLDivElement | null>, setIdx: React.Dispatch<React.SetStateAction<number>>, idx: number, dir: 1 | -1, length: number) => {
+    const ni = dir === 1 ? (idx < length - 1 ? idx + 1 : 0) : (idx > 0 ? idx - 1 : length - 1);
+    setIdx(ni);
+    focusListOption(listRef, ni);
+  };
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-4xl mx-auto space-y-6">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="w-full space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">
@@ -390,7 +413,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
         {showAddCustomer && (
           <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
-            <CustomerManager compact initialName={pendingCustomerName.current} onCreated={async (c: Customer) => { await reloadCustomers(); setSelectedCustomerId(c.id); setShowAddCustomer(false); setCustomerQuery(''); }} />
+            <CustomerManager compact initialName={pendingCustomerName.current} onCreated={async (c: Customer) => { await reloadCustomers(); setSelectedCustomerId(c.id); setShowAddCustomer(false); setCustomerQuery(''); requestAnimationFrame(() => insumoQueryRef.current?.focus()); }} />
           </div>
         )}
 
@@ -419,19 +442,26 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               value={customerQuery}
               disabled={locked}
-              onChange={e => { setCustomerQuery(e.target.value); setCustomerFocusIdx(-1); }}
+              ref={customerQueryRef}
+              onChange={e => { setCustomerQuery(e.target.value.toUpperCase()); setCustomerFocusIdx(-1); }}
               onKeyDown={e => {
-                if (!filteredCustomers.length) return;
-                if (e.key === 'ArrowDown') {
+                if (e.key === 'ArrowDown' && filteredCustomers.length) {
                   e.preventDefault();
                   setCustomerFocusIdx(prev => (prev < filteredCustomers.length - 1 ? prev + 1 : 0));
-                } else if (e.key === 'ArrowUp') {
+                } else if (e.key === 'ArrowUp' && filteredCustomers.length) {
                   e.preventDefault();
                   setCustomerFocusIdx(prev => (prev > 0 ? prev - 1 : filteredCustomers.length - 1));
                 } else if (e.key === 'Enter') {
-                  e.preventDefault();
-                  const target = customerFocusIdx >= 0 ? filteredCustomers[customerFocusIdx] : filteredCustomers[0];
-                  if (target) { setSelectedCustomerId(target.id); setCustomerQuery(''); setCustomerFocusIdx(-1); }
+                  if (filteredCustomers.length) {
+                    e.preventDefault();
+                    const targetIdx = customerFocusIdx >= 0 && customerFocusIdx < filteredCustomers.length ? customerFocusIdx : 0;
+                    setCustomerFocusIdx(targetIdx);
+                    focusListOption(customerListRef, targetIdx);
+                  } else if (customerQuery.trim()) {
+                    e.preventDefault();
+                    pendingCustomerName.current = customerQuery.trim();
+                    setShowAddCustomer(true); setCustomerQuery(''); setCustomerFocusIdx(-1);
+                  }
                 } else if (e.key === 'Escape') {
                   setCustomerQuery(''); setCustomerFocusIdx(-1);
                 }
@@ -444,9 +474,27 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               </button>
             )}
             {filteredCustomers.length > 0 && (
-              <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+              <div ref={customerListRef} className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
                 {filteredCustomers.map((c, idx) => (
-                  <button key={c.id} type="button" onClick={() => { setSelectedCustomerId(c.id); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
+                  <button key={c.id} type="button" data-idx={idx}
+                    onClick={() => { setSelectedCustomerId(c.id); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        moveListFocus(customerListRef, setCustomerFocusIdx, idx, 1, filteredCustomers.length);
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        moveListFocus(customerListRef, setCustomerFocusIdx, idx, -1, filteredCustomers.length);
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setSelectedCustomerId(c.id); setCustomerQuery(''); setCustomerFocusIdx(-1);
+                        requestAnimationFrame(() => insumoQueryRef.current?.focus());
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setCustomerQuery(''); setCustomerFocusIdx(-1);
+                        customerQueryRef.current?.focus();
+                      }
+                    }}
                     className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === customerFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                     <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                     <span className="text-sm truncate flex-1">{c.name}</span>
@@ -501,7 +549,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="relative mb-4">
             {showAddInsumo && (
               <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
-                <InsumoManager compact initialName={pendingInsumoName.current} onCreated={async (m: Insumo) => { await reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); }} />
+                <InsumoManager compact initialName={pendingInsumoName.current} onCreated={async (m: Insumo) => { await reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); requestAnimationFrame(() => quantityRef.current?.focus()); }} />
               </div>
             )}
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
@@ -509,19 +557,26 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               value={insumoQuery}
               disabled={locked}
-              onChange={e => { setInsumoQuery(e.target.value); setInsumoFocusIdx(-1); }}
+              ref={insumoQueryRef}
+              onChange={e => { setInsumoQuery(e.target.value.toUpperCase()); setInsumoFocusIdx(-1); }}
               onKeyDown={e => {
-                if (!filteredInsumos.length) return;
-                if (e.key === 'ArrowDown') {
+                if (e.key === 'ArrowDown' && filteredInsumos.length) {
                   e.preventDefault();
                   setInsumoFocusIdx(prev => (prev < filteredInsumos.length - 1 ? prev + 1 : 0));
-                } else if (e.key === 'ArrowUp') {
+                } else if (e.key === 'ArrowUp' && filteredInsumos.length) {
                   e.preventDefault();
                   setInsumoFocusIdx(prev => (prev > 0 ? prev - 1 : filteredInsumos.length - 1));
                 } else if (e.key === 'Enter') {
-                  e.preventDefault();
-                  const target = insumoFocusIdx >= 0 ? filteredInsumos[insumoFocusIdx] : filteredInsumos[0];
-                  if (target) { setSelectedInsumoId(target.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }
+                  if (filteredInsumos.length) {
+                    e.preventDefault();
+                    const targetIdx = insumoFocusIdx >= 0 && insumoFocusIdx < filteredInsumos.length ? insumoFocusIdx : 0;
+                    setInsumoFocusIdx(targetIdx);
+                    focusListOption(insumoListRef, targetIdx);
+                  } else if (insumoQuery.trim()) {
+                    e.preventDefault();
+                    pendingInsumoName.current = insumoQuery.trim();
+                    setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1);
+                  }
                 } else if (e.key === 'Escape') {
                   setInsumoQuery(''); setInsumoFocusIdx(-1);
                 }
@@ -534,9 +589,27 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               </button>
             )}
             {filteredInsumos.length > 0 && (
-              <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+              <div ref={insumoListRef} className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
                 {filteredInsumos.map((m, idx) => (
-                  <button key={m.id} type="button" onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                  <button key={m.id} type="button" data-idx={idx}
+                    onClick={() => { setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        moveListFocus(insumoListRef, setInsumoFocusIdx, idx, 1, filteredInsumos.length);
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        moveListFocus(insumoListRef, setInsumoFocusIdx, idx, -1, filteredInsumos.length);
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setSelectedInsumoId(m.id); setInsumoQuery(''); setInsumoFocusIdx(-1);
+                        requestAnimationFrame(() => quantityRef.current?.focus());
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setInsumoQuery(''); setInsumoFocusIdx(-1);
+                        insumoQueryRef.current?.focus();
+                      }
+                    }}
                     className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === insumoFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                     <ClipboardList className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                     <span className="text-sm truncate flex-1">{m.name}</span>
@@ -569,30 +642,18 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="sm:w-32">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
             <input
+              ref={quantityRef}
               inputMode="numeric"
               maxLength={8}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
               value={quantity}
               disabled={locked}
               onChange={e => setQuantity(formatQuantityInput(e.target.value))}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && selectedInsumoId && quantity) {
-                  e.preventDefault();
-                  addIngredient();
-                }
-              }}
             />
           </div>
           <div className="sm:w-36">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
-            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              value={unit} disabled={locked} onChange={e => setUnit(e.target.value)}>
-              <option value="g">g</option>
-              <option value="mcg">mcg</option>
-              <option value="mg">mg</option>
-              <option value="ml">ml</option>
-              <option value="ui">ui</option>
-            </select>
+            <UnitCycle value={unit} onChange={setUnit} options={INGREDIENT_UNITS} disabled={locked} />
           </div>
           <div className="flex-1 space-y-1">
             {itemError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{itemError}</p>}
@@ -667,19 +728,20 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <input
                 className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
                 value={savedFormulaQuery}
+                ref={savedFormulaQueryRef}
                 onChange={e => { setSavedFormulaQuery(e.target.value); setSavedFormulaFocusIdx(-1); }}
                 onKeyDown={e => {
-                  if (!filteredSavedFormulas.length) return;
-                  if (e.key === 'ArrowDown') {
+                  if (e.key === 'ArrowDown' && filteredSavedFormulas.length) {
                     e.preventDefault();
                     setSavedFormulaFocusIdx(prev => (prev < filteredSavedFormulas.length - 1 ? prev + 1 : 0));
-                  } else if (e.key === 'ArrowUp') {
+                  } else if (e.key === 'ArrowUp' && filteredSavedFormulas.length) {
                     e.preventDefault();
                     setSavedFormulaFocusIdx(prev => (prev > 0 ? prev - 1 : filteredSavedFormulas.length - 1));
-                  } else if (e.key === 'Enter') {
+                  } else if (e.key === 'Enter' && filteredSavedFormulas.length) {
                     e.preventDefault();
-                    const target = savedFormulaFocusIdx >= 0 ? filteredSavedFormulas[savedFormulaFocusIdx] : filteredSavedFormulas[0];
-                    if (target) { applySavedFormula(target); setSavedFormulaFocusIdx(-1); }
+                    const targetIdx = savedFormulaFocusIdx >= 0 && savedFormulaFocusIdx < filteredSavedFormulas.length ? savedFormulaFocusIdx : 0;
+                    setSavedFormulaFocusIdx(targetIdx);
+                    focusListOption(savedFormulaListRef, targetIdx);
                   } else if (e.key === 'Escape') {
                     setSavedFormulaQuery(''); setSavedFormulaFocusIdx(-1);
                   }
@@ -692,9 +754,27 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 </button>
               )}
               {filteredSavedFormulas.length > 0 && (
-                <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+                <div ref={savedFormulaListRef} className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
                   {filteredSavedFormulas.map((f, idx) => (
-                    <button key={f.id} type="button" onClick={() => { applySavedFormula(f); setSavedFormulaFocusIdx(-1); }}
+                    <button key={f.id} type="button" data-idx={idx}
+                      onClick={() => { applySavedFormula(f); setSavedFormulaFocusIdx(-1); }}
+                      onKeyDown={e => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          moveListFocus(savedFormulaListRef, setSavedFormulaFocusIdx, idx, 1, filteredSavedFormulas.length);
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          moveListFocus(savedFormulaListRef, setSavedFormulaFocusIdx, idx, -1, filteredSavedFormulas.length);
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          applySavedFormula(f); setSavedFormulaFocusIdx(-1);
+                          requestAnimationFrame(() => budgetNumberRef.current?.focus());
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setSavedFormulaQuery(''); setSavedFormulaFocusIdx(-1);
+                          savedFormulaQueryRef.current?.focus();
+                        }
+                      }}
                       className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === savedFormulaFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                       <Bookmark className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                       <div className="flex items-center gap-2 w-full min-w-0">
@@ -725,6 +805,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="w-36">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Número de orçamento</label>
             <input
+              ref={budgetNumberRef}
               inputMode="numeric"
               maxLength={6}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
@@ -739,6 +820,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <div className="sm:w-28">
                 <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
                 <input
+                  ref={bQtyRef}
                   inputMode="numeric"
                   maxLength={3}
                   className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
@@ -747,15 +829,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   onChange={e => { setBudgetError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 3)); }}
                 />
               </div>
-              <div className="sm:w-24">
+              <div className="sm:w-36">
                 <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
-                <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  value={bUnit} disabled={locked} onChange={e => setBUnit(e.target.value)}>
-                  <option value="dose">dose</option>
-                  <option value="caps">caps</option>
-                  <option value="g">g</option>
-                  <option value="ml">ml</option>
-                </select>
+                <UnitCycle value={bUnit} onChange={setBUnit} options={BUDGET_UNITS} disabled={locked} />
               </div>
               <div className="flex-1">
                 <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
@@ -879,15 +955,15 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-red-700 transition-colors rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed" title="Abrir calendário">
                 <Calendar className="w-4 h-4" />
               </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                className="absolute inset-0 w-full opacity-0 pointer-events-none"
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={e => setDeliveryDate(e.target.value ? formatDateToBR(e.target.value) : '')}
+              />
             </div>
-            <input
-              ref={dateInputRef}
-              type="date"
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={e => setDeliveryDate(e.target.value ? formatDateToBR(e.target.value) : '')}
-            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
@@ -982,8 +1058,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       )}
 
       {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { if (!saving) setShowCancelModal(false); }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { if (!saving) setShowCancelModal(false); }}
+          onKeyDown={e => { if (e.key === 'Escape' && !saving) setShowCancelModal(false); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                 <X className="w-5 h-5 text-red-600" />
@@ -995,6 +1072,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             </div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Justificativa (obrigatória)</label>
             <textarea
+              autoFocus
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm min-h-[90px] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
               value={cancelReason} disabled={saving}
               onChange={e => setCancelReason(e.target.value)} />

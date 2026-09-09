@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Settings, Wifi, WifiOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AdminUserManager } from './AdminUserManager';
+import { AuditLogs } from './AuditLogs';
 
 export function SettingsManager() {
   const [config, setConfig] = useState({ host: '', port: 3306, user: '', password: '', database: 'pharmaflow' });
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'db' | 'admin'>('db');
+  const [tab, setTab] = useState<'db' | 'admin' | 'logs'>('db');
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -45,7 +46,7 @@ export function SettingsManager() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-6">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl mx-auto space-y-6">
       {/* Abas */}
       <div className="flex items-center gap-4 border-b border-zinc-200">
         <button onClick={() => setTab('db')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'db' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
@@ -56,7 +57,13 @@ export function SettingsManager() {
           Administrador
           {tab === 'admin' && <motion.div layoutId="activeSetup" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
         </button>
+        <button onClick={() => setTab('logs')} className={`pb-4 px-2 text-sm font-medium transition-colors relative ${tab === 'logs' ? 'text-red-700' : 'text-zinc-500 hover:text-zinc-900'}`}>
+          Logs
+          {tab === 'logs' && <motion.div layoutId="activeSetup" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-700" />}
+        </button>
       </div>
+
+      {tab === 'logs' && <AuditLogs />}
 
       {tab === 'admin' && <AdminUserManager />}
 
