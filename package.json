@@ -13,7 +13,7 @@
     "dev:web-server": "tsx web-server/index.ts",
     "dev:web": "vite --config vite.web.config.ts --port 3002 --strictPort",
     "dev:web:all": "concurrently -k -n electron,server,web -c blue,green,magenta \"npm:dev\" \"npm:dev:web-server\" \"npm:dev:web\"",
-    "clean": "node -e \"const fs=require('fs'); for (const dir of ['dist','dist-electron','release']) fs.rmSync(dir, { recursive: true, force: true });\"",
+    "clean": "node -e \"const fs=require('fs'); for (const dir of ['dist','dist-electron','release','../pharmaflow-release']) fs.rmSync(dir, { recursive: true, force: true });\"",
     "lint": "tsc --noEmit"
   },
   "build": {
@@ -21,7 +21,7 @@
     "productName": "PIX Farma",
     "electronDist": "node_modules/electron/dist",
     "directories": {
-      "output": "release/${version}"
+      "output": "../pharmaflow-release/${version}"
     },
     "files": [
       "dist",

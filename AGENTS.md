@@ -32,7 +32,7 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 | `npm run dev` | Vite on port 3000 bound to `0.0.0.0` (for Electron) |
 | `npm run build` | `vite build --configLoader native && electron-builder` (Windows: `dir` package, no NSIS) |
 | `npm run lint` | `tsc --noEmit` (only verification; no test framework) |
-| `npm run clean` | Removes `dist/`, `dist-electron/`, `release/` |
+| `npm run clean` | Removes `dist/`, `dist-electron/`, `release/`, `../pharmaflow-release/` |
 
 ---
 
@@ -48,7 +48,7 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 ## Conventions
 
 - UI strings and new comments: **Brazilian Portuguese**.
-- Never commit: `dist/`, `dist-electron/`, `release/`, `att.txt`, `db.txt`.
+- Never commit: `dist/`, `dist-electron/`, `release/`, `../pharmaflow-release/`, `att.txt`, `db.txt`.
 
 ---
 
