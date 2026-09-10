@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ClipboardList, PlusCircle, Clock, CheckCircle2, Users, Cross } from 'lucide-react';
+import { GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Formula } from '../types';
@@ -51,7 +52,7 @@ function QuickActionButton({ icon, label, onClick, color }: { icon: React.ReactN
   return (
     <button
       onClick={onClick}
-      style={isPfOrange ? { background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' } : undefined}
+      style={isPfOrange ? { background: GRADIENTS.primary } : undefined}
       className={`flex flex-col items-center justify-center gap-3 p-6 rounded-xl text-white transition-transform hover:scale-[1.02] active:scale-[0.98] hover:opacity-90 ${isPfOrange ? '' : color}`}>
       {icon}<span className="font-medium">{label}</span>
     </button>

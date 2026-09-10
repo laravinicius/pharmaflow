@@ -10,6 +10,7 @@ import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
 import { ConfirmModal } from './ConfirmModal';
+import { GRADIENTS } from '../../config/branding';
 import { useAuth } from '../context/AuthContext';
 
 export function InsumoManager({ compact = false, onCreated, initialName }: { compact?: boolean; onCreated?: (m: Insumo) => void; initialName?: string } = {}) {
@@ -132,7 +133,7 @@ export function InsumoManager({ compact = false, onCreated, initialName }: { com
         <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} />
         {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
       </div>
-      <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
+      <button type="submit" disabled={saving} style={{ background: GRADIENTS.primary }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
         {saving ? '...' : 'Adicionar'}
       </button>
     </form>
@@ -152,7 +153,7 @@ export function InsumoManager({ compact = false, onCreated, initialName }: { com
             <input required autoFocus className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={name} onChange={e => { setFormError(''); setName(e.target.value.toUpperCase()); }} />
             {formError && <p className="text-xs text-red-600 mt-1">{formError}</p>}
           </div>
-          <button type="button" onClick={() => handleSubmit()} disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
+          <button type="button" onClick={() => handleSubmit()} disabled={saving} style={{ background: GRADIENTS.primary }} className="text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-60 transition-all whitespace-nowrap">
             {saving ? '...' : 'Adicionar'}
           </button>
         </div>

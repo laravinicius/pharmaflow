@@ -10,6 +10,7 @@ import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
 import { InsumoManager } from './InsumoManager';
+import { COLORS, GRADIENTS } from '../../config/branding';
 import { UnitCycle, INGREDIENT_UNITS, BUDGET_UNITS } from './UnitCycle';
 import { useAuth } from '../context/AuthContext';
 
@@ -254,7 +255,7 @@ export function SavedFormulaManager() {
           </div>
           <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
             className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+            style={{ background: GRADIENTS.secondary }}>
             + Adicionar
           </button>
         </div>
@@ -263,7 +264,7 @@ export function SavedFormulaManager() {
           <div className="mt-3 space-y-2">
             {budgetItems.map((bi, idx) => (
               <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-zinc-100"
-                style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
+                style={{ background: idx % 2 === 0 ? COLORS.rowAlt : '#fff' }}>
                 <p className="text-sm text-zinc-700 flex-1 min-w-0">
                   <strong>{formatQuantity(bi.quantity)}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </p>
@@ -392,7 +393,7 @@ export function SavedFormulaManager() {
             </div>
             <button type="button" disabled={!quantity} onClick={addItem}
               className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+              style={{ background: GRADIENTS.secondary }}>
               + Adicionar
             </button>
           </div>
@@ -404,7 +405,7 @@ export function SavedFormulaManager() {
           <div className="space-y-2">
             {items.map((item, idx) => (
               <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-zinc-100"
-                style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
+                style={{ background: idx % 2 === 0 ? COLORS.rowAlt : '#fff' }}>
                 <div className="min-w-0">
                   <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
                   <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
@@ -421,7 +422,7 @@ export function SavedFormulaManager() {
 
       {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}
+        <button type="submit" disabled={saving} style={{ background: GRADIENTS.primary }}
           className="flex-1 text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
           {saving ? '...' : editingId ? 'Atualizar' : 'Adicionar'}
         </button>

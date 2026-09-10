@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Settings, Wifi, WifiOff } from 'lucide-react';
+import { GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
 import { AdminUserManager } from './AdminUserManager';
 import { AuditLogs } from './AuditLogs';
@@ -110,7 +111,7 @@ export function SettingsManager() {
             <button type="button" onClick={handleTest} disabled={testing} className="flex-1 border border-zinc-300 text-zinc-700 font-semibold py-2 rounded-lg hover:bg-zinc-50 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
               <Wifi className="w-4 h-4" /> {testing ? 'Testando...' : 'Testar Conexão'}
             </button>
-            <button type="submit" disabled={saving} style={{ background: "linear-gradient(135deg, #C5243E, #9B1A2E)" }} className="flex-1 text-white hover:opacity-90 font-semibold py-2 rounded-lg disabled:opacity-60 transition-colors">
+            <button type="submit" disabled={saving} style={{ background: GRADIENTS.primary }} className="flex-1 text-white hover:opacity-90 font-semibold py-2 rounded-lg disabled:opacity-60 transition-colors">
               {saving ? 'Salvando...' : 'Salvar'}
             </button>
           </div>

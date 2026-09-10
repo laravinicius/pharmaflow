@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
+import { GRADIENTS } from '../../config/branding';
 
 interface AdminAuthModalProps {
   isOpen: boolean;
@@ -99,7 +100,7 @@ export function AdminAuthModal({ isOpen, onClose, onConfirm, title = 'Confirmaç
               type="submit"
               disabled={loading}
               className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}
+              style={{ background: GRADIENTS.primary }}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Confirmar exclusão'}
             </button>

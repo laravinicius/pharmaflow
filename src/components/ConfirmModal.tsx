@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { GRADIENTS } from '../../config/branding';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -49,7 +50,7 @@ export function ConfirmModal({ isOpen, title, message, confirmLabel = 'Confirmar
             type="button"
             onClick={onConfirm}
             className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
-            style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}
+            style={{ background: GRADIENTS.primary }}
           >
             {confirmLabel}
           </button>

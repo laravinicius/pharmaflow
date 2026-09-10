@@ -7,7 +7,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
 import { User, Formula } from './types';
-import { PixFarmaLogo } from './components/Logo';
+import { BrandLogo } from './components/Logo';
+import { BRAND, COLORS, GRADIENTS } from '../config/branding';
 import { NavItem } from './components/NavItem';
 import { AdminPanel } from './components/UserManager';
 import { CustomerManager } from './components/CustomerManager';
@@ -92,7 +93,7 @@ function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
           </button>
           <button type="button" onClick={onConfirm}
             className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
-            style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
+            style={{ background: GRADIENTS.primary }}>
             Sim, sair
           </button>
         </div>
@@ -306,15 +307,15 @@ function AppInner() {
   if (!user) {
     return (
       <>
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #fff0f3 0%, #fff 50%, #f0f4ff 100%)' }}>
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4" style={{ background: `linear-gradient(135deg, ${COLORS.pinkSoft} 0%, #fff 50%, ${COLORS.blueSoft} 100%)` }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-200 overflow-hidden"
           >
-            <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #C5243E, #243465, #C5243E)' }} />
+            <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.secondary}, ${COLORS.primary})` }} />
             <div className="flex justify-center px-8 pt-6">
               <div style={{ maxWidth: 408 }}>
-                <PixFarmaLogo size="lg" />
+                <BrandLogo size="lg" />
               </div>
             </div>
             <div className="p-8">
@@ -351,7 +352,7 @@ function AppInner() {
               )}
               <button type="submit" disabled={loginLoading}
                 className="w-full hover:opacity-90 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-red-200"
-                style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}
+                style={{ background: GRADIENTS.primary }}
               >
                 {loginLoading ? 'Conectando...' : 'Entrar'}
               </button>
@@ -386,7 +387,7 @@ function AppInner() {
                   </button>
                   <button type="button" onClick={() => doLogin(true)} disabled={loginLoading}
                     className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-60"
-                    style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
+                    style={{ background: GRADIENTS.primary }}>
                     {loginLoading ? 'Entrando...' : 'Entrar mesmo assim'}
                   </button>
                 </div>
@@ -404,7 +405,7 @@ function AppInner() {
       <>
         <div className="flex-1 min-h-0 flex flex-col bg-zinc-50">
           <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-8 shrink-0">
-            <PixFarmaLogo size="md" />
+            <BrandLogo size="md" />
             <button
               onClick={handleLogout}
               className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
@@ -434,7 +435,7 @@ function AppInner() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             className="fixed top-10 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white flex items-center gap-2 pointer-events-none"
-            style={{ background: toast.type === 'success' ? 'linear-gradient(135deg,#16a34a,#15803d)' : '#243465' }}
+            style={{ background: toast.type === 'success' ? 'linear-gradient(135deg,#16a34a,#15803d)' : COLORS.secondary }}
           >
             {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
             {toast.msg}
@@ -443,9 +444,9 @@ function AppInner() {
       </AnimatePresence>
         {/* Sidebar */}
         <aside className={`border-r border-zinc-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 h-full overflow-hidden`}
-          style={{ background: '#243465' }}>
+          style={{ background: COLORS.secondary }}>
           <div className="p-5 w-full">
-            <PixFarmaLogo size={isSidebarOpen ? 'sidebar' : 'icon'} />
+            <BrandLogo size={isSidebarOpen ? 'sidebar' : 'icon'} />
           </div>
 
           {setupMode && isSidebarOpen && (
@@ -513,7 +514,7 @@ function AppInner() {
                   title="Diminuir fonte"
                   className="w-8 h-8 rounded-lg font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                   style={{
-                    background: 'linear-gradient(135deg, #243465, #1A2850)',
+                    background: GRADIENTS.secondary,
                   }}
                 >
                   a&minus;
@@ -524,7 +525,7 @@ function AppInner() {
                   title="Aumentar fonte"
                   className="w-8 h-8 rounded-lg font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                   style={{
-                    background: 'linear-gradient(135deg, #C5243E, #9B1A2E)',
+                    background: GRADIENTS.primary,
                   }}
                 >
                   A+
@@ -583,7 +584,7 @@ function AppInner() {
               </button>
               <button type="button" onClick={() => { setMissingReasons(null); setAutoUnlockFormula(true); }}
                 className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
-                style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+                style={{ background: GRADIENTS.secondary }}>
                 Editar
               </button>
             </div>
@@ -600,7 +601,7 @@ export default function App() {
     <AuthProvider>
       <FormDraftProvider>
         <div className="h-screen overflow-hidden bg-zinc-50 flex flex-col pt-[30px]" onKeyDown={handleEnterAsTab}>
-          <div className="titlebar">PIX Farma</div>
+          <div className="titlebar">{BRAND.name}</div>
           <AppInner />
         </div>
       </FormDraftProvider>

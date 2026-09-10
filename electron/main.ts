@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import mysql from 'mysql2/promise';
 import { Db } from './db';
 import { formatDbError } from './dbError';
+import { BRAND, COLORS } from '../config/branding';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -163,12 +164,12 @@ const createWindow = () => {
 
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600,
-    title: 'PIX Farma - Manipulação',
+    title: BRAND.windowTitle,
     icon: appIcon,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#243465',
+      color: COLORS.secondary,
       symbolColor: '#FFFFFF',
       height: 30,
     },

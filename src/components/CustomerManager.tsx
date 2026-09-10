@@ -9,6 +9,7 @@ import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
 import { AdminAuthModal } from './AdminAuthModal';
+import { GRADIENTS } from '../../config/branding';
 import { ConfirmModal } from './ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 
@@ -196,7 +197,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
       <div className="space-y-1">
         {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
         <div className="flex gap-2">
-          <button type="submit" disabled={saving} style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }} className="flex-1 text-white py-2 px-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
+          <button type="submit" disabled={saving} style={{ background: GRADIENTS.primary }} className="flex-1 text-white py-2 px-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-all text-sm">
             {saving ? '...' : editingId ? 'Atualizar' : 'Adicionar'}
           </button>
           {editingId && <button type="button" onClick={reset} className="px-3 py-2 rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-100 text-sm">✕</button>}

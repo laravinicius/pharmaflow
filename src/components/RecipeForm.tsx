@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Users, Search, X, PlusCircle, RefreshCw, Trash2, AlertCircle, Calendar, ClipboardList, Bookmark,
 } from 'lucide-react';
+import { COLORS, GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
@@ -366,7 +367,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           {formula && locked && !confirmed && !readOnly && (
             <button type="button" onClick={() => setLocked(false)}
               className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md"
-              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+              style={{ background: GRADIENTS.secondary }}>
               <RefreshCw className="w-3.5 h-3.5" /> Editar
             </button>
           )}
@@ -392,7 +393,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
       {showTemplateBanner && template && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
-          style={{ background: '#EFF2FA', border: '1px solid #D0DCE8', color: '#243465' }}>
+          style={{ background: COLORS.lightBlueBg, border: `1px solid ${COLORS.lightBlueBorder}`, color: COLORS.secondary }}>
           <RefreshCw className="w-4 h-4 shrink-0" />
           Baseado na fórmula #{template.id} de <strong className="ml-1">{template.customer_name}</strong>.
           Verifique e ajuste antes de finalizar.
@@ -400,7 +401,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       )}
       {formula && locked && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
-          style={{ background: '#FEF0F2', border: '1px solid #FED7DB', color: '#C5243E' }}>
+          style={{ background: COLORS.lightRedBg, border: `1px solid ${COLORS.lightRedBorder}`, color: COLORS.primary }}>
           <AlertCircle className="w-4 h-4 shrink-0" />
           {readOnly ? 'Fórmula no histórico — visualização somente leitura.' : confirmed ? 'Fórmula confirmada — apenas pagamento, forma de pagamento e andamento podem ser alterados.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
         </div>
@@ -660,7 +661,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             {!locked && (
               <button type="button" disabled={!selectedInsumoId || !quantity} onClick={addIngredient}
                 className="w-full text-white py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+                style={{ background: GRADIENTS.secondary }}>
                 + Adicionar à fórmula
               </button>
             )}
@@ -670,7 +671,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="mt-4 pt-3 border-t border-zinc-100">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Insumos adicionados</h4>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#FEF0F2', color: '#C5243E' }}>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: COLORS.lightRedBg, color: COLORS.primary }}>
               {items.length} {items.length === 1 ? 'insumo' : 'insumos'}
             </span>
           </div>
@@ -682,7 +683,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               {items.map((item, idx) => (
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={item.insumo_id}
                   className="flex items-center justify-between p-3 rounded-xl border border-zinc-100"
-                  style={{ background: idx % 2 === 0 ? '#f8faff' : '#fff' }}>
+                  style={{ background: idx % 2 === 0 ? COLORS.rowAlt : '#fff' }}>
                   <div className="min-w-0">
                     <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
                     <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
@@ -708,7 +709,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
           {appliedSavedFormula && (
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium mb-4"
-              style={{ background: '#EFF2FA', border: '1px solid #D0DCE8', color: '#243465' }}>
+              style={{ background: COLORS.lightBlueBg, border: `1px solid ${COLORS.lightBlueBorder}`, color: COLORS.secondary }}>
               <RefreshCw className="w-4 h-4 shrink-0" />
               <span className="flex-1 min-w-0">
                 Fórmula salva <strong>{appliedSavedFormula.name}</strong> aplicada — os insumos da lista foram substituídos.
@@ -853,7 +854,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 {!locked && (
                   <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
                     className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                    style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+                    style={{ background: GRADIENTS.secondary }}>
                     + Adicionar
                   </button>
                 )}
@@ -871,7 +872,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                       role="radio"
                       aria-checked={isSelected}
                       className={`flex items-center gap-3 p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500 ${!locked ? 'cursor-pointer' : ''} ${isSelected ? 'border-red-300' : 'border-zinc-100'}`}
-                      style={{ background: isSelected ? '#fff0f3' : (idx % 2 === 0 ? '#f8faff' : '#fff') }}
+                      style={{ background: isSelected ? COLORS.pinkSoft : (idx % 2 === 0 ? COLORS.rowAlt : '#fff') }}
                       onClick={() => { if (!locked) setSelectedBudgetIndex(idx); }}
                       onKeyDown={e => {
                         if (locked) return;
@@ -886,7 +887,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                           setSelectedBudgetIndex(idx - 1);
                         }
                       }}>
-                      <input type="radio" name="budgetSelection" className="w-4 h-4 accent-[#C5243E] shrink-0"
+                      <input type="radio" name="budgetSelection" className="w-4 h-4 accent-[var(--pf-primary)] shrink-0"
                         checked={isSelected}
                         disabled={locked}
                         onChange={() => { if (!locked) setSelectedBudgetIndex(idx); }}
@@ -1021,7 +1022,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div>
             <button type="button" disabled={!canSave || saving} onClick={handleSave}
               className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+              style={{ background: GRADIENTS.secondary }}>
               {saving ? 'Salvando...' : '💾 Salvar'}
             </button>
             <p className="text-center text-xs text-zinc-400 mt-2">
@@ -1031,7 +1032,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div>
             <button type="button" disabled={!canConfirm || saving} onClick={handleConfirm}
               className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
+              style={{ background: GRADIENTS.primary }}>
               {saving ? 'Salvando...' : '✓ Confirmar'}
             </button>
             <p className="text-center text-xs text-zinc-400 mt-2">
@@ -1050,7 +1051,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="md:col-span-2">
             <button type="button" disabled={saving} onClick={handleSaveConfirmed}
               className="w-full text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+              style={{ background: GRADIENTS.secondary }}>
               {saving ? 'Salvando...' : '💾 Salvar alterações'}
             </button>
           </div>
@@ -1083,7 +1084,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               </button>
               <button type="button" disabled={!cancelReason.trim() || saving} onClick={handleCancelFormula}
                 className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
+                style={{ background: GRADIENTS.primary }}>
                 {saving ? 'Cancelando...' : 'Confirmar cancelamento'}
               </button>
             </div>

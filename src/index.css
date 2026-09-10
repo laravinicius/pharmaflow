@@ -1,6 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+:root {
+  --pf-primary: #C5243E;
+  --pf-primary-dark: #9B1A2E;
+  --pf-secondary: #243465;
+  --pf-secondary-dark: #1A2850;
+  --pf-accent: #4A90D9;
+  --pf-selection-bg: #FED7DB;
+  --pf-selection-color: #8C1A3D;
+  --pf-light-red-bg: #FEF0F2;
+  --pf-light-red-border: #FED7DB;
+  --pf-light-blue-bg: #EFF2FA;
+  --pf-light-blue-border: #D0DCE8;
+  --pf-pink-soft: #fff0f3;
+  --pf-blue-soft: #f0f4ff;
+  --pf-row-alt: #f8faff;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -29,7 +46,7 @@ body {
   display: flex;
   align-items: center;
   padding-left: 12px;
-  background: #243465;
+  background: var(--pf-secondary);
   color: #FFFFFF;
   font-size: 12px;
   font-weight: 600;
@@ -43,4 +60,4 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
 
 /* Seleção de texto na cor da marca */
-::selection { background: #FED7DB; color: #8C1A3D; }
+::selection { background: var(--pf-selection-bg); color: var(--pf-selection-color); }

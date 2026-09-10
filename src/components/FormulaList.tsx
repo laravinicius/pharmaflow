@@ -7,6 +7,7 @@ import { formatDateToBR, formatQuantity } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { LoadingState, ErrorState } from './Feedback';
+import { GRADIENTS } from '../../config/branding';
 
 // Verifica quais requisitos faltam para a fórmula poder ser confirmada
 export function getMissingReasons(f: Formula): string[] {
@@ -196,7 +197,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       {showRepeat && (
                         <button type="button" onClick={(e) => { e.stopPropagation(); onRepeat?.(f); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all whitespace-nowrap"
-                          style={{ background: 'linear-gradient(135deg, #243465, #1A2850)' }}>
+                          style={{ background: GRADIENTS.secondary }}>
                           <RefreshCw className="w-3.5 h-3.5" /> Repetir
                         </button>
                       )}
@@ -248,7 +249,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     <button type="button" disabled={confirmingId === f.id}
                       onClick={(e) => { e.stopPropagation(); handleConfirm(f); }}
                       className="px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                      style={{ background: 'linear-gradient(135deg, #C5243E, #9B1A2E)' }}>
+                      style={{ background: GRADIENTS.primary }}>
                       {confirmingId === f.id ? 'Confirmando...' : 'Confirmar'}
                     </button>
                     <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
