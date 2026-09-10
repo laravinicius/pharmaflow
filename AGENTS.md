@@ -52,25 +52,19 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 
 ---
 
-## Visual / Colors (Exact Values)
+## Visual / Colors
 
-Defined in `src/components/Logo.tsx`:
-- `PRIMARY` (red): `#C5243E`
-- `SECONDARY` (blue): `#243465`
-- `FARMA_COLOR` (light blue): `#4A90D9`
+The generic `main` uses black, white and gray. Client-specific colors are defined in `config/branding.ts` on the client's branch.
 
-**Gradients** (use exact values in `style={{}}`):
-- Red button: `linear-gradient(135deg, #C5243E, #9B1A2E)`
-- Blue button: `linear-gradient(135deg, #243465, #1A2850)`
+**Gradients**: use `GRADIENTS.primary` and `GRADIENTS.secondary` from `config/branding.ts` in inline styles.
 
 **Support colors**:
-- Light red bg: `#FEF0F2` | border: `#FED7DB` | text: `#C5243E`
-- Light blue bg: `#EFF2FA` | border: `#D0DCE8` | text: `#243465`
-- Selection: `::selection { background: #FED7DB; color: #8C1A3D; }` (in `src/index.css`)
+- Light primary background/border: `COLORS.lightRedBg` / `COLORS.lightRedBorder`
+- Light secondary background/border: `COLORS.lightBlueBg` / `COLORS.lightBlueBorder`
+- Selection: `COLORS.selectionBg` / `COLORS.selectionColor` (in `src/index.css`)
+- Active navigation icon/background: `COLORS.navActive` / `COLORS.navActiveBg`
 
-**Active nav icons**: `text-amber-400` (`#FBBF24`) via inline style in `NavItem`.
-
-**Do NOT use** Tailwind `red-500/600/700` or `blue-500/600/700` for brand colors — use hex values or `PRIMARY`/`SECONDARY` constants.
+**Do NOT use** Tailwind `red-500/600/700` or `blue-500/600/700` for brand colors — use `COLORS` or `GRADIENTS` from `config/branding.ts`.
 
 ---
 

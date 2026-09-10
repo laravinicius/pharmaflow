@@ -18,7 +18,7 @@
   },
   "build": {
     "appId": "com.pharmaflow.app",
-    "productName": "PIX Farma",
+    "productName": "PharmaFlow",
     "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "../pharmaflow-release/${version}"

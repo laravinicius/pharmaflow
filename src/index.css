@@ -2,20 +2,20 @@
 @import "tailwindcss";
 
 :root {
-  --pf-primary: #C5243E;
-  --pf-primary-dark: #9B1A2E;
-  --pf-secondary: #243465;
-  --pf-secondary-dark: #1A2850;
-  --pf-accent: #4A90D9;
-  --pf-selection-bg: #FED7DB;
-  --pf-selection-color: #8C1A3D;
-  --pf-light-red-bg: #FEF0F2;
-  --pf-light-red-border: #FED7DB;
-  --pf-light-blue-bg: #EFF2FA;
-  --pf-light-blue-border: #D0DCE8;
-  --pf-pink-soft: #fff0f3;
-  --pf-blue-soft: #f0f4ff;
-  --pf-row-alt: #f8faff;
+  --pf-primary: #111827;
+  --pf-primary-dark: #000000;
+  --pf-secondary: #000000;
+  --pf-secondary-dark: #111827;
+  --pf-accent: #374151;
+  --pf-selection-bg: #e4e4e7;
+  --pf-selection-color: #111827;
+  --pf-light-red-bg: #fafafa;
+  --pf-light-red-border: #e4e4e7;
+  --pf-light-blue-bg: #f4f4f5;
+  --pf-light-blue-border: #e4e4e7;
+  --pf-pink-soft: #fafafa;
+  --pf-blue-soft: #f4f4f5;
+  --pf-row-alt: #f8f8f8;
 }
 
 *, *::before, *::after {

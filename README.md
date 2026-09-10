@@ -1,4 +1,4 @@
-# PharmaFlow (PIX Farma)
+# PharmaFlow
 
 ![Version](https://img.shields.io/badge/version-0.0.1-blue)
 ![Node](https://img.shields.io/badge/Node-20%2B-green)
@@ -12,8 +12,8 @@
 
 Aplicação desktop online-first para gerenciamento de fluxo de manipulação farmacêutica. Construída com Electron, Vite, React 19 e Tailwind CSS v4, com persistência de dados em MariaDB/MySQL — sem cache local ou sincronização offline.
 
-> **Nome do produto:** PIX Farma (exibido na barra de título e instalador)  
-> **Nome do repositório:** PharmaFlow
+> **Produto base:** PharmaFlow (versão genérica)
+> **Versão específica:** PIX Farma, mantida na branch `pix-farma`
 
 ---
 
@@ -159,36 +159,56 @@ sessions           -- id, user_id, token (UNIQUE), last_seen
 
 ---
 
-## Paleta de Cores (Valores Exatos)
+## Branding e White-Label
 
-Definidos em src/components/Logo.tsx — use hex ou constantes, NÃO red-500/blue-500 do Tailwind.
+O branding ativo fica centralizado em `config/branding.ts`. A `main` contém o produto base genérico, enquanto cada cliente pode ter uma branch própria com nome, logo, cores e funcionalidades específicas.
 
-| Constante | Hex | Uso |
-|-----------|-----|-----|
-| PRIMARY (vermelho) | #C5243E | Botões primários, destaque, links, badges ativos |
-| PRIMARY_DARK | #9B1A2E | Fim do gradiente botões vermelhos |
-| SECONDARY (azul) | #243465 | Sidebar, botões secundários, navegação |
-| SECONDARY_DARK | #1A2850 | Fim do gradiente botões azuis |
-| FARMA_COLOR (azul claro) | #4A90D9 | Logo "Farma", elementos informativos |
+### Fluxo de branches
 
-### Gradientes (usar inline style={{}})
+```text
+main (PharmaFlow genérico)
+├── pix-farma (PIX Farma)
+├── cliente-alfa (cliente Alfa)
+└── cliente-beta (cliente Beta)
+```
 
-```css
-/* Botão vermelho */
-background: linear-gradient(135deg, #C5243E, #9B1A2E);
+- Mudanças estruturais ou funcionalidades úteis para todos: implementar na `main`.
+- Atualizar uma branch de cliente: `git checkout cliente && git merge main`.
+- Customização exclusiva de um cliente: implementar somente na branch dele.
+- Nunca fazer merge de uma branch de cliente para `main` sem decidir antes que a funcionalidade fará parte do produto base.
+- Criar um novo cliente: `git checkout -b cliente-nome main`.
 
-/* Botão azul */
-background: linear-gradient(135deg, #243465, #1A2850);
+Arquivos de branding podem gerar conflitos intencionais durante merges: `config/branding.ts`, `src/index.css`, `package.json`, `index.html` e assets em `public/`. Ao atualizar uma branch de cliente, preserve o branding daquela branch nesses arquivos.
+
+## Paleta de Cores
+
+Na versão genérica, a paleta é preto, branco e tons de cinza. Para versões de clientes, os valores ficam em `config/branding.ts`; não use `red-500/blue-500` do Tailwind para cores de marca.
+
+| Constante | Uso |
+|-----------|-----|
+| `COLORS.primary` | Botões primários e destaques |
+| `COLORS.primaryDark` | Fim do gradiente primário |
+| `COLORS.secondary` | Sidebar, titlebar e botões secundários |
+| `COLORS.secondaryDark` | Fim do gradiente secundário |
+| `COLORS.accent` | Destaques secundários e logo |
+
+### Gradientes
+
+```tsx
+import { GRADIENTS } from '../../config/branding';
+
+style={{ background: GRADIENTS.primary }}
+style={{ background: GRADIENTS.secondary }}
 ```
 
 ### Cores de Apoio
 
-| Contexto | Background | Border | Texto |
-|----------|------------|--------|-------|
-| Vermelho claro | #FEF0F2 | #FED7DB | #C5243E |
-| Azul claro | #EFF2FA | #D0DCE8 | #243465 |
-| Seleção (::selection) | #FED7DB | — | #8C1A3D |
-| Nav item ativo | — | — | text-amber-400 (#FBBF24) |
+| Contexto | Constantes |
+|----------|------------|
+| Fundo claro primário | `COLORS.lightRedBg` / `COLORS.lightRedBorder` |
+| Fundo claro secundário | `COLORS.lightBlueBg` / `COLORS.lightBlueBorder` |
+| Seleção | `COLORS.selectionBg` / `COLORS.selectionColor` |
+| Navegação ativa | `COLORS.navActive` / `COLORS.navActiveBg` |
 
 ---
 
@@ -300,7 +320,7 @@ npm run build
 ```
 
 Gera em release/<version>/win-unpacked/:
-- PIX Farma.exe — executável standalone (pacote dir)
+- PharmaFlow.exe — executável standalone da versão genérica (pacote dir)
 - resources/app.asar — código da aplicação empacotado
 
 > **Nota:** Configurado target: ["dir", "nsis"] no package.json, mas no Windows o dir é priorizado para build offline-friendly.
