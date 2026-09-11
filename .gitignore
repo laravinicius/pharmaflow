@@ -48,9 +48,6 @@ info.txt
 .plans
 migrations/
 
-# Web de teste (somente dev — produção/build usam apenas Electron)
-web-server/
-vite.web.config.ts
 src/services/lanDatabase.web.ts
 
 # Docker

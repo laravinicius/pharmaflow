@@ -129,9 +129,6 @@ ipcMain.handle('config:save', (_, newConfig: Partial<DbConfig>) => {
   dbConfig = { ...dbConfig, ...newConfig };
   fs.writeFileSync(configPath, JSON.stringify(dbConfig, null, 2));
 initPool();
-pool.on('connection', (conn) => {
-  conn.query("SET time_zone = '-03:00'").catch(() => {});
-});
   return { success: true };
 });
 
