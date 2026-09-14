@@ -23,7 +23,7 @@ interface DbConfig {
 }
 
 let dbConfig: DbConfig = {
-  host: 'localhost', port: 3306, user: 'root', password: '', database: 'pharmaflow',
+  host: 'localhost', port: 3306, user: 'pharmaflow_app', password: 'pharmaflow_dev', database: 'pharmaflow',
 };
 
 if (fs.existsSync(configPath)) {

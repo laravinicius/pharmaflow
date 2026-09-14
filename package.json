@@ -21,7 +21,7 @@
     "productName": "PIX Farma",
     "electronDist": "node_modules/electron/dist",
     "directories": {
-      "output": "../pharmaflow-release/${version}"
+      "output": "../pharmaflow-pix-farma-release/${version}"
     },
     "files": [
       "dist",

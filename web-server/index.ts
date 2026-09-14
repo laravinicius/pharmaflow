@@ -11,8 +11,8 @@ const db = new Db();
 const pool = mysql.createPool({
   host: process.env.PHARMAFLOW_DB_HOST ?? 'localhost',
   port: Number(process.env.PHARMAFLOW_DB_PORT ?? 3306),
-  user: process.env.PHARMAFLOW_DB_USER ?? 'root',
-  password: process.env.PHARMAFLOW_DB_PASSWORD ?? '',
+  user: process.env.PHARMAFLOW_DB_USER ?? 'pharmaflow_app',
+  password: process.env.PHARMAFLOW_DB_PASSWORD ?? 'pharmaflow_dev',
   database: process.env.PHARMAFLOW_DB_DATABASE ?? 'pharmaflow',
   waitForConnections: true,
   connectionLimit: 10,

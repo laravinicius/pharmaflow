@@ -52,4 +52,3 @@ src/services/lanDatabase.web.ts
 
 # Docker
 docker-data/
-docker-compose.yml

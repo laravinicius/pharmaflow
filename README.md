@@ -266,6 +266,26 @@ pharmaflow/
 ### Pré-requisitos
 - Node.js 20+
 - MariaDB/MySQL acessível (local ou remoto)
+- Docker Desktop (para usar o banco de desenvolvimento local)
+
+### Banco de Desenvolvimento com Docker
+
+O Compose cria um MariaDB local na porta `3306`, inicializa o schema a partir de `database.sql` e persiste os dados em um volume nomeado.
+
+```bash
+# Iniciar o banco em segundo plano
+docker compose up -d
+
+# Acompanhar o status e o healthcheck
+docker compose ps
+docker compose logs -f mariadb
+
+# Recriar o banco do zero (remove os dados persistidos)
+docker compose down -v
+docker compose up -d
+```
+
+As credenciais de desenvolvimento são `pharmaflow_app` / `pharmaflow_dev`, no banco `pharmaflow`. O usuário inicial definido em `database.sql` permanece disponível após a inicialização.
 
 ### Primeira Execução
 ```bash
