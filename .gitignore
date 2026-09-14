@@ -48,7 +48,5 @@ info.txt
 .plans
 migrations/
 
-src/services/lanDatabase.web.ts
-
 # Docker
 docker-data/

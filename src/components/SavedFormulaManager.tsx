@@ -302,9 +302,9 @@ export function SavedFormulaManager() {
         ) : (
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-            <input ref={insumoQueryRef} className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+            <input ref={insumoQueryRef} className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm uppercase"
               value={insumoQuery}
-              onChange={e => { setInsumoQuery(e.target.value); setInsumoFocusIdx(-1); }}
+              onChange={e => { setInsumoQuery(e.target.value.toUpperCase()); setInsumoFocusIdx(-1); }}
               onKeyDown={e => {
                 if (e.key === 'ArrowDown' && filteredInsumos.length) {
                   e.preventDefault();
@@ -320,7 +320,7 @@ export function SavedFormulaManager() {
                     focusListOption(targetIdx);
                   } else if (insumoQuery.trim()) {
                     e.preventDefault();
-                    pendingInsumoName.current = insumoQuery.trim();
+                    pendingInsumoName.current = insumoQuery.trim().toUpperCase();
                     setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1);
                   }
                 } else if (e.key === 'Escape') {
@@ -367,7 +367,7 @@ export function SavedFormulaManager() {
                 <p className="text-xs text-zinc-400 mb-2">Nenhum insumo encontrado.</p>
                 <button
                   type="button"
-                  onClick={() => { pendingInsumoName.current = insumoQuery.trim(); setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
+                  onClick={() => { pendingInsumoName.current = insumoQuery.trim().toUpperCase(); setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1); }}
                   className="w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
                 >
                   <PlusCircle className="w-4 h-4 shrink-0" />
@@ -462,7 +462,7 @@ export function SavedFormulaManager() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold text-zinc-900">Fórmulas</h2>
+        <h2 className="text-3xl font-bold text-zinc-900">Minhas Fórmulas</h2>
         <p className="text-zinc-500">Gerencie as fórmulas prontas da farmácia.</p>
       </div>
       <div className="flex items-center gap-4 border-b border-zinc-200">

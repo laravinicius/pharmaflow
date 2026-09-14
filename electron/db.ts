@@ -84,6 +84,12 @@ const friendlyError = (e: any): string => {
   return 'Erro ao acessar o banco de dados.';
 };
 
+const isDuplicateBudgetNumber = (e: any): boolean =>
+  e?.code === 'ER_DUP_ENTRY' && (
+    /budget_number_registry|uq_budget_number_source/.test(String(e?.message ?? '')) ||
+    /for key 'PRIMARY'/.test(String(e?.message ?? ''))
+  );
+
 // O app é online-first: todo dado é lido/gravado direto no MariaDB,
 // sem cache local nem sincronização offline.
 
@@ -375,13 +381,40 @@ export class Db {
   }
 
   async updateCustomer(id: number, c: { name: string; phone: string }, sessionToken?: string) {
+    if (!this.pool) throw new Error('Sem conexão com o servidor');
+    const conn = await this.pool.getConnection();
     try {
-      await this.q('UPDATE customers SET name=?, phone=? WHERE id=?', [c.name, c.phone, id]);
+      await conn.beginTransaction();
+      await conn.query('UPDATE customers SET name=?, phone=? WHERE id=?', [c.name, c.phone, id]);
+      await conn.query('UPDATE formulas SET customer_phone=? WHERE customer_id=?', [c.phone, id]);
+      await conn.commit();
       const actor = await this.resolveActor(sessionToken);
       await this.logAction(actor, 'update', 'customers', id, `Cliente atualizado: ${c.name} (tel: ${c.phone}).`);
       return { success: true };
     } catch (e) {
+      await conn.rollback();
       return { success: false, error: 'Celular já cadastrado no servidor.' };
+    } finally {
+      conn.release();
+    }
+  }
+
+  private async reserveBudgetNumber(
+    conn: mysql.PoolConnection,
+    budgetNumber: string | null | undefined,
+    sourceType: 'formula' | 'saved_formula',
+    sourceId: number
+  ): Promise<void> {
+    const number = budgetNumber?.trim() ?? '';
+    if (!number) return;
+    try {
+      await conn.query(
+        'INSERT INTO budget_number_registry (budget_number, source_type, source_id) VALUES (?,?,?)',
+        [number, sourceType, sourceId]
+      );
+    } catch (e) {
+      if (isDuplicateBudgetNumber(e)) throw new Error('Número de orçamento já utilizado.');
+      throw e;
     }
   }
 
@@ -532,6 +565,7 @@ const [r]: any = await conn.query(
          formula.cancel_reason ?? null,
          formula.status ?? 'pending']
       );
+      await this.reserveBudgetNumber(conn, formula.budget_number, 'formula', r.insertId);
       for (const item of formula.items) {
         await conn.query('INSERT INTO formula_items (formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
           [r.insertId, item.insumo_id, item.quantity, item.unit ?? 'mg']);
@@ -566,6 +600,9 @@ const [r]: any = await conn.query(
     status?: string;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
+    if (formula.delivery_status === 'entregue' && formula.payment_status !== 'pago') {
+      throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
+    }
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -578,6 +615,8 @@ const [r]: any = await conn.query(
          formula.payment_method ?? null, formula.delivery_status ?? '', formula.cancel_reason ?? null,
          formula.status ?? 'pending', id]
       );
+      await conn.query('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['formula', id]);
+      await this.reserveBudgetNumber(conn, formula.budget_number, 'formula', id);
       await conn.query('DELETE FROM formula_items WHERE formula_id=?', [id]);
       for (const item of formula.items) {
         await conn.query('INSERT INTO formula_items (formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
@@ -612,6 +651,14 @@ const [r]: any = await conn.query(
   }
 
   async updateFormulaDeliveryStatus(id: number, deliveryStatus: string, sessionToken?: string) {
+    if (deliveryStatus === 'entregue') {
+      const rows = await this.q<Array<{ payment_status: string }>>(
+        'SELECT payment_status FROM formulas WHERE id=?', [id]
+      );
+      if (rows[0]?.payment_status !== 'pago') {
+        throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
+      }
+    }
     await this.q(
       `UPDATE formulas SET delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' ELSE status END WHERE id=?`,
       [deliveryStatus, deliveryStatus, id]
@@ -626,6 +673,7 @@ const [r]: any = await conn.query(
       const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
+      await this.q('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['formula', id]);
       await this.q('DELETE FROM formulas WHERE id=?', [id]);
       const actor = adminCheck.user
         ? { id: adminCheck.user.id, name: adminCheck.user.name }
@@ -691,21 +739,29 @@ const [r]: any = await conn.query(
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_items: Array<{ quantity: number; unit: string; value: number }>;
   }, sessionToken?: string) {
+    if (!this.pool) throw new Error('Sem conexão com o servidor');
+    const conn = await this.pool.getConnection();
     try {
-      const r: any = await this.q('INSERT INTO saved_formulas (name, budget_number) VALUES (?,?)', [formula.name, formula.budget_number ?? null]);
+      await conn.beginTransaction();
+      const [r]: any = await conn.query('INSERT INTO saved_formulas (name, budget_number) VALUES (?,?)', [formula.name, formula.budget_number ?? null]);
+      await this.reserveBudgetNumber(conn, formula.budget_number, 'saved_formula', r.insertId);
       for (const item of formula.items) {
-        await this.q('INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
+        await conn.query('INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
           [r.insertId, item.insumo_id, item.quantity, item.unit ?? 'mg']);
       }
       for (const b of formula.budget_items) {
-        await this.q('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
+        await conn.query('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
           [r.insertId, b.quantity, b.unit, b.value]);
       }
+      await conn.commit();
       const actor = await this.resolveActor(sessionToken);
       await this.logAction(actor, 'add', 'saved_formulas', r.insertId, `Fórmula salva adicionada: ${formula.name}.`);
       return { success: true, id: r.insertId };
     } catch (e) {
+      await conn.rollback();
       return { success: false, error: friendlyError(e) };
+    } finally {
+      conn.release();
     }
   }
 
@@ -715,23 +771,32 @@ const [r]: any = await conn.query(
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
     budget_items: Array<{ quantity: number; unit: string; value: number }>;
   }, sessionToken?: string) {
+    if (!this.pool) throw new Error('Sem conexão com o servidor');
+    const conn = await this.pool.getConnection();
     try {
-      await this.q('UPDATE saved_formulas SET name=?, budget_number=? WHERE id=?', [formula.name, formula.budget_number ?? null, id]);
-      await this.q('DELETE FROM saved_formula_items WHERE saved_formula_id=?', [id]);
+      await conn.beginTransaction();
+      await conn.query('UPDATE saved_formulas SET name=?, budget_number=? WHERE id=?', [formula.name, formula.budget_number ?? null, id]);
+      await conn.query('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['saved_formula', id]);
+      await this.reserveBudgetNumber(conn, formula.budget_number, 'saved_formula', id);
+      await conn.query('DELETE FROM saved_formula_items WHERE saved_formula_id=?', [id]);
       for (const item of formula.items) {
-        await this.q('INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
+        await conn.query('INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
           [id, item.insumo_id, item.quantity, item.unit ?? 'mg']);
       }
-      await this.q('DELETE FROM saved_formula_budget_items WHERE saved_formula_id=?', [id]);
+      await conn.query('DELETE FROM saved_formula_budget_items WHERE saved_formula_id=?', [id]);
       for (const b of formula.budget_items) {
-        await this.q('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
+        await conn.query('INSERT INTO saved_formula_budget_items (saved_formula_id, quantity, unit, value) VALUES (?,?,?,?)',
           [id, b.quantity, b.unit, b.value]);
       }
+      await conn.commit();
       const actor = await this.resolveActor(sessionToken);
       await this.logAction(actor, 'update', 'saved_formulas', id, `Fórmula salva atualizada: ${formula.name}.`);
       return { success: true };
     } catch (e) {
+      await conn.rollback();
       return { success: false, error: friendlyError(e) };
+    } finally {
+      conn.release();
     }
   }
 
@@ -741,6 +806,7 @@ const [r]: any = await conn.query(
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
       const target = await this.q<any[]>('SELECT name FROM saved_formulas WHERE id = ?', [id]);
+      await this.q('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['saved_formula', id]);
       await this.q('DELETE FROM saved_formulas WHERE id=?', [id]);
       const actor = adminCheck.user
         ? { id: adminCheck.user.id, name: adminCheck.user.name }

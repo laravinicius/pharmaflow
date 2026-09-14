@@ -7,11 +7,12 @@ interface ConfirmModalProps {
   title: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
 }
 
-export function ConfirmModal({ isOpen, title, message, confirmLabel = 'Confirmar', onConfirm, onClose }: ConfirmModalProps) {
+export function ConfirmModal({ isOpen, title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', onConfirm, onClose }: ConfirmModalProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export function ConfirmModal({ isOpen, title, message, confirmLabel = 'Confirmar
             onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
           >
-            Cancelar
+            {cancelLabel}
           </button>
           <button
             ref={confirmRef}

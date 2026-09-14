@@ -118,6 +118,7 @@ function AppInner() {
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
   const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
   const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
+  const [missingReasonsTarget, setMissingReasonsTarget] = useState<'pending' | 'confirmed' | null>(null);
   const [autoUnlockFormula, setAutoUnlockFormula] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
@@ -143,6 +144,7 @@ function AppInner() {
     clearAuth();
     setSetupMode(false);
     setActiveTab('dashboard');
+    setLoginForm({ username: '', password: '' });
     setLoginError('Sessão encerrada por inatividade (5 min).');
   }, [sessionToken, clearAuth, clearDrafts]);
 
@@ -466,7 +468,7 @@ function AppInner() {
                 <NavItem icon={<History />} label="Histórico" active={isTabActive('history')} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Users />} label="Clientes" active={isTabActive('customers')} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Cross />} label="Insumos" active={isTabActive('insumos')} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Bookmark />} label="Fórmulas" active={isTabActive('savedFormulas')} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<Bookmark />} label="Minhas Fórmulas" active={isTabActive('savedFormulas')} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
                 {user.role === 'admin' && (
                   <NavItem icon={<Settings />} label="Administração" active={isTabActive('admin')} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
                 )}
@@ -544,9 +546,9 @@ function AppInner() {
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
               {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} initialLocked={!autoUnlockFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setAutoUnlockFormula(false); setActiveTab(dest); }} />}
               {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
-              {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setActiveTab('formulaDetail'); } }} />}
-              {activeTab === 'confirmed' && <FormulaList screenKey="confirmed" variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />}
-              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
+              {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('pending'); setActiveTab('formulaDetail'); } }} />}
+              {activeTab === 'confirmed' && <FormulaList screenKey="confirmed" variant="confirmed" title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} onDeliveryBlocked={(f, reasons) => { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('confirmed'); }} />}
+              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} monthlySummary onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
               {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
               {activeTab === 'insumos' && <InsumoManager />}
@@ -557,8 +559,8 @@ function AppInner() {
       </div>
 
       {missingReasons && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setMissingReasons(null)}
-          onKeyDown={e => { if (e.key === 'Escape') setMissingReasons(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { setMissingReasons(null); setMissingReasonsTarget(null); }}
+          onKeyDown={e => { if (e.key === 'Escape') { setMissingReasons(null); setMissingReasonsTarget(null); } }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
@@ -578,11 +580,11 @@ function AppInner() {
               ))}
             </ul>
             <div className="mt-5 flex gap-3">
-              <button type="button" onClick={() => setMissingReasons(null)} autoFocus
+              <button type="button" onClick={() => { setMissingReasons(null); setMissingReasonsTarget(null); }} autoFocus
                 className="flex-1 py-2.5 rounded-xl border border-zinc-300 font-semibold text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
                 Entendi
               </button>
-              <button type="button" onClick={() => { setMissingReasons(null); setAutoUnlockFormula(true); }}
+              <button type="button" onClick={() => { const target = missingReasonsTarget; setMissingReasons(null); setMissingReasonsTarget(null); setAutoUnlockFormula(target === 'pending'); if (target === 'confirmed') setActiveTab('confirmedDetail'); }}
                 className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
                 style={{ background: GRADIENTS.secondary }}>
                 Editar

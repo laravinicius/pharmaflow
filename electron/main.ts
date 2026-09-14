@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -117,6 +117,20 @@ ipcMain.handle('savedFormulas:delete', async (_, id, adminCreds, sessionToken) =
 // ─── Logs de auditoria ───────────────────────────────────────────────────────
 
 ipcMain.handle('logs:list', (_, filters) => db.listLogs(filters));
+
+ipcMain.handle('app:show-message-box', async (_, options: { type?: 'none' | 'info' | 'error' | 'question' | 'warning'; title?: string; message: string }) => {
+  return dialog.showMessageBox({
+    type: options.type ?? 'info',
+    title: options.title ?? 'PharmaFlow',
+    message: options.message,
+  });
+});
+
+ipcMain.handle('app:open-whatsapp', async (_, url: string) => {
+  if (!url.startsWith('whatsapp://send?')) throw new Error('URL do WhatsApp inválida.');
+  await shell.openExternal(url);
+  return { success: true };
+});
 
 // ─── Configurações ───────────────────────────────────────────────────────────
 

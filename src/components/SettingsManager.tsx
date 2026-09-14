@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff } from 'lucide-react';
 import { GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
 import { AdminUserManager } from './AdminUserManager';
@@ -35,16 +35,6 @@ export function SettingsManager() {
     );
     setTesting(false);
   };
-
-  if (!window.electronAPI) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <Settings className="w-8 h-8 text-zinc-400 mb-4" />
-        <h3 className="text-lg font-semibold text-zinc-900">Versão Web</h3>
-        <p className="text-zinc-500 max-w-xs">Configurações disponíveis apenas na versão Desktop.</p>
-      </div>
-    );
-  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl mx-auto space-y-6">

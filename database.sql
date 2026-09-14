@@ -88,6 +88,14 @@ CREATE TABLE IF NOT EXISTS saved_formulas (
   updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS budget_number_registry (
+  budget_number VARCHAR(6)  NOT NULL PRIMARY KEY,
+  source_type   ENUM('formula','saved_formula') NOT NULL,
+  source_id     INT          NOT NULL,
+  created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_budget_number_source (source_type, source_id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS saved_formula_items (
   id               INT AUTO_INCREMENT PRIMARY KEY,
   saved_formula_id INT           NOT NULL,

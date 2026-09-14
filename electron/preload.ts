@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Logs de auditoria
   listLogs: (filters?: any) => ipcRenderer.invoke('logs:list', filters),
+  showMessageBox: (options: { type?: 'none' | 'info' | 'error' | 'question' | 'warning'; title?: string; message: string }) =>
+    ipcRenderer.invoke('app:show-message-box', options),
+  openWhatsApp: (url: string) => ipcRenderer.invoke('app:open-whatsapp', url),
 
   // Atualização ao vivo — avisa quando os dados mudam no servidor
   onDataChanged: (cb: () => void) => {

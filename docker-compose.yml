@@ -1,7 +1,7 @@
 services:
   mariadb:
     image: mariadb:11
-    container_name: pharmaflow-pix
+    container_name: pharmaflow
     restart: unless-stopped
     environment:
       MARIADB_DATABASE: pharmaflow

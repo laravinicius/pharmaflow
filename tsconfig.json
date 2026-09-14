@@ -23,8 +23,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": [
-    "web-server",
-    "src/services/lanDatabase.web.ts"
-  ]
+  "exclude": []
 }

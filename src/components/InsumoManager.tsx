@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext';
 export function InsumoManager({ compact = false, onCreated, initialName }: { compact?: boolean; onCreated?: (m: Insumo) => void; initialName?: string } = {}) {
   const { data: insumos, loading, error, reload } = useData(() => db.insumos.list());
   const { sessionToken } = useAuth();
-  const [name, setName] = useState(initialName ?? '');
+  const [name, setName] = useState((initialName ?? '').toUpperCase());
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -59,7 +59,7 @@ export function InsumoManager({ compact = false, onCreated, initialName }: { com
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const trimmed = name.trim();
+    const trimmed = name.trim().toUpperCase();
     if (!trimmed) return;
     const dup = (insumos as Insumo[])?.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
     if (dup) { setFormError(`Insumo já cadastrado: ${dup.name}`); return; }
@@ -106,7 +106,7 @@ export function InsumoManager({ compact = false, onCreated, initialName }: { com
 
   const handleRowSave = async () => {
     if (editingRow === null) return;
-    const trimmed = rowDraft.trim();
+    const trimmed = rowDraft.trim().toUpperCase();
     if (!trimmed) { setFormError('Informe o nome do insumo.'); return; }
     const dup = (insumos as Insumo[])?.find(m => m.id !== editingRow && m.name.toLowerCase() === trimmed.toLowerCase());
     if (dup) { setFormError(`Insumo já cadastrado: ${dup.name}`); return; }

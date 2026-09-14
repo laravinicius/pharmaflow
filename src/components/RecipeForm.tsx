@@ -41,11 +41,14 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [budgetError, setBudgetError] = useState('');
   const [attendantName, setAttendantName] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
+  const [deliveryDateError, setDeliveryDateError] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [saving, setSaving] = useState(false);
   const [locked, setLocked] = useState(formula ? initialLocked : false);
   const [deliveryStatus, setDeliveryStatus] = useState('');
+  const [showDeliveryErrorModal, setShowDeliveryErrorModal] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [customerFocusIdx, setCustomerFocusIdx] = useState(-1);
@@ -69,6 +72,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   const draftRef = useRef({ selectedCustomerId, items, budgetNumber, budgetItems, selectedBudgetIndex, attendantName, deliveryDate, paymentStatus, paymentMethod });
   const skipFirstCleanupRef = useRef(true);
+  const completedDraftRef = useRef(false);
   useEffect(() => {
     draftRef.current = { selectedCustomerId, items, budgetNumber, budgetItems, selectedBudgetIndex, attendantName, deliveryDate, paymentStatus, paymentMethod };
   });
@@ -103,6 +107,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     return () => {
       if (!isDraftMode) return;
       if (skipFirstCleanupRef.current) { skipFirstCleanupRef.current = false; return; }
+      if (completedDraftRef.current) return;
       saveDraft(DRAFT_KEY, draftRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,6 +166,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setBudgetError('');
     setAttendantName('');
     setDeliveryDate('');
+    setDeliveryDateError('');
     setPaymentStatus('');
     setPaymentMethod('');
   };
@@ -240,10 +246,31 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     else if (selectedBudgetIndex !== null && selectedBudgetIndex > idx) setSelectedBudgetIndex(selectedBudgetIndex - 1);
   };
 
+  const todayIso = (() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  })();
+  const parsedDeliveryDate = parseDateBR(deliveryDate);
+  const deliveryDateIsPast = !!parsedDeliveryDate && parsedDeliveryDate < todayIso;
+  const validateDeliveryDate = (value: string) => {
+    const parsed = parseDateBR(value);
+    const error = parsed && parsed < todayIso ? 'A previsão de entrega não pode ser anterior à data atual.' : '';
+    setDeliveryDateError(error);
+    return !error;
+  };
+
   const canSave = !!selectedCustomerId && items.length > 0 &&
     !!budgetNumber && budgetItems.length > 0 &&
-    !!attendantName;
-  const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parseDateBR(deliveryDate);
+    !!attendantName && !deliveryDateIsPast;
+  const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
+
+  const getSaveErrorMessage = (err: any) => {
+    const message = String(err?.message ?? '');
+    if (message.includes('Número de orçamento já utilizado') || message.includes('Duplicate entry')) {
+      return 'Número de orçamento já utilizado. Informe outro número para continuar.';
+    }
+    return message || 'Não foi possível salvar. Verifique a conexão com o servidor e tente novamente.';
+  };
 
   const buildPayload = (status: string, soloSelected = false) => {
     const payloadBudgetItems = soloSelected && selectedBudgetIndex !== null
@@ -264,31 +291,46 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (!canSave || !validateDeliveryDate(deliveryDate)) return;
     setSaving(true);
     try {
       if (formula) await db.formulas.update(formula.id, buildPayload('pending'), sessionToken ?? undefined);
-      else { await db.formulas.add(buildPayload('pending'), sessionToken ?? undefined); removeDraft(DRAFT_KEY); }
+      else {
+        await db.formulas.add(buildPayload('pending'), sessionToken ?? undefined);
+        completedDraftRef.current = true;
+        removeDraft(DRAFT_KEY);
+        clearForm();
+      }
       onComplete('pending');
     } catch (err: any) {
-      alert('Erro ao salvar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
+      setSaveError(getSaveErrorMessage(err));
     } finally { setSaving(false); }
   };
 
   const handleConfirm = async () => {
-    if (!canConfirm) return;
+    if (!canConfirm || !validateDeliveryDate(deliveryDate)) return;
     setSaving(true);
     try {
       if (formula) await db.formulas.update(formula.id, buildPayload('confirmed', true), sessionToken ?? undefined);
-      else { await db.formulas.add(buildPayload('confirmed', true), sessionToken ?? undefined); removeDraft(DRAFT_KEY); }
+      else {
+        await db.formulas.add(buildPayload('confirmed', true), sessionToken ?? undefined);
+        completedDraftRef.current = true;
+        removeDraft(DRAFT_KEY);
+        clearForm();
+      }
       onComplete('confirmed');
     } catch (err: any) {
-      alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
+      setSaveError(getSaveErrorMessage(err));
     } finally { setSaving(false); }
   };
 
   const handleSaveConfirmed = async () => {
     if (!formula) return;
+    if (!validateDeliveryDate(deliveryDate)) return;
+    if (deliveryStatus === 'entregue' && paymentStatus !== 'pago') {
+      setShowDeliveryErrorModal(true);
+      return;
+    }
     setSaving(true);
     try {
       await db.formulas.update(formula.id, buildPayload(
@@ -296,7 +338,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       ), sessionToken ?? undefined);
       onComplete('confirmed');
     } catch (err: any) {
-      alert('Erro ao salvar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
+      setSaveError(getSaveErrorMessage(err));
     } finally { setSaving(false); }
   };
 
@@ -312,7 +354,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       }, sessionToken ?? undefined);
       onComplete('confirmed');
     } catch (err: any) {
-      alert('Erro ao cancelar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
+      setSaveError(getSaveErrorMessage(err));
     } finally { setSaving(false); }
   };
 
@@ -440,7 +482,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input
-              className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm uppercase disabled:opacity-60 disabled:cursor-not-allowed"
               value={customerQuery}
               disabled={locked}
               ref={customerQueryRef}
@@ -722,7 +764,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           )}
 
           {allSavedFormulas.length === 0 ? (
-            <p className="text-sm text-zinc-400">Nenhuma fórmula salva cadastrada. Cadastre uma na tela "Fórmulas".</p>
+            <p className="text-sm text-zinc-400">Nenhuma fórmula salva cadastrada. Cadastre uma na tela "Minhas Fórmulas".</p>
           ) : (
             <div className="relative">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
@@ -943,11 +985,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 onChange={e => {
                   const masked = formatDateBR(e.target.value);
                   setDeliveryDate(masked);
+                  validateDeliveryDate(masked);
                   if (dateInputRef.current) dateInputRef.current.value = parseDateBR(masked) ?? '';
                 }}
               />
               {!locked && deliveryDate && (
-                <button type="button" onClick={() => { setDeliveryDate(''); if (dateInputRef.current) dateInputRef.current.value = ''; }}
+                <button type="button" onClick={() => { setDeliveryDate(''); setDeliveryDateError(''); if (dateInputRef.current) dateInputRef.current.value = ''; }}
                   className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors" title="Limpar data">
                   <X className="w-4 h-4" />
                 </button>
@@ -959,12 +1002,18 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <input
                 ref={dateInputRef}
                 type="date"
+                min={todayIso}
                 className="absolute inset-0 w-full opacity-0 pointer-events-none"
                 tabIndex={-1}
                 aria-hidden="true"
-                onChange={e => setDeliveryDate(e.target.value ? formatDateToBR(e.target.value) : '')}
+                onChange={e => {
+                  const value = e.target.value ? formatDateToBR(e.target.value) : '';
+                  setDeliveryDate(value);
+                  validateDeliveryDate(value);
+                }}
               />
             </div>
+            {deliveryDateError && <p className="mt-1 text-xs text-red-600">{deliveryDateError}</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
@@ -1086,6 +1135,57 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: GRADIENTS.primary }}>
                 {saving ? 'Cancelando...' : 'Confirmar cancelamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeliveryErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowDeliveryErrorModal(false)}
+          onKeyDown={e => { if (e.key === 'Escape') setShowDeliveryErrorModal(false); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-zinc-900 text-lg">Entrega não permitida</h3>
+                <p className="text-xs text-zinc-500">Pagamento necessário antes da entrega.</p>
+              </div>
+            </div>
+            <p className="text-sm text-zinc-700">A fórmula só pode ser entregue quando o pagamento estiver como <strong>Pago</strong>.</p>
+            <div className="mt-5 flex justify-end">
+              <button type="button" onClick={() => setShowDeliveryErrorModal(false)} autoFocus
+                className="px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
+                style={{ background: GRADIENTS.primary }}>
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveError && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSaveError('')}
+          onKeyDown={e => { if (e.key === 'Escape') setSaveError(''); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="save-error-title">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 id="save-error-title" className="font-bold text-zinc-900 text-lg">Não foi possível salvar</h3>
+                <p className="text-sm text-zinc-700 mt-2">{saveError}</p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button type="button" onClick={() => setSaveError('')} autoFocus
+                className="px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
+                style={{ background: GRADIENTS.primary }}>
+                Entendi
               </button>
             </div>
           </div>

@@ -1,6 +1,27 @@
 # PharmaFlow — Agent Instructions
 
-PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind CSS v4) for pharmacy compounding workflow. All data flows through MariaDB — no local cache or offline sync. UI and comments are in Brazilian Portuguese.
+Use este arquivo como mapa curto de navegação. Consulte os documentos vinculados somente quando a tarefa tocar aquela área; não faça uma varredura completa do repositório para uma mudança localizada quando o mapa for suficiente. Expanda a investigação se imports, rotas, schema ou evidências de runtime revelarem dependências não documentadas.
+
+## Projeto e navegação
+
+PharmaFlow é uma aplicação desktop Electron para fluxo de manipulação farmacêutica: Electron, React 19, Vite, TypeScript, Tailwind CSS v4 e MariaDB. O renderer nunca acessa MariaDB diretamente.
+
+```text
+electron/main.ts       → janela, IPC, configuração e eventos de mudança
+electron/preload.ts    → bridge isolada do renderer
+electron/db.ts         → queries MariaDB, sessões, autorização e auditoria
+src/App.tsx            → autenticação, navegação e composição
+src/components/        → telas e módulos de negócio
+src/services/lanDatabase.ts → facade tipada IPC/HTTP
+src/hooks/useData.ts   → carregamento, polling e atualização
+src/context/           → sessão e rascunho de fórmula
+database.sql           → schema operacional
+docs/                  → mapas arquiteturais e decisões
+```
+
+Detalhes: [architecture.md](docs/architecture.md), [modules.md](docs/modules.md), [database.md](docs/database.md), [authentication.md](docs/authentication.md) e [decisions](docs/decisions/).
+
+Interface e comentários novos devem permanecer em português brasileiro. Todos os dados fluem pelo MariaDB; não há cache local nem sincronização offline documentada.
 
 ---
 
@@ -40,7 +61,7 @@ PharmaFlow is an online-first desktop app (Electron + Vite + React 19 + Tailwind
 
 - **Session**: Single active session/user. Heartbeat every 2s client-side; stale cleanup every 60s server-side (TTL 120s).
 - **Force login**: Returns `conflict: true` if logged in elsewhere; pass `force: true` to override.
-- **Setup mode**: Login `admin`/`admin123` → `setupMode: true`, shows only Settings screen.
+- **Setup mode**: o login especial de configuração retorna `setupMode: true` e mostra apenas Settings. Não copie credenciais para documentação; consulte o código quando esse fluxo precisar mudar.
 - **Exit confirmation**: Blocks close/logout until modal confirmed (`app:confirm-exit` / `app:exit-confirmed`).
 
 ---
@@ -81,3 +102,12 @@ Defined in `src/components/Logo.tsx`:
 3. Expose in `electron/preload.ts`
 4. Add typed method in `src/services/lanDatabase.ts`
 5. Use `db.*` in React components via `useData` hook
+
+## Fluxo para novas tarefas
+
+1. Identifique a área em `docs/modules.md`.
+2. Consulte o documento de arquitetura, banco ou autenticação correspondente.
+3. Inspecione somente os entrypoints e dependências indicados.
+4. Faça a menor alteração consistente; novo acesso a dados segue a cadeia IPC → preload → service.
+5. Execute `npm run lint` e, quando bundling/empacotamento for afetado, `npm run build`.
+6. Atualize a documentação somente se uma fronteira arquitetural ou decisão mudar.
