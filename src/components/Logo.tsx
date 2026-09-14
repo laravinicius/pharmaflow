@@ -46,7 +46,7 @@ export function BrandLogo({ size = 'md' }: { size?: 'icon' | 'md' | 'lg' | 'side
 
   if (size === 'lg') {
     return (
-      <LogoImage sizePx={120} fillWidth variant="original" />
+      <LogoImage sizePx={448} fillWidth variant="original" />
     );
   }
 
