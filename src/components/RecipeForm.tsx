@@ -34,7 +34,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [appliedSavedFormula, setAppliedSavedFormula] = useState<SavedFormula | null>(null);
   const [budgetNumber, setBudgetNumber] = useState('');
   const [bQty, setBQty] = useState('');
-  const [bUnit, setBUnit] = useState('dose');
+  const [bUnit, setBUnit] = useState('doses');
   const [bValue, setBValue] = useState('');
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [selectedBudgetIndex, setSelectedBudgetIndex] = useState<number | null>(null);
@@ -122,7 +122,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       const budgetItems = formula.budget_items ?? [];
       const selIdx = budgetItems.findIndex(bi => bi.is_selected);
       setSelectedBudgetIndex(selIdx >= 0 ? selIdx : null);
-      setAttendantName(formula.attendant_name ?? '');
+      setAttendantName((formula.attendant_name ?? '').toUpperCase());
       setDeliveryDate(formula.delivery_date ? formatDateToBR(formula.delivery_date) : '');
       setPaymentStatus(formula.payment_status ?? '');
       setPaymentMethod(formula.payment_method ?? '');
@@ -159,7 +159,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setAppliedSavedFormula(null);
     setBudgetNumber('');
     setBQty('');
-    setBUnit('dose');
+    setBUnit('doses');
     setBValue('');
     setBudgetItems([]);
     setSelectedBudgetIndex(null);
@@ -278,7 +278,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       : budgetItems.map((bi, i) => ({ ...bi, is_selected: selectedBudgetIndex === i }));
     return {
       customer_id: selectedCustomerId as number,
-      attendant_name: user.name,
+      attendant_name: attendantName,
       items: items.map(i => ({ insumo_id: i.insumo_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
       budget_number: budgetNumber || undefined,
       budget_items: payloadBudgetItems.length > 0 ? payloadBudgetItems : undefined,
@@ -963,7 +963,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             value={attendantName}
             disabled={locked}
-            onChange={e => setAttendantName(e.target.value)}
+            onChange={e => setAttendantName(e.target.value.toUpperCase())}
           />
         </div>
       </div>

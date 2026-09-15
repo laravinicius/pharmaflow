@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS saved_formula_budget_items (
   id               INT AUTO_INCREMENT PRIMARY KEY,
   saved_formula_id INT            NOT NULL,
   quantity         DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
-  unit             VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, dose, g, ml',
+  unit             VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, doses, g, ml',
   value            DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
   FOREIGN KEY (saved_formula_id) REFERENCES saved_formulas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

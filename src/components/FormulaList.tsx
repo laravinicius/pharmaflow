@@ -45,7 +45,7 @@ export function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, monthlySummary = false, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; monthlySummary?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
+export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, monthlySummary = false, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; monthlySummary?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const { sessionToken } = useAuth();
   const [search, setSearch] = useState('');
@@ -164,13 +164,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const showRepeat = !!onRepeat;
   const gridCols = variant === 'confirmed'
     ? showAndamento
-      ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_0.7fr_0.7fr_1.5fr_0.8fr_0.6fr]'
-      : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.6fr_0.8fr]'
+      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_0.7fr_1.5fr_0.8fr_0.6fr]'
+      : 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.6fr_0.8fr]'
     : showAndamento
-      ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]'
+      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]'
       : showRepeat
-        ? 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.6fr]'
-        : 'md:grid-cols-[2fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
+        ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.6fr]'
+        : 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
+  const pendingGridCols = 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
 
   return (
     <>
@@ -223,8 +224,13 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         <div className="space-y-3">
           {filtered.length > 0 && variant === 'confirmed' && (
             <div className={`hidden md:grid ${gridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
-              <span>Cliente</span><span>Quantidade</span><span>Valor</span><span>Atendente PM</span>
+              <span>Cliente</span><span>Orçamento</span><span>Quantidade</span><span>Valor</span><span>Atendente</span><span>Funcionário</span>
               <span>Data criação</span><span>Data entrega</span>{showAndamento && <span>Andamento</span>}<span>Whatsapp</span><span />
+            </div>
+          )}
+          {filtered.length > 0 && variant === 'pending' && (
+            <div className={`hidden md:grid ${pendingGridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
+              <span>Cliente</span><span>Orçamento</span><span>Quantidade</span><span>Valor</span><span>Atendente</span><span>Funcionário</span><span>Insumos</span><span>Confirmar</span><span />
             </div>
           )}
 {filtered.map((f, idx) => {
@@ -256,6 +262,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                       {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
                     </div>
+                    <p className="text-zinc-700 truncate">{f.budget_number || '—'}</p>
                     <div className="text-zinc-700 space-y-0.5 font-medium">
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
@@ -265,6 +272,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                     </div>
                     <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
+                    <p className="text-zinc-700 truncate">{employeeName || '—'}</p>
                     <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
                     <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
                     {showAndamento && (
@@ -338,32 +346,39 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 onFocus={() => setFocusedIdx(idx)}
                 onBlur={() => setFocusedIdx(-1)}
                 className={`w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-3 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
-                <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1.2fr_1fr_2fr_1.1fr] gap-2 items-center text-sm">
+                <div className={`grid grid-cols-1 ${pendingGridCols} gap-2 items-center text-sm`}>
                   <div className="min-w-0">
                     <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                     {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
                   </div>
+                  <p className="text-zinc-700 truncate">{f.budget_number || '—'}</p>
+                  <div className="text-zinc-700 space-y-0.5 font-medium">
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
+                  </div>
+                  <div className="text-zinc-700 space-y-0.5 tabular-nums">
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
+                  </div>
                   <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
-                  <p className="text-zinc-500 whitespace-nowrap">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
-                  <div className="min-w-0">
-                    <p className="text-zinc-600 truncate">
-                      {f.items.slice(0, 3).map((item, idx) => (
-                        <span key={idx}>{idx > 0 && <span className="text-zinc-300">, </span>}{item.insumo_name}</span>
-                      ))}
-                    </p>
+                  <p className="text-zinc-700 truncate">{employeeName || '—'}</p>
+                  <div className="min-w-0 text-zinc-600">
+                    {f.items.slice(0, 3).map((item, idx) => <p key={idx} className="truncate">{item.insumo_name}</p>)}
                     {f.items.length > 3 && (
                       <p className="text-xs text-zinc-400 font-medium pt-0.5">
-                        Mais {f.items.length - 3} insumo{f.items.length - 3 === 1 ? '' : 's'}
+                        +{f.items.length - 3} insumo{f.items.length - 3 === 1 ? '' : 's'}
                       </p>
                     )}
                   </div>
-                  <div className="flex justify-end items-center gap-2">
+                  <div className="flex justify-end">
                     <button type="button" disabled={confirmingId === f.id}
                       onClick={(e) => { e.stopPropagation(); handleConfirm(f); }}
                       className="px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                       style={{ background: GRADIENTS.primary }}>
                       {confirmingId === f.id ? 'Confirmando...' : 'Confirmar'}
                     </button>
+                  </div>
+                  <div className="flex justify-end">
                     <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white/70 flex items-center justify-center text-zinc-400 group-hover:border-red-300 group-hover:text-red-600 transition-colors">
                       <ChevronRight className="w-4 h-4" />
                     </div>

@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext';
 export function SavedFormulaManager() {
   const { data: formulas, loading, error, reload } = useData(() => db.savedFormulas.list());
   const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
-  const { sessionToken } = useAuth();
+  const { user, sessionToken } = useAuth();
   const [name, setName] = useState('');
   const [budgetNumber, setBudgetNumber] = useState('');
   const [items, setItems] = useState<SavedFormulaItem[]>([]);
@@ -28,7 +28,7 @@ export function SavedFormulaManager() {
   const [unit, setUnit] = useState('mg');
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [bQty, setBQty] = useState('');
-  const [bUnit, setBUnit] = useState('dose');
+  const [bUnit, setBUnit] = useState('doses');
   const [bValue, setBValue] = useState('');
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const pendingInsumoName = useRef('');
@@ -74,7 +74,7 @@ export function SavedFormulaManager() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('dose'); setBValue(''); setFormError(''); setSuccess(null); };
+  const reset = () => { setName(''); setBudgetNumber(''); setItems([]); setEditingId(null); setInsumoQuery(''); setSelectedInsumoId(''); setQuantity(''); setUnit('mg'); setBudgetItems([]); setBQty(''); setBUnit('doses'); setBValue(''); setFormError(''); setSuccess(null); };
 
   const allFormulas = (formulas as SavedFormula[]) ?? [];
   const allInsumos = (insumos as Insumo[]) ?? [];
@@ -511,7 +511,7 @@ export function SavedFormulaManager() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead><tr className="border-b border-zinc-100 text-zinc-400 text-xs uppercase font-semibold">
-                      <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Composição</th><th className="px-4 py-3">Cadastro</th><th className="px-4 py-3 text-right">Ações</th>
+                      <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Orçamento</th><th className="px-4 py-3">Composição</th><th className="px-4 py-3">Atendente</th><th className="px-4 py-3">Funcionário</th><th className="px-4 py-3">Cadastro</th><th className="px-4 py-3 text-right">Ações</th>
                     </tr></thead>
                     <tbody className="divide-y divide-zinc-50">
                       {list.map(f => (
@@ -519,9 +519,12 @@ export function SavedFormulaManager() {
                           <td className="px-4 py-3 font-medium text-zinc-900">
                             <HighlightMatch text={f.name} query={search} />
                           </td>
+                          <td className="px-4 py-3 text-zinc-700 text-sm">{f.budget_number || '—'}</td>
                           <td className="px-4 py-3 text-zinc-600 text-sm max-w-xs">
                             {f.items.map(i => `${i.insumo_name} ${formatQuantity(i.quantity)} ${i.unit ?? 'mg'}`).join(', ')}
                           </td>
+                          <td className="px-4 py-3 text-zinc-500 text-sm">—</td>
+                          <td className="px-4 py-3 text-zinc-700 text-sm">{user.name}</td>
                           <td className="px-4 py-3 text-zinc-500 text-sm">{f.created_at ? new Date(f.created_at).toLocaleString('pt-BR') : '—'}</td>
                           <td className="px-4 py-3 text-right space-x-3">
                             <button onClick={() => startEdit(f)} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
