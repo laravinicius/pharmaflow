@@ -2,377 +2,202 @@
 
 ![Version](https://img.shields.io/badge/version-0.0.1-blue)
 ![Node](https://img.shields.io/badge/Node-20%2B-green)
-![Electron](https://img.shields.io/badge/Electron-33-blue)
+![Electron](https://img.shields.io/badge/Electron-36-blue)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Vite](https://img.shields.io/badge/Vite-6-646cff)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-v4-06b6d4)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
-![MariaDB](https://img.shields.io/badge/MariaDB-10%2B-0064a5)
+![MariaDB](https://img.shields.io/badge/MariaDB-11-0064a5)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-Aplicação desktop online-first para gerenciamento de fluxo de manipulação farmacêutica. Construída com Electron, Vite, React 19 e Tailwind CSS v4, com persistência de dados em MariaDB/MySQL — sem cache local ou sincronização offline.
+Aplicação desktop online-first para gerenciamento do fluxo de manipulação farmacêutica. Usa Electron, React 19, Vite, TypeScript, Tailwind CSS v4 e MariaDB. Não há cache local nem sincronização offline documentada.
 
-> **Nome do produto:** PIX Farma (exibido na barra de título e instalador)  
-> **Nome do repositório:** PharmaFlow
+O produto é exibido como **PIX Farma**; o repositório se chama **PharmaFlow**.
 
----
-
-## Capturas de Tela
-
-As capturas de tela da aplicação podem ser adicionadas ao diretório `docs/screenshots/`:
-
-- `dashboard.png` — Dashboard com estatísticas
-- `recipe.png` — Tela Nova Fórmula
-- `admin.png` — Painel Administração
-- `customers.png` — Gestão de Clientes
-- `insumos.png` — Gestão de Insumos
-- `saved-formulas.png` — Fórmulas Salvas
-- `settings.png` — Configurações de conexão DB
-- `login.png` — Tela de login
-
-Tamanho recomendado: 1280x800 (resolução padrão da janela). Formato: PNG ou WebP.
-
----
-
-## Principais Funcionalidades
+## Funcionalidades
 
 | Módulo | Descrição |
-|--------|-----------|
-| Dashboard | Visão geral com estatísticas em tempo real (fórmulas totais, pendentes, confirmadas, clientes, insumos) e ações rápidas |
-| Nova Fórmula | Criação de fórmulas com cliente, atendente, orçamento, insumos (quantidade + unidade), itens de orçamento (cápsulas/ml/g + valor), data de entrega, pagamento |
-| Pendentes | Lista de fórmulas aguardando confirmação; confirmação exige preenchimento de campos obrigatórios |
-| Confirmadas | Fórmulas confirmadas para manipulação (status confirmed / completed); controle de andamento: em_producao, aguardando_retirada, aguardando_envio, entregue |
-| Histórico | Fórmulas canceladas e entregues; filtro por status; ação Repetir para criar nova fórmula baseada em anterior |
-| Clientes | CRUD completo com telefone único; busca e paginação |
-| Insumos | CRUD de insumos (matérias-primas) com nome único |
-| Fórmulas Salvas | Templates reutilizáveis (nome, número orçamento, insumos, itens de orçamento) |
-| Administração (admin) | Gestão de usuários (admin/employee), troca de senha, exclusão com confirmação de credenciais admin |
-| Configurações | Conexão MariaDB (host, porta, usuário, senha, database) salva em userData/config.json; teste de conexão |
-| Autenticação | Login com detecção de sessão ativa em outro dispositivo (force login); logout por inatividade (5 min); heartbeat 30s |
+|---|---|
+| Dashboard | Estatísticas de fórmulas, clientes e insumos e ações rápidas. |
+| Nova Fórmula | Cliente, atendente, orçamento, insumos, quantidades, unidades, entrega e pagamento. |
+| Pendentes | Fórmulas `pending`, aguardando confirmação e validação dos campos obrigatórios. |
+| Confirmadas | Fórmulas `confirmed`/`completed`, com andamento `em_producao`, `aguardando_retirada`, `aguardando_envio` ou `entregue`. |
+| Histórico | Fórmulas `cancelled`/`delivered`, filtros, visualização e repetição. |
+| Clientes | Cadastro, edição, busca e paginação; telefone único. |
+| Insumos | Cadastro e edição de matérias-primas; nome único. |
+| Minhas Fórmulas | Modelos reutilizáveis com insumos e itens de orçamento. |
+| Administração | Usuários `admin`/`employee`, administradores, troca de senha e exclusões protegidas. |
+| Logs de auditoria | Consulta de ações registradas em `action_logs`. |
+| Configurações | Conexão MariaDB salva em `userData/config.json` e teste de conexão. |
+| WhatsApp | Abertura de links `whatsapp://send`. |
 
----
+A entrega só pode avançar quando o pagamento estiver marcado como pago, conforme as regras do backend.
 
-## Stack Tecnológico
+## Stack
 
-| Camada | Tecnologia | Versão |
-|--------|------------|--------|
-| Runtime | Electron | 33.x |
-| Frontend | React | 19.x |
-| Build Tool | Vite | 6.x |
-| Estilização | Tailwind CSS | v4 (via @tailwindcss/vite) |
-| Linguagem | TypeScript | 5.8.x |
-| Banco de Dados | MariaDB / MySQL | 10+ / 8+ |
-| Driver DB | mysql2 | 3.18.x |
-| Animações | motion (framer-motion) | 12.x |
-| Ícones | lucide-react | 0.546.x |
-| Empacotamento | electron-builder | 25.x |
-| Lint/Typecheck | tsc --noEmit | — |
-
----
+| Camada | Tecnologia |
+|---|---|
+| Runtime | Electron 36.x |
+| Frontend | React 19.x |
+| Build | Vite 6.x + `vite-plugin-electron` |
+| Estilos | Tailwind CSS 4.x via `@tailwindcss/vite` |
+| Linguagem | TypeScript 5.8.x |
+| Banco | MariaDB 11 no Docker; MariaDB/MySQL configurável |
+| Driver | `mysql2` 3.18.x |
+| Animações | `motion` 12.x |
+| Ícones | `lucide-react` 0.546.x |
+| Empacotamento | `electron-builder` 25.x |
+| Verificação | `tsc --noEmit` |
 
 ## Arquitetura
 
-### Fluxo de Dados (3 Camadas — Renderer nunca acessa o DB diretamente)
+O renderer não acessa o banco diretamente:
 
-```
-┌──────────────────┐     IPC      ┌──────────────────┐     Pool MySQL     ┌─────────────┐
-│  React (Renderer) │ ◄──────────► │ electron/main.ts  │ ◄───────────────► │  MariaDB    │
-│  src/services/   │              │  ipcMain.handle  │                    │  (pharmaflow)│
-│  lanDatabase.ts  │              │  electron/preload │                    │             │
-└──────────────────┘   contextBridge ┴──────────────────┘                    └─────────────┘
-       │
-       ▼
-┌──────────────────┐
-│   useData Hook   │  ← Polling 10s + Evento 'data:changed' broadcast
-└──────────────────┘
-```
-
-1. **electron/main.ts** — Handlers ipcMain.handle para cada operação (auth, users, customers, insumos, formulas, savedFormulas, config)
-2. **electron/preload.ts** — contextBridge.exposeInMainWorld('electronAPI', {...}) expõe API tipada para o renderer
-3. **src/services/lanDatabase.ts** — Camada tipada db.* (db.auth.login, db.formulas.list, etc.) consumida pelos componentes React
-
-### Path Alias
-- @/* resolve para raiz do repositório (não src/)
-
----
-
-## Banco de Dados
-
-### Schema (database.sql — Single Source of Truth)
-
-```sql
--- Tabelas principais
-users              -- id, name, username, password (SHA-256 hex), role (admin/employee)
-customers          -- id, name, phone (UNIQUE)
-insumos            -- id, name (UNIQUE)
-formulas           -- id, customer_id, customer_phone, attendant_name, budget_number,
-                   -- delivery_date, payment_status, payment_method, delivery_status,
-                   -- cancel_reason, status (pending/completed/confirmed/cancelled/delivered)
-formula_items      -- id, formula_id, insumo_id, quantity (DECIMAL 10,3), unit (g/mcg/ui/mg)
-formula_budget_items -- id, formula_id, quantity, unit (caps/ml/g), value, is_selected
-saved_formulas     -- id, name (UNIQUE), budget_number
-saved_formula_items -- id, saved_formula_id, insumo_id, quantity, unit
-saved_formula_budget_items -- id, saved_formula_id, quantity, unit, value
-sessions           -- id, user_id, token (UNIQUE), last_seen
+```text
+React
+  ↓ src/services/lanDatabase.ts
+preload.ts / contextBridge
+  ↓ IPC
+electron/main.ts / ipcMain.handle
+  ↓
+electron/db.ts / mysql2
+  ↓
+MariaDB
 ```
 
-> **Regra:** Toda alteração de schema → atualize apenas database.sql. Não há arquivos de migração versionados; o banco é recriado do zero a partir desse arquivo.
+- `main.ts`: janela, handlers IPC, configuração, saída e notificações.
+- `preload.ts`: API isolada `window.electronAPI`.
+- `db.ts`: queries, autenticação, autorização, sessões e auditoria.
+- `lanDatabase.ts`: fachada tipada do renderer.
+- `useData.ts`: evento `data:changed` e polling a cada 10 segundos.
+- A fachada também possui caminho compatível com execução web via `fetch` para endpoints `/api`, quando disponível.
+- O alias `@/*` resolve para a raiz do repositório, não para `src/`.
 
-### Credenciais Iniciais (Setup Mode)
-- **Usuário:** admin / admin123 (apenas para primeira configuração do banco)
-- Ao logar com essas credenciais → setupMode: true → apenas a tela Configurações fica visível
-- Configure a conexão MariaDB, teste, salve → reinicie o app → login normal
+## Banco de dados
 
----
+`database.sql` é a fonte operacional única. O Docker o monta na inicialização. `migrations/` é somente histórico; não há executor de migrations no runtime ou nos scripts.
 
-## Autenticação e Sessão
+Tabelas principais:
 
-| Recurso | Detalhes |
-|---------|----------|
-| Hash de senha | SHA-256 hex (função hash() em electron/db.ts) |
-| Roles | admin (acesso total + admin panel) / employee (operações padrão) |
-| Heartbeat | Cliente envia a cada 30s (db.auth.heartbeat); servidor valida token |
-| Limpeza servidor | Job a cada 60s remove sessões com last_seen > 120s (TTL 2 min) |
-| Force Login | Se usuário já logado em outro dispositivo → retorna conflict: true; passe force: true para derrubar sessão anterior |
-| Inatividade | Sem interação (mouse/teclado/click/touch) por 5 min → logout automático |
-| Sessão única | Apenas 1 sessão ativa por usuário (exceto force login) |
-
----
-
-## Modo Setup (Primeira Execução)
-
-1. Abra o app → tela de login
-2. Entre com admin / admin123
-3. App entra em Setup Mode (indicador visual "Modo Configuração" na sidebar)
-4. Apenas Configurações acessível → preencha host/porta/usuário/senha/database do MariaDB
-5. Clique Testar Conexão → Salvar
-6. Reinicie o app → login normal com usuários criados no painel Admin
-
----
-
-## Confirmação de Saída
-
-- Fechar janela ou Sair da conta → modal nativo Electron bloqueia a ação
-- Usuário deve confirmar no modal (Sim, sair / Cancelar)
-- IPC: app:confirm-exit (main → renderer) / app:exit-confirmed (renderer → main)
-- Previne fechamento acidental com trabalho não salvo
-
----
-
-## Paleta de Cores (Valores Exatos)
-
-Definidos em src/components/Logo.tsx — use hex ou constantes, NÃO red-500/blue-500 do Tailwind.
-
-| Constante | Hex | Uso |
-|-----------|-----|-----|
-| PRIMARY (vermelho) | #C5243E | Botões primários, destaque, links, badges ativos |
-| PRIMARY_DARK | #9B1A2E | Fim do gradiente botões vermelhos |
-| SECONDARY (azul) | #243465 | Sidebar, botões secundários, navegação |
-| SECONDARY_DARK | #1A2850 | Fim do gradiente botões azuis |
-| FARMA_COLOR (azul claro) | #4A90D9 | Logo "Farma", elementos informativos |
-
-### Gradientes (usar inline style={{}})
-
-```css
-/* Botão vermelho */
-background: linear-gradient(135deg, #C5243E, #9B1A2E);
-
-/* Botão azul */
-background: linear-gradient(135deg, #243465, #1A2850);
+```text
+users, customers, insumos, formulas
+formula_items, formula_budget_items
+saved_formulas, saved_formula_items, saved_formula_budget_items
+budget_number_registry, sessions, action_logs
 ```
 
-### Cores de Apoio
+Senhas são armazenadas atualmente como SHA-256 hexadecimal. O seed de `database.sql` cria:
 
-| Contexto | Background | Border | Texto |
-|----------|------------|--------|-------|
-| Vermelho claro | #FEF0F2 | #FED7DB | #C5243E |
-| Azul claro | #EFF2FA | #D0DCE8 | #243465 |
-| Seleção (::selection) | #FED7DB | — | #8C1A3D |
-| Nav item ativo | — | — | text-amber-400 (#FBBF24) |
+- usuário: `administrador`
+- senha: definida pelo hash existente no próprio `database.sql`
+- papel: `admin`
 
----
+O modo especial de configuração usa `admin` / `admin123`; essas credenciais não são o usuário seed e servem apenas para acessar Configurações.
 
-## Estrutura do Projeto
+## Autenticação e sessões
 
-```
-pharmaflow/
-├── electron/              # Processo principal Electron
-│   ├── main.ts           # IPC handlers, DB pool, window management
-│   ├── preload.ts        # contextBridge → window.electronAPI
-│   ├── db.ts             # Classe Db (queries SQL + hash)
-│   └── dbError.ts        # Formatação de erros MySQL
-├── src/
-│   ├── components/       # Componentes React (UI)
-│   │   ├── Logo.tsx      # Logo + constantes de cor
-│   │   ├── NavItem.tsx   # Item de navegação (sidebar)
-│   │   ├── Dashboard.tsx
-│   │   ├── RecipeForm.tsx
-│   │   ├── FormulaList.tsx
-│   │   ├── CustomerManager.tsx
-│   │   ├── InsumoManager.tsx
-│   │   ├── SavedFormulaManager.tsx
-│   │   ├── UserManager.tsx (AdminPanel)
-│   │   ├── SettingsManager.tsx
-│   │   └── ...
-│   ├── context/
-│   │   └── AuthContext.tsx  # Provider de autenticação
-│   ├── hooks/
-│   │   └── useData.ts       # Hook de dados (polling + data:changed)
-│   ├── services/
-│   │   └── lanDatabase.ts   # API tipada db.* → electronAPI
-│   ├── types.ts            # Interfaces TypeScript (User, Formula, etc.)
-│   ├── utils/
-│   │   ├── format.ts       # Formatação de moeda, data, telefone
-│   │   └── perf.ts         # Utilitários de performance
-│   ├── App.tsx             # App principal (roteamento, layout, auth)
-│   ├── main.tsx            # Entry point React
-│   └── index.css           # Tailwind v4 + ::selection + globals
-├── migrations/             # Histórico legado (não usado no fluxo oficial)
-├── public/                 # Assets estáticos (ícones, logos)
-├── scripts/
-│   ├── patch-icon.js       # Patch do ícone no build
-│   └── compress-images.ts  # Otimização de imagens
-├── database.sql            # Único script SQL do schema (source of truth)
-├── index.html
-├── vite.config.ts
-├── tsconfig.json
-├── package.json
-├── electron-builder.env
-└── README.md
-```
+- Papéis: `admin` e `employee`.
+- Token mantido em memória no renderer, sem persistência local.
+- Heartbeat do cliente a cada 2 segundos.
+- TTL de sessão: 120 segundos sem heartbeat.
+- Limpeza de sessões órfãs a cada 60 segundos no processo principal.
+- Uma sessão ativa por usuário; login forçado substitui a anterior.
+- Logout após 5 minutos sem mouse, teclado, clique ou toque.
+- Operações administrativas também são verificadas no backend.
 
-### Arquivos Não Versionados (.gitignore)
-- dist/ dist-electron/ release/ — artefatos de build
-- att.txt db.txt — arquivos locais de apoio
-- node_modules/ .env*
+## Primeira execução
 
----
+1. Inicie MariaDB ou use o Docker Compose.
+2. Execute `npm install`.
+3. Execute `npm run dev`.
+4. Para configurar a conexão, use `admin` / `admin123`.
+5. Preencha e teste host, porta, usuário, senha e banco em Configurações.
+6. Reinicie e entre com `administrador` ou outro usuário existente; novos usuários podem ser criados em Administração.
 
-## Comandos
+## Banco local com Docker
 
-| Comando | Descrição |
-|---------|-----------|
-| npm install | Instala dependências |
-| npm run dev | Inicia servidor de desenvolvimento Vite na porta 3000 (0.0.0.0) + Electron em modo desenvolvimento |
-| npm run build | vite build --configLoader native + electron-builder --win → gera pacote dir em release/<version>/ (Windows: sem NSIS para evitar download de binários externos) |
-| npm run preview | Preview do build Vite (sem Electron) |
-| npm run lint | tsc --noEmit — apenas verificação de tipos (sem framework de teste) |
-| npm run clean | Remove dist/, dist-electron/, release/ |
-
----
-
-## Desenvolvimento
-
-### Pré-requisitos
-- Node.js 20+
-- MariaDB/MySQL acessível (local ou remoto)
-- Docker Desktop (para usar o banco de desenvolvimento local)
-
-### Banco de Desenvolvimento com Docker
-
-O Compose cria um MariaDB local na porta `3306`, inicializa o schema a partir de `database.sql` e persiste os dados em um volume nomeado.
+O Compose usa MariaDB 11, expõe `3306`, executa `database.sql` na primeira inicialização e persiste dados em volume nomeado.
 
 ```bash
-# Iniciar o banco em segundo plano
 docker compose up -d
-
-# Acompanhar o status e o healthcheck
 docker compose ps
 docker compose logs -f mariadb
+```
 
-# Recriar o banco do zero (remove os dados persistidos)
+Credenciais de desenvolvimento: banco `pharmaflow`, usuário `pharmaflow_app`, senha `pharmaflow_dev`, root `pharmaflow_root_dev`.
+
+Para recriar o banco, removendo os dados persistidos:
+
+```bash
 docker compose down -v
 docker compose up -d
 ```
 
-As credenciais de desenvolvimento são `pharmaflow_app` / `pharmaflow_dev`, no banco `pharmaflow`. O usuário inicial definido em `database.sql` permanece disponível após a inicialização.
+## Comandos
 
-### Primeira Execução
-```bash
-npm install
-npm run dev
-# 1. Login: admin / admin123
-# 2. Configure conexão DB em Configurações
-# 3. Reinicie app
-# 4. Crie usuários no painel Admin
-```
+| Comando | Descrição |
+|---|---|
+| `npm install` | Instala dependências. |
+| `npm run dev` | Inicia Vite em `0.0.0.0:3000` com o plugin Electron em desenvolvimento. |
+| `npm run build` | Executa patch do ícone, build Vite e `electron-builder --win`. |
+| `npm run preview` | Preview do build Vite, sem Electron. |
+| `npm run lint` | `tsc --noEmit`; não há suíte de testes configurada. |
+| `npm run clean` | Remove `dist/`, `dist-electron/`, `release/` e `../pharmaflow-release/`. |
 
-### Adicionar Nova Feature de Dados (Checklist)
-
-1. Atualize database.sql se houver mudança de schema
-2. Adicione handler IPC em electron/main.ts (ipcMain.handle)
-3. Exponha em electron/preload.ts (contextBridge)
-4. Adicione método tipado em src/services/lanDatabase.ts (db.*)
-5. Use db.* nos componentes React via hook useData
-
-### Convenções
-- UI e comentários novos: Português Brasileiro
-- Commits: Conventional Commits (feat:, fix:, chore:, refactor:)
-- Branch: feature/nome, fix/nome, chore/nome
-- PR: Descreva o que muda, por que, e como testar
-
----
-
-## Build de Produção (Windows)
+## Build para Windows
 
 ```bash
 npm run build
 ```
 
-Gera em release/<version>/win-unpacked/:
-- PIX Farma.exe — executável standalone (pacote dir)
-- resources/app.asar — código da aplicação empacotado
+Os targets configurados são `dir` e `nsis`. O destino é:
 
-> **Nota:** Configurado target: ["dir", "nsis"] no package.json, mas no Windows o dir é priorizado para build offline-friendly.
+```text
+../pharmaflow-pix-farma-release/<versão>/
+```
 
----
+`dir` gera uma versão descompactada; `nsis` gera o instalador quando os binários necessários estiverem disponíveis.
 
-## Contribuindo
+## Estrutura
 
-1. Fork o repositório
-2. Crie branch: git checkout -b feature/minha-feature
-3. Commit: git commit -m "feat: descrição clara da mudança"
-4. Push: git push origin feature/minha-feature
-5. Abra Pull Request com:
-   - O que foi alterado
-   - Por que (motivação)
-   - Como testar localmente
-   - Screenshots se houver mudança visual
+```text
+pharmaflow/
+├── electron/
+│   ├── main.ts, preload.ts, db.ts, dbError.ts
+├── src/
+│   ├── components/          # telas e módulos de negócio
+│   │   ├── AdminUserManager.tsx, AuditLogs.tsx
+│   │   ├── Dashboard.tsx, FormulaList.tsx, RecipeForm.tsx
+│   │   └── SettingsManager.tsx e demais componentes
+│   ├── context/             # AuthContext e FormDraftContext
+│   ├── hooks/useData.ts
+│   ├── services/lanDatabase.ts
+│   ├── types.ts, App.tsx, index.css
+│   └── utils/                # formatação, navegação e performance
+├── config/branding.ts
+├── database.sql
+├── docker-compose.yml
+├── public/, scripts/, docs/
+├── package.json
+└── README.md
+```
 
-### Padrões de Código
-- npm run lint deve passar (TypeScript strict)
-- Sem console.log em produção
-- Componentes pequenos, responsabilidade única
-- Tipagem explícita em props e retornos de API
+## Convenções
 
----
+- Interface e comentários novos em português brasileiro.
+- Novo acesso a dados segue `main.ts` → `preload.ts` → `lanDatabase.ts` → banco.
+- Mudanças de schema atualizam `database.sql`; não criar migrations sem decisão arquitetural.
+- Mutações preservam auditoria e `data:changed`.
+- Cores de marca: vermelho `#C5243E`, azul `#243465` e azul claro `#4A90D9`; não usar `red-500`/`blue-500` como substitutos.
+- Capturas de tela podem ser colocadas em `docs/screenshots/` (recomendado: 1280x800, PNG/WebP).
 
-## Licença
+## Licença e autor
 
-**MIT License** — veja arquivo LICENSE para detalhes.
+Este projeto está sob a [licença MIT](LICENSE).
 
-> **Resumo:** Uso livre, modificação, distribuição, uso comercial permitido. Inclua aviso de copyright e licença. Sem garantia.
+**Vinicius Lara** — [GitHub](https://github.com/ViniciusLara) · [LinkedIn](https://linkedin.com/in/viniciuslara)
 
----
+Dependências principais: [Electron](https://www.electronjs.org/), [Vite](https://vitejs.dev/), [React](https://react.dev/), [Tailwind CSS](https://tailwindcss.com/), [MariaDB](https://mariadb.org/), [lucide-react](https://lucide.dev/) e [Motion](https://motion.dev/). A lista completa está em [package.json](package.json).
 
-## Autor
 
-**Vinicius Lara**  
-GitHub: https://github.com/ViniciusLara  
-LinkedIn: https://linkedin.com/in/viniciuslara
 
----
-
-## Dependências Principais
-
-Este projeto utiliza as seguintes tecnologias de código aberto:
-
-- [Electron](https://electronjs.org/) — Runtime para aplicações desktop multiplataforma
-- [Vite](https://vitejs.dev/) — Ferramenta de build e servidor de desenvolvimento de alta performance
-- [React](https://react.dev/) — Biblioteca para construção de interfaces de usuário
-- [Tailwind CSS](https://tailwindcss.com/) — Framework CSS utility-first
-- [MariaDB](https://mariadb.org/) — Sistema de gerenciamento de banco de dados relacional
-- [lucide-react](https://lucide.dev/) — Biblioteca de ícones
-- [motion](https://motion.dev/) — Biblioteca de animações
-
-A lista completa de dependências está disponível em package.json.
