@@ -5,7 +5,7 @@ export interface FormulaItem { insumo_id: number; insumo_name: string; quantity:
 export interface BudgetItem { quantity: number; unit: string; value: number; is_selected?: boolean }
 export interface Formula {
   id: number; customer_id: number; customer_name: string; customer_phone: string;
-  attendant_name: string; status: 'pending' | 'completed' | 'confirmed' | 'cancelled' | 'delivered';
+  attendant_name: string; status: 'pending' | 'confirmed' | 'cancelled' | 'delivered';
   created_at: string; items: FormulaItem[]; budget_number?: string; budget_items?: BudgetItem[];
   delivery_date?: string | null;
   payment_status?: string; payment_method?: string | null;

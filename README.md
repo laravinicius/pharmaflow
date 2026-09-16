@@ -200,4 +200,3 @@ Este projeto está sob a [licença MIT](LICENSE).
 Dependências principais: [Electron](https://www.electronjs.org/), [Vite](https://vitejs.dev/), [React](https://react.dev/), [Tailwind CSS](https://tailwindcss.com/), [MariaDB](https://mariadb.org/), [lucide-react](https://lucide.dev/) e [Motion](https://motion.dev/). A lista completa está em [package.json](package.json).
 
 
-

@@ -105,6 +105,7 @@ ipcMain.handle('formulas:add',           async (_, f, sessionToken)          => 
 ipcMain.handle('formulas:update',        async (_, id, f, sessionToken)      => { const r = await db.updateFormula(id, f, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:update-status', async (_, id, status, sessionToken) => { const r = await db.updateFormulaStatus(id, status, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:update-delivery-status', async (_, id, deliveryStatus, sessionToken) => { const r = await db.updateFormulaDeliveryStatus(id, deliveryStatus, sessionToken); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:update-delivery-status-batch', async (_, ids, deliveryStatus, sessionToken) => { const r = await db.updateFormulasDeliveryStatus(ids, deliveryStatus, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:delete',        async (_, id, adminCreds, sessionToken) => { const r = await db.deleteFormula(id, adminCreds, sessionToken); notifyDataChanged(); return r; });
 
 // ─── Fórmulas Salvas ─────────────────────────────────────────────────────────

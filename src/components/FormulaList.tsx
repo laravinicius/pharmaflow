@@ -45,15 +45,16 @@ export function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, monthlySummary = false, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; monthlySummary?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
+export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, monthlySummary = false, deliveryStatusFilter, batchActionLabel, selectable = true, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; batchActionLabel?: string; selectable?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const { sessionToken } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [focusedIdx, setFocusedIdx] = useState(-1);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
-  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
   const [pendingWhatsAppStatus, setPendingWhatsAppStatus] = useState<Formula | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [batchUpdating, setBatchUpdating] = useState(false);
   const now = new Date();
   const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
   const [summaryYear, setSummaryYear] = useState(now.getFullYear());
@@ -64,38 +65,43 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       setConfirmingId(f.id);
       try {
         await db.formulas.updateStatus(f.id, 'confirmed', sessionToken ?? undefined);
-        reload();
+        await reload();
+        onConfirm?.(f, []);
       } catch (err: any) {
         alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
       } finally {
         setConfirmingId(null);
       }
+      return;
     }
     onConfirm?.(f, reasons);
   };
 
-  const applyDeliveryStatusChange = async (f: Formula, deliveryStatus: string) => {
-    if (deliveryStatus === 'entregue' && f.payment_status !== 'pago') {
-      onDeliveryBlocked?.(f, ['Status de pagamento: Pago']);
-      return;
-    }
-    setUpdatingStatusId(f.id);
+  const applyBatchDeliveryStatus = async (deliveryStatus: string) => {
+    setBatchUpdating(true);
     try {
-      await db.formulas.updateDeliveryStatus(f.id, deliveryStatus, sessionToken ?? undefined);
+      await db.formulas.updateDeliveriesStatus(selectedIds, deliveryStatus, sessionToken ?? undefined);
+      setSelectedIds([]);
       reload();
     } catch (err: any) {
       alert('Erro ao atualizar o andamento: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally {
-      setUpdatingStatusId(null);
+      setBatchUpdating(false);
     }
   };
 
-  const handleDeliveryStatusChange = async (f: Formula, deliveryStatus: string) => {
-    if (deliveryStatus === 'aguardando_retirada') {
-      setPendingWhatsAppStatus(f);
+  const handleBatchAction = async () => {
+    if (!batchActionLabel || !selectedIds.length) return;
+    const selected = all.filter(f => selectedIds.includes(f.id));
+    if (batchActionLabel === 'Entregue' && selected.some(f => f.payment_status !== 'pago')) {
+      onDeliveryBlocked?.(selected.find(f => f.payment_status !== 'pago')!, ['Status de pagamento: Pago']);
       return;
     }
-    await applyDeliveryStatusChange(f, deliveryStatus);
+    if (batchActionLabel === 'Aguardando retirada') {
+      setPendingWhatsAppStatus(selected[0]);
+      return;
+    }
+    await applyBatchDeliveryStatus('entregue');
   };
 
   const handleWhatsAppStatusChoice = async (notifyCustomer: boolean) => {
@@ -113,7 +119,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         alert('Cliente sem telefone válido para contato.');
       }
     }
-    await applyDeliveryStatusChange(formula, 'aguardando_retirada');
+    await applyBatchDeliveryStatus('aguardando_retirada');
   };
 
   const all = (formulas as Formula[]) ?? [];
@@ -141,13 +147,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const filtered = useMemo(() => {
     return all
       .filter(f => statuses.includes(f.status))
+      .filter(f => !deliveryStatusFilter || f.delivery_status === deliveryStatusFilter)
       .filter(f => !statusFilter || f.status === statusFilter)
       .filter(f =>
         f.customer_name.toLowerCase().includes(searchLower) ||
         (f.attendant_name || '').toLowerCase().includes(searchLower) ||
         String(f.id).includes(searchLower)
       );
-  }, [all, statuses, statusFilter, searchLower]);
+  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter]);
 
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
@@ -161,17 +168,28 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     nao_pago: 'bg-red-100 border-red-300',
     pagar_na_retirada: 'bg-cyan-100 border-cyan-300',
   };
+  const paymentLabels: Record<string, string> = {
+    pago: 'Pago',
+    parcial: 'Parcial',
+    nao_pago: 'Não Pago',
+    pagar_na_retirada: 'Pagar na retirada',
+  };
+  const paymentText: Record<string, string> = {
+    pago: 'text-emerald-700',
+    parcial: 'text-amber-700',
+    nao_pago: 'text-red-700',
+    pagar_na_retirada: 'text-cyan-700',
+  };
   const showRepeat = !!onRepeat;
   const gridCols = variant === 'confirmed'
-    ? showAndamento
-      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_0.7fr_1.5fr_0.8fr_0.6fr]'
-      : 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.6fr_0.8fr]'
+      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.6fr_0.8fr]'
     : showAndamento
       ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]'
       : showRepeat
         ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.6fr]'
         : 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
   const pendingGridCols = 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
+  const columnGap = 'gap-4';
 
   return (
     <>
@@ -182,6 +200,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           <p className="text-zinc-500 text-sm">{subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
+          {batchActionLabel && <button onClick={handleBatchAction} disabled={!selectedIds.length || batchUpdating} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed">{batchUpdating ? 'Atualizando...' : batchActionLabel}</button>}
           <button onClick={reload} className="p-2 text-zinc-400 hover:text-zinc-700 transition-colors" title="Atualizar"><RefreshCw className="w-5 h-5" /></button>
           {statusFilterOptions && (
             <select className="px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm"
@@ -223,14 +242,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       {!loading && !error && (
         <div className="space-y-3">
           {filtered.length > 0 && variant === 'confirmed' && (
-            <div className={`hidden md:grid ${gridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
-              <span>Cliente</span><span>Orçamento</span><span>Quantidade</span><span>Valor</span><span>Atendente</span><span>Funcionário</span>
-              <span>Data criação</span><span>Data entrega</span>{showAndamento && <span>Andamento</span>}<span>Whatsapp</span><span />
+            <div className={`hidden md:grid ${gridCols} ${columnGap} ${selectable ? 'pl-[4.25rem] pr-4' : 'px-4'} text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
+              <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
+              <span className="text-left">Data criação</span><span className="text-left">Data entrega</span><span className="text-left">Pagamento</span><span className="text-right">Whatsapp</span><span />
             </div>
           )}
           {filtered.length > 0 && variant === 'pending' && (
-            <div className={`hidden md:grid ${pendingGridCols} gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400`}>
-              <span>Cliente</span><span>Orçamento</span><span>Quantidade</span><span>Valor</span><span>Atendente</span><span>Funcionário</span><span>Insumos</span><span>Confirmar</span><span />
+            <div className={`hidden md:grid ${pendingGridCols} ${columnGap} px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
+              <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span><span className="text-left">Insumos</span><span className="text-right">Confirmar</span><span />
             </div>
           )}
 {filtered.map((f, idx) => {
@@ -239,7 +258,11 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
               const isFocused = focusedIdx === idx;
               const cardTint = isFocused ? tintFocused : tint;
               return variant === 'confirmed' ? (
-                <div key={f.id} onClick={() => onSelect?.(f)}
+                <div key={f.id} className="flex items-stretch gap-3">
+                {selectable && <div onClick={e => e.stopPropagation()} className="flex items-center justify-center shrink-0">
+                  <input type="checkbox" checked={selectedIds.includes(f.id)} onChange={e => setSelectedIds(ids => e.target.checked ? [...ids, f.id] : ids.filter(id => id !== f.id))} aria-label={`Selecionar fórmula de ${f.customer_name}`} className="h-10 w-10 md:h-16 md:w-8 cursor-pointer accent-emerald-500" />
+                </div>}
+                <div onClick={() => onSelect?.(f)}
                   tabIndex={0}
                   role="button"
                   onKeyDown={e => {
@@ -256,41 +279,35 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   }}
                   onFocus={() => setFocusedIdx(idx)}
                   onBlur={() => setFocusedIdx(-1)}
-                  className={`w-full text-left rounded-2xl border shadow-sm px-4 py-3 hover:shadow-md transition-all group cursor-pointer ${cardTint} focus:outline-none`}>
-                  <div className={`grid grid-cols-1 ${gridCols} gap-2 items-center text-sm`}>
-                    <div className="min-w-0">
+                  className={`w-full text-left rounded-2xl border shadow-sm px-4 py-4 hover:shadow-md transition-all group cursor-pointer ${cardTint} focus:outline-none`}>
+                  <div className={`grid grid-cols-1 ${gridCols} ${columnGap} items-center text-sm`}>
+                    <div className="min-w-0 text-left">
                       <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                       {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
                     </div>
-                    <p className="text-zinc-700 truncate">{f.budget_number || '—'}</p>
-                    <div className="text-zinc-700 space-y-0.5 font-medium">
+                    <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
+                    <div className="text-zinc-700 space-y-1 font-medium text-right">
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                     </div>
-                    <div className="text-zinc-700 space-y-0.5 tabular-nums">
+                    <div className="text-zinc-700 space-y-1 tabular-nums text-right">
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                     </div>
-                    <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
-                    <p className="text-zinc-700 truncate">{employeeName || '—'}</p>
-                    <p className="text-zinc-500">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
-                    <p className="text-zinc-500 whitespace-nowrap">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
-                    {showAndamento && (
-                      <div className="flex justify-end">
-                        <select
-                          value={f.delivery_status ?? ''}
-                          disabled={!f.payment_status || updatingStatusId === f.id}
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          onChange={(e) => handleDeliveryStatusChange(f, e.target.value)}
-                          className="w-full px-2 py-1.5 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm text-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap">
-                          <option value="">Selecione...</option>
-                          <option value="em_producao">Em produção</option>
-                          <option value="aguardando_retirada">Aguardando retirada</option>
-                          <option value="aguardando_envio">Aguardando envio</option>
-                          <option value="entregue">Entregue</option>
-                        </select>
-                      </div>
-                    )}
+                    <p className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
+                    <p className="text-zinc-700 truncate text-left">{employeeName || '—'}</p>
+                    <p className="text-zinc-500 text-left">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-zinc-500 whitespace-nowrap text-left">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
+                    <div className="flex justify-start" onClick={e => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        disabled
+                        aria-label={`Status de pagamento: ${paymentLabels[f.payment_status ?? ''] ?? 'Não informado'}`}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap cursor-default ${paymentTint[f.payment_status ?? ''] ?? 'bg-zinc-50 border-zinc-200'} ${paymentText[f.payment_status ?? ''] ?? 'text-zinc-500'}`}
+                      >
+                        {paymentLabels[f.payment_status ?? ''] ?? 'Não informado'}
+                      </button>
+                    </div>
                     <div className="flex justify-end">
                       {(() => {
                         const whatsappUrl = getWhatsAppUrl(f.customer_phone);
@@ -327,6 +344,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     </div>
                   </div>
                 </div>
+                </div>
             ) : (
               <div key={f.id} onClick={() => onSelect?.(f)}
                 tabIndex={0}
@@ -345,24 +363,24 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 }}
                 onFocus={() => setFocusedIdx(idx)}
                 onBlur={() => setFocusedIdx(-1)}
-                className={`w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-3 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
-                <div className={`grid grid-cols-1 ${pendingGridCols} gap-2 items-center text-sm`}>
-                  <div className="min-w-0">
+                className={`w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-4 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
+                <div className={`grid grid-cols-1 ${pendingGridCols} ${columnGap} items-center text-sm`}>
+                  <div className="min-w-0 text-left">
                     <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                     {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
                   </div>
-                  <p className="text-zinc-700 truncate">{f.budget_number || '—'}</p>
-                  <div className="text-zinc-700 space-y-0.5 font-medium">
+                  <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
+                  <div className="text-zinc-700 space-y-1 font-medium text-right">
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
-                  <div className="text-zinc-700 space-y-0.5 tabular-nums">
+                  <div className="text-zinc-700 space-y-1 tabular-nums text-right">
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
-                  <p className="text-zinc-700 truncate">{f.attendant_name || '—'}</p>
-                  <p className="text-zinc-700 truncate">{employeeName || '—'}</p>
-                  <div className="min-w-0 text-zinc-600">
+                  <p className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
+                  <p className="text-zinc-700 truncate text-left">{employeeName || '—'}</p>
+                  <div className="min-w-0 text-zinc-600 text-left">
                     {f.items.slice(0, 3).map((item, idx) => <p key={idx} className="truncate">{item.insumo_name}</p>)}
                     {f.items.length > 3 && (
                       <p className="text-xs text-zinc-400 font-medium pt-0.5">

@@ -126,7 +126,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       setDeliveryDate(formula.delivery_date ? formatDateToBR(formula.delivery_date) : '');
       setPaymentStatus(formula.payment_status ?? '');
       setPaymentMethod(formula.payment_method ?? '');
-      setDeliveryStatus(formula.delivery_status ?? '');
+      setDeliveryStatus(formula.delivery_status ?? (formula.status === 'confirmed' ? 'em_producao' : ''));
     }
   }, [formula]);
 
@@ -285,7 +285,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       delivery_date: parseDateBR(deliveryDate),
       payment_status: paymentStatus || undefined,
       payment_method: paymentMethod || null,
-      delivery_status: deliveryStatus,
+      delivery_status: status === 'confirmed' ? (deliveryStatus || 'em_producao') : deliveryStatus,
       status,
     };
   };
@@ -1036,32 +1036,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <option value="pix">Pix</option>
             </select>
           </div>
-          {confirmed && (
-            <div>
-              <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Andamento</label>
-              <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                value={deliveryStatus} disabled={!paymentStatus} onChange={e => setDeliveryStatus(e.target.value)}>
-                <option value="">Selecione...</option>
-                <option value="em_producao">Em produção</option>
-                <option value="aguardando_retirada">Aguardando retirada</option>
-                <option value="aguardando_envio">Aguardando envio</option>
-                <option value="entregue">Entregue</option>
-              </select>
-            </div>
-          )}
-          {readOnly && (
-            <div>
-              <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Andamento</label>
-              <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                value={deliveryStatus} disabled>
-                <option value="">Não definido</option>
-                <option value="em_producao">Em produção</option>
-                <option value="aguardando_retirada">Aguardando retirada</option>
-                <option value="aguardando_envio">Aguardando envio</option>
-                <option value="entregue">Entregue</option>
-              </select>
-            </div>
-          )}
         </div>
       </div>
 

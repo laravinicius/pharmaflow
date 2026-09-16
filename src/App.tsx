@@ -110,6 +110,7 @@ function AppInner() {
   const [setupMode, setSetupMode] = useState(false);
   const [loginConflict, setLoginConflict] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'insumos' | 'savedFormulas' | 'settings'>('dashboard');
+  const [confirmedStage, setConfirmedStage] = useState<'em_producao' | 'aguardando_retirada'>('em_producao');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
@@ -464,7 +465,7 @@ function AppInner() {
                 <NavItem icon={<ClipboardList />} label="Dashboard" active={isTabActive('dashboard')} onClick={() => setActiveTab('dashboard')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<PlusCircle />} label="Nova Fórmula" active={isTabActive('recipe')} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Clock />} label="Pendentes" active={isTabActive('pending')} onClick={() => setActiveTab('pending')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={isTabActive('confirmed')} onClick={() => setActiveTab('confirmed')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={isTabActive('confirmed')} onClick={() => { setConfirmedStage('em_producao'); setActiveTab('confirmed'); }} collapsed={!isSidebarOpen} />
                 <NavItem icon={<History />} label="Histórico" active={isTabActive('history')} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Users />} label="Clientes" active={isTabActive('customers')} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Cross />} label="Insumos" active={isTabActive('insumos')} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
@@ -546,9 +547,15 @@ function AppInner() {
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
               {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} initialLocked={!autoUnlockFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setAutoUnlockFormula(false); setActiveTab(dest); }} />}
               {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
-              {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" employeeName={user.name} title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('pending'); setActiveTab('formulaDetail'); } }} />}
-              {activeTab === 'confirmed' && <FormulaList screenKey="confirmed" variant="confirmed" employeeName={user.name} title="Fórmulas Confirmadas" subtitle="Fórmulas confirmadas para manipulação" statuses={['confirmed', 'completed']} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} onDeliveryBlocked={(f, reasons) => { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('confirmed'); }} />}
-              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} monthlySummary onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
+              {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" employeeName={user.name} title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setConfirmedStage('em_producao'); setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('pending'); setActiveTab('formulaDetail'); } }} />}
+              {activeTab === 'confirmed' && <>
+                <div className="mb-5 flex gap-2 border-b border-zinc-200">
+                  <button onClick={() => setConfirmedStage('em_producao')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'em_producao' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Em produção</button>
+                  <button onClick={() => setConfirmedStage('aguardando_retirada')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'aguardando_retirada' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Aguardando retirada</button>
+                </div>
+                <FormulaList screenKey={`confirmed-${confirmedStage}`} variant="confirmed" statuses={['confirmed']} employeeName={user.name} title={confirmedStage === 'em_producao' ? 'Fórmulas em produção' : 'Fórmulas aguardando retirada'} subtitle="Fórmulas confirmadas para manipulação" deliveryStatusFilter={confirmedStage} batchActionLabel={confirmedStage === 'em_producao' ? 'Aguardando retirada' : 'Entregue'} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} onDeliveryBlocked={(f, reasons) => { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('confirmed'); }} />
+              </>}
+              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} monthlySummary selectable={false} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
               {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
               {activeTab === 'insumos' && <InsumoManager />}

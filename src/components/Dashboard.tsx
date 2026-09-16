@@ -11,7 +11,7 @@ export function Dashboard({ user, onNavigate }: { user: User; onNavigate: (tab: 
   const { data: insumos } = useData(() => db.insumos.list());
   const { data: formulas } = useData(() => db.formulas.list());
   const pendingFormulas = useMemo(() => (formulas ?? []).filter((f: Formula) => f.status === 'pending').length, [formulas]);
-  const confirmedFormulas = useMemo(() => (formulas ?? []).filter((f: Formula) => f.status === 'confirmed' || f.status === 'completed').length, [formulas]);
+  const confirmedFormulas = useMemo(() => (formulas ?? []).filter((f: Formula) => f.status === 'confirmed').length, [formulas]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">

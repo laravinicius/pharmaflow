@@ -600,7 +600,14 @@ const [r]: any = await conn.query(
     status?: string;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
-    if (formula.delivery_status === 'entregue' && formula.payment_status !== 'pago') {
+    const current = await this.q<Array<{ delivery_status: string; payment_status: string }>>(
+      'SELECT delivery_status, payment_status FROM formulas WHERE id=?', [id]
+    );
+    const deliveryStatus = formula.status === 'confirmed'
+      ? (formula.delivery_status || 'em_producao')
+      : (formula.delivery_status || current[0]?.delivery_status || '');
+    const paymentStatus = formula.payment_status ?? current[0]?.payment_status ?? '';
+    if (deliveryStatus === 'entregue' && paymentStatus !== 'pago') {
       throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
     }
     const conn = await this.pool.getConnection();
@@ -611,8 +618,8 @@ const [r]: any = await conn.query(
       await conn.query(
         `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, payment_method=?, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
         [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
-         formula.delivery_date ?? null, formula.payment_status ?? '',
-         formula.payment_method ?? null, formula.delivery_status ?? '', formula.cancel_reason ?? null,
+         formula.delivery_date ?? null, paymentStatus,
+         formula.payment_method ?? null, deliveryStatus, formula.cancel_reason ?? null,
          formula.status ?? 'pending', id]
       );
       await conn.query('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['formula', id]);
@@ -665,6 +672,23 @@ const [r]: any = await conn.query(
     );
     const actor = await this.resolveActor(sessionToken);
     await this.logAction(actor, 'update_delivery_status', 'formulas', id, `Andamento da fórmula ${id} alterado para ${deliveryStatus}.`);
+    return { success: true };
+  }
+
+  async updateFormulasDeliveryStatus(ids: number[], deliveryStatus: string, sessionToken?: string) {
+    if (!ids.length) return { success: true };
+    if (deliveryStatus === 'entregue') {
+      const rows = await this.q<Array<{ id: number; payment_status: string }>>(
+        `SELECT id, payment_status FROM formulas WHERE id IN (${ids.map(() => '?').join(',')})`, ids
+      );
+      const unpaid = rows.filter(row => row.payment_status !== 'pago').map(row => row.id);
+      if (unpaid.length) throw new Error(`A fórmula ${unpaid.join(', ')} só pode ser entregue quando o pagamento estiver como "Pago".`);
+    }
+    const actor = await this.resolveActor(sessionToken);
+    for (const id of ids) {
+      await this.q(`UPDATE formulas SET delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' ELSE status END WHERE id=?`, [deliveryStatus, deliveryStatus, id]);
+      await this.logAction(actor, 'update_delivery_status', 'formulas', id, `Andamento da fórmula ${id} alterado para ${deliveryStatus}.`);
+    }
     return { success: true };
   }
 

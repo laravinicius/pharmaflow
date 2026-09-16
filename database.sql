@@ -52,9 +52,9 @@ CREATE TABLE IF NOT EXISTS formulas (
   delivery_date   DATE         NULL,
   payment_status  VARCHAR(20)  NOT NULL DEFAULT '',
   payment_method  VARCHAR(20)  NULL,
-  delivery_status VARCHAR(20)  NOT NULL DEFAULT '' COMMENT 'Andamento: em_producao (padrão ao confirmar), aguardando_retirada, aguardando_envio, entregue',
+  delivery_status VARCHAR(20)  NOT NULL DEFAULT '' COMMENT 'Andamento: em_producao (padrão ao confirmar), aguardando_retirada, entregue',
   cancel_reason   TEXT         NULL,
-  status          ENUM('pending','completed','confirmed','cancelled','delivered') NOT NULL DEFAULT 'pending',
+  status          ENUM('pending','confirmed','cancelled','delivered') NOT NULL DEFAULT 'pending',
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
