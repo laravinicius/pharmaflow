@@ -223,13 +223,14 @@ function AppInner() {
 
   const handleExitConfirm = async () => {
     if (exitContext === 'window-close') {
-      await db.app.confirmExit();
+      await db.app.confirmExit(sessionToken ?? undefined);
     } else if (exitContext === 'logout') {
       if (sessionToken) await db.auth.logout(sessionToken).catch(() => {});
       clearDrafts();
       clearAuth();
       setSetupMode(false);
       setActiveTab('dashboard');
+      setLoginForm({ username: '', password: '' });
     }
     setShowExitConfirm(false);
     setExitContext(null);

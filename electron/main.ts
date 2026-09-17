@@ -208,7 +208,8 @@ const createWindow = () => {
   }
 };
 
-ipcMain.handle('app:exit-confirmed', () => {
+ipcMain.handle('app:exit-confirmed', async (_, token?: string) => {
+  if (token) await db.revokeSession(token).catch(() => {});
   pendingExitConfirm = true;
   for (const win of BrowserWindow.getAllWindows()) {
     win.destroy();

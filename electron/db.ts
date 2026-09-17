@@ -337,7 +337,15 @@ export class Db {
       const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
-      const target = await this.q<any[]>('SELECT name FROM users WHERE id = ?', [id]);
+      const target = await this.q<any[]>('SELECT id, name, username FROM users WHERE id = ?', [id]);
+      if (target.length === 0) {
+        return { success: false, error: 'Usuário não encontrado.' };
+      }
+
+      if (adminCheck.user && target[0].id === adminCheck.user.id) {
+        return { success: false, error: 'Você não pode excluir seu próprio usuário.' };
+      }
+
       await this.q('DELETE FROM users WHERE id = ?', [id]);
       const actor = adminCheck.user
         ? { id: adminCheck.user.id, name: adminCheck.user.name }

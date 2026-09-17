@@ -64,5 +64,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('app:confirm-exit', listener);
     return () => ipcRenderer.removeListener('app:confirm-exit', listener);
   },
-  confirmAppExit: () => ipcRenderer.invoke('app:exit-confirmed'),
+  confirmAppExit: (token?: string) => ipcRenderer.invoke('app:exit-confirmed', token),
 });

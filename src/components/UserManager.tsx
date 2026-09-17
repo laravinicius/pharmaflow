@@ -114,7 +114,7 @@ export function UserManager({ user }: { user: User }) {
   };
 
   const handleDelete = async (u: any) => {
-    if (u.role === 'admin') { alert('Administradores não podem ser excluídos.'); return; }
+    if (u.username === 'admin') { alert('O usuário de configuração não pode ser excluído.'); return; }
     if (u.username === user.username) { alert('Você não pode excluir seu próprio usuário.'); return; }
     // Cancela edição se for o mesmo usuário sendo deletado
     if (editingId === u.id) reset();
@@ -142,7 +142,7 @@ export function UserManager({ user }: { user: User }) {
       <div id="user-form" className={`rounded-xl border p-5 space-y-4 transition-colors ${isEditing ? 'bg-blue-50 border-blue-200' : 'bg-zinc-50 border-zinc-100'}`}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-zinc-700 uppercase tracking-wide">
-            {isEditing ? '✏️ Editando funcionário' : 'Novo funcionário'}
+            {isEditing ? '✏️ Editando usuário' : 'Novo usuário'}
           </h3>
           {isEditing && (
             <button type="button" onClick={reset}
@@ -245,7 +245,7 @@ export function UserManager({ user }: { user: User }) {
                       className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${editingId === u.id ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'text-blue-600 hover:bg-blue-50'}`}>
                       {editingId === u.id ? 'Cancelar' : 'Editar'}
                     </button>
-                    {u.role !== 'admin' && u.username !== user.username && (
+                    {u.username !== 'admin' && u.username !== user.username && (
                       <button
                         onClick={() => handleDelete(u)}
                         className="text-zinc-300 hover:text-red-600 transition-colors p-1 rounded">
@@ -266,8 +266,8 @@ export function UserManager({ user }: { user: User }) {
         isOpen={deleteModalOpen}
         onClose={() => { setDeleteModalOpen(false); setPendingDeleteId(null); }}
         onConfirm={handleDeleteConfirm}
-        title="Excluir funcionário"
-        message="Esta ação não pode ser desfeita. O funcionário não conseguirá mais fazer login."
+        title="Excluir usuário"
+        message="Esta ação não pode ser desfeita. O usuário não conseguirá mais fazer login."
       />
     </div>
   );

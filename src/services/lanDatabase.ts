@@ -13,7 +13,7 @@ declare global {
       listSavedFormulas: () => Promise<any[]>; addSavedFormula: (f: any, t?: string) => Promise<any>; updateSavedFormula: (id: number, f: any, t?: string) => Promise<any>; deleteSavedFormula: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
       listLogs: (filters?: any) => Promise<{ rows: any[]; total: number }>; showMessageBox: (options: { type?: 'none' | 'info' | 'error' | 'question' | 'warning'; title?: string; message: string }) => Promise<any>; openWhatsApp: (url: string) => Promise<any>;
       onDataChanged: (cb: () => void) => () => void; getConfig: () => Promise<any>; saveConfig: (cfg: any) => Promise<any>; testConnection: () => Promise<any>;
-      onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => () => void; confirmAppExit: () => Promise<void>;
+      onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => () => void; confirmAppExit: (token?: string) => Promise<void>;
     };
   }
 }
@@ -30,5 +30,5 @@ export const db = {
   logs: { list: (filters?: any) => electron().listLogs(filters) },
   data: { onChanged: (cb: () => void) => electron().onDataChanged(cb) },
   config: { get: () => electron().getConfig(), save: (c: any) => electron().saveConfig(c), test: () => electron().testConnection() },
-  app: { onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => electron().onConfirmExit(cb), confirmExit: () => electron().confirmAppExit() },
+  app: { onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => electron().onConfirmExit(cb), confirmExit: (token?: string) => electron().confirmAppExit(token) },
 };
