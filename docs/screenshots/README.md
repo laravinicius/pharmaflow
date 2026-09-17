@@ -1,15 +1,8 @@
-# Pasta de Capturas de Tela
+# Captura de Tela
 
-Coloque aqui as imagens do app para o README:
+O README exibe somente a captura da tela inicial:
 
-- `dashboard.png` — Dashboard com estatísticas
-- `recipe.png` — Tela Nova Fórmula
-- `admin.png` — Painel Administração
-- `customers.png` — Gestão de Clientes
-- `insumos.png` — Gestão de Insumos
-- `saved-formulas.png` — Fórmulas Salvas
-- `settings.png` — Configurações de conexão DB
-- `login.png` — Tela de login
+- `homePage.png` — Tela inicial do PharmaFlow
 
 Tamanho recomendado: 1280x800 (resolução padrão da janela)
 Formato: PNG ou WebP

@@ -14,6 +14,10 @@ Aplicação desktop online-first para gerenciamento do fluxo de manipulação fa
 
 O produto é exibido como **PIX Farma**; o repositório se chama **PharmaFlow**.
 
+## Visão geral
+
+![Tela inicial do PharmaFlow](docs/screenshots/homePage.png)
+
 ## Funcionalidades
 
 | Módulo | Descrição |
@@ -198,5 +202,4 @@ Este projeto está sob a [licença MIT](LICENSE).
 **Vinicius Lara** — [GitHub](https://github.com/ViniciusLara) · [LinkedIn](https://linkedin.com/in/viniciuslara)
 
 Dependências principais: [Electron](https://www.electronjs.org/), [Vite](https://vitejs.dev/), [React](https://react.dev/), [Tailwind CSS](https://tailwindcss.com/), [MariaDB](https://mariadb.org/), [lucide-react](https://lucide.dev/) e [Motion](https://motion.dev/). A lista completa está em [package.json](package.json).
-
 
