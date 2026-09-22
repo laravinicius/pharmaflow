@@ -118,6 +118,7 @@ function AppInner() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
   const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
+  const [partialPaymentAmounts, setPartialPaymentAmounts] = useState<Record<number, string>>({});
   const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
   const [missingReasonsTarget, setMissingReasonsTarget] = useState<'pending' | 'confirmed' | null>(null);
   const [autoUnlockFormula, setAutoUnlockFormula] = useState(false);
@@ -143,6 +144,7 @@ function AppInner() {
     }
     clearDrafts();
     clearAuth();
+    setPartialPaymentAmounts({});
     setSetupMode(false);
     setActiveTab('dashboard');
     setLoginForm({ username: '', password: '' });
@@ -228,6 +230,7 @@ function AppInner() {
       if (sessionToken) await db.auth.logout(sessionToken).catch(() => {});
       clearDrafts();
       clearAuth();
+      setPartialPaymentAmounts({});
       setSetupMode(false);
       setActiveTab('dashboard');
       setLoginForm({ username: '', password: '' });
@@ -277,6 +280,7 @@ function AppInner() {
         if (!res.valid) {
           clearDrafts();
           clearAuth();
+          setPartialPaymentAmounts({});
           setSetupMode(false);
           setLoginError('Sua sessão foi encerrada em outro dispositivo.');
         }
@@ -546,18 +550,18 @@ function AppInner() {
               {activeTab === 'dashboard' && <Dashboard user={user} onNavigate={setActiveTab} />}
               {activeTab === 'admin' && <AdminPanel user={user} />}
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
-              {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} initialLocked={!autoUnlockFormula} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setAutoUnlockFormula(false); setActiveTab(dest); }} />}
-              {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
+              {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} initialLocked={!autoUnlockFormula} partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setAutoUnlockFormula(false); setActiveTab(dest); }} />}
+              {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
               {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" employeeName={user.name} title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setConfirmedStage('em_producao'); setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('pending'); setActiveTab('formulaDetail'); } }} />}
               {activeTab === 'confirmed' && <>
                 <div className="mb-5 flex gap-2 border-b border-zinc-200">
                   <button onClick={() => setConfirmedStage('em_producao')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'em_producao' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Em produção</button>
                   <button onClick={() => setConfirmedStage('aguardando_retirada')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'aguardando_retirada' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Aguardando retirada</button>
                 </div>
-                <FormulaList screenKey={`confirmed-${confirmedStage}`} variant="confirmed" statuses={['confirmed']} employeeName={user.name} title={confirmedStage === 'em_producao' ? 'Fórmulas em produção' : 'Fórmulas aguardando retirada'} subtitle="Fórmulas confirmadas para manipulação" deliveryStatusFilter={confirmedStage} batchActionLabel={confirmedStage === 'em_producao' ? 'Aguardando retirada' : 'Entregue'} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} onDeliveryBlocked={(f, reasons) => { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('confirmed'); }} />
+                <FormulaList screenKey={`confirmed-${confirmedStage}`} variant="confirmed" statuses={['confirmed']} employeeName={user.name} title={confirmedStage === 'em_producao' ? 'Fórmulas em produção' : 'Fórmulas aguardando retirada'} subtitle="Fórmulas confirmadas para manipulação" deliveryStatusFilter={confirmedStage} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} onDeliveryBlocked={(f, reasons) => { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('confirmed'); }} />
               </>}
-              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} monthlySummary selectable={false} onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
-              {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
+              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} monthlySummary onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
+              {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
               {activeTab === 'insumos' && <InsumoManager />}
               {activeTab === 'savedFormulas' && <SavedFormulaManager />}

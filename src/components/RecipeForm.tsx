@@ -14,7 +14,7 @@ import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
 import { UnitCycle, INGREDIENT_UNITS, BUDGET_UNITS } from './UnitCycle';
 
-export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; onComplete: (dest: 'pending' | 'confirmed') => void }) {
+export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, partialPaymentAmount: savedPartialPaymentAmount = '', onPartialPaymentAmountChange, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; partialPaymentAmount?: string; onPartialPaymentAmountChange?: (value: string | null) => void; onComplete: (dest: 'pending' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
   const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
   const { data: savedFormulas } = useData(() => db.savedFormulas.list());
@@ -43,9 +43,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryDateError, setDeliveryDateError] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
+  const [partialPaymentAmount, setPartialPaymentAmount] = useState(savedPartialPaymentAmount);
   const [paymentMethod, setPaymentMethod] = useState('');
   const [saving, setSaving] = useState(false);
   const [locked, setLocked] = useState(formula ? initialLocked : false);
+  const [deliveryDateEditing, setDeliveryDateEditing] = useState(false);
   const [deliveryStatus, setDeliveryStatus] = useState('');
   const [showDeliveryErrorModal, setShowDeliveryErrorModal] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -54,6 +56,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [customerFocusIdx, setCustomerFocusIdx] = useState(-1);
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [savedFormulaFocusIdx, setSavedFormulaFocusIdx] = useState(-1);
+  const deliveryDateTextInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const insumoQueryRef = useRef<HTMLInputElement>(null);
   const quantityRef = useRef<HTMLInputElement>(null);
@@ -115,6 +118,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   useEffect(() => {
     if (formula) {
+      setDeliveryDateEditing(false);
       setSelectedCustomerId(formula.customer_id);
       setItems(formula.items.map(i => ({ ...i })));
       setBudgetNumber(formula.budget_number ?? '');
@@ -168,6 +172,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setDeliveryDate('');
     setDeliveryDateError('');
     setPaymentStatus('');
+    setPartialPaymentAmount('');
+    onPartialPaymentAmountChange?.(null);
     setPaymentMethod('');
   };
 
@@ -261,7 +267,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   const canSave = !!selectedCustomerId && items.length > 0 &&
     !!budgetNumber && budgetItems.length > 0 &&
-    !!attendantName && !deliveryDateIsPast;
+    !!attendantName && !deliveryDateIsPast &&
+    (paymentStatus !== 'parcial' || parseCurrency(partialPaymentAmount) > 0);
   const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
 
   const getSaveErrorMessage = (err: any) => {
@@ -413,6 +420,19 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <RefreshCw className="w-3.5 h-3.5" /> Editar
             </button>
           )}
+          {formula && confirmed && locked && !readOnly && (
+            <button type="button" disabled={saving} onClick={() => {
+              setDeliveryDateEditing(true);
+              requestAnimationFrame(() => {
+                deliveryDateTextInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                deliveryDateTextInputRef.current?.focus();
+              });
+            }}
+              className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: GRADIENTS.secondary }}>
+              <RefreshCw className="w-3.5 h-3.5" /> Editar previsão
+            </button>
+          )}
           {formula && confirmed && (
             <button type="button" disabled={saving} onClick={() => setShowCancelModal(true)}
               className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
@@ -445,7 +465,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
           style={{ background: COLORS.lightRedBg, border: `1px solid ${COLORS.lightRedBorder}`, color: COLORS.primary }}>
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {readOnly ? 'Fórmula no histórico — visualização somente leitura.' : confirmed ? 'Fórmula confirmada — apenas pagamento, forma de pagamento e andamento podem ser alterados.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
+          {readOnly ? 'Fórmula no histórico — visualização somente leitura.' : confirmed ? 'Fórmula confirmada — previsão de entrega, pagamento, forma de pagamento e andamento podem ser alterados.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
         </div>
       )}
       {/* Linha 1 — Seleção do Cliente */}
@@ -973,15 +993,17 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <h3 className="font-semibold text-zinc-900 text-sm mb-4">5. Finalizar</h3>
         <div className={(confirmed || readOnly) ? 'grid grid-cols-1 gap-6 md:grid-cols-3' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}>
           <div>
+            {/** Data liberada separadamente para fórmulas confirmadas. */}
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Previsão de entrega</label>
             <div className="relative">
               <input
+                ref={deliveryDateTextInputRef}
                 type="text"
                 inputMode="numeric"
                 maxLength={10}
                 className="w-full pr-10 px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 value={deliveryDate}
-                disabled={locked}
+                disabled={readOnly || (confirmed ? !deliveryDateEditing : locked)}
                 onChange={e => {
                   const masked = formatDateBR(e.target.value);
                   setDeliveryDate(masked);
@@ -989,13 +1011,13 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   if (dateInputRef.current) dateInputRef.current.value = parseDateBR(masked) ?? '';
                 }}
               />
-              {!locked && deliveryDate && (
+              {(!readOnly && (confirmed ? deliveryDateEditing : !locked)) && deliveryDate && (
                 <button type="button" onClick={() => { setDeliveryDate(''); setDeliveryDateError(''); if (dateInputRef.current) dateInputRef.current.value = ''; }}
                   className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors" title="Limpar data">
                   <X className="w-4 h-4" />
                 </button>
               )}
-              <button type="button" onClick={() => dateInputRef.current?.showPicker()} disabled={locked}
+              <button type="button" onClick={() => dateInputRef.current?.showPicker()} disabled={readOnly || (confirmed ? !deliveryDateEditing : locked)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-red-700 transition-colors rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed" title="Abrir calendário">
                 <Calendar className="w-4 h-4" />
               </button>
@@ -1018,14 +1040,45 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
             <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              value={paymentStatus} disabled={locked && !confirmed} onChange={e => setPaymentStatus(e.target.value)}>
+              value={paymentStatus} disabled={locked && !confirmed} onChange={e => {
+                const status = e.target.value;
+                setPaymentStatus(status);
+                if (status !== 'parcial') {
+                  setPartialPaymentAmount('');
+                  onPartialPaymentAmountChange?.(null);
+                }
+              }}>
               <option value="">Selecione...</option>
               <option value="pago">Pago</option>
               <option value="parcial">Parcial</option>
-              <option value="nao_pago">Não Pago</option>
               <option value="pagar_na_retirada">Pagar na retirada</option>
             </select>
           </div>
+          {paymentStatus === 'parcial' && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantia paga</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={partialPaymentAmount}
+                  disabled={locked && !confirmed}
+                  onChange={e => {
+                    const value = formatCurrency(e.target.value);
+                    setPartialPaymentAmount(value);
+                    onPartialPaymentAmountChange?.(value || null);
+                  }}
+                  placeholder="0,00"
+                  aria-label="Quantia paga"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+              {!partialPaymentAmount || parseCurrency(partialPaymentAmount) <= 0 ? (
+                <p className="mt-1 text-xs text-red-600">Informe uma quantia maior que zero.</p>
+              ) : null}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Forma de pagamento</label>
             <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"

@@ -45,7 +45,7 @@ export function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, monthlySummary = false, deliveryStatusFilter, batchActionLabel, selectable = true, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; batchActionLabel?: string; selectable?: boolean; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
+export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const { sessionToken } = useAuth();
   const [search, setSearch] = useState('');
@@ -53,8 +53,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const [focusedIdx, setFocusedIdx] = useState(-1);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [pendingWhatsAppStatus, setPendingWhatsAppStatus] = useState<Formula | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [batchUpdating, setBatchUpdating] = useState(false);
+  const [updatingDeliveryId, setUpdatingDeliveryId] = useState<number | null>(null);
   const now = new Date();
   const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
   const [summaryYear, setSummaryYear] = useState(now.getFullYear());
@@ -77,31 +76,29 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     onConfirm?.(f, reasons);
   };
 
-  const applyBatchDeliveryStatus = async (deliveryStatus: string) => {
-    setBatchUpdating(true);
+  const applyDeliveryStatus = async (formula: Formula, deliveryStatus: string) => {
+    setUpdatingDeliveryId(formula.id);
     try {
-      await db.formulas.updateDeliveriesStatus(selectedIds, deliveryStatus, sessionToken ?? undefined);
-      setSelectedIds([]);
-      reload();
+      await db.formulas.updateDeliveryStatus(formula.id, deliveryStatus, sessionToken ?? undefined);
+      await reload();
     } catch (err: any) {
       alert('Erro ao atualizar o andamento: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally {
-      setBatchUpdating(false);
+      setUpdatingDeliveryId(null);
     }
   };
 
-  const handleBatchAction = async () => {
-    if (!batchActionLabel || !selectedIds.length) return;
-    const selected = all.filter(f => selectedIds.includes(f.id));
-    if (batchActionLabel === 'Entregue' && selected.some(f => f.payment_status !== 'pago')) {
-      onDeliveryBlocked?.(selected.find(f => f.payment_status !== 'pago')!, ['Status de pagamento: Pago']);
+  const handleDeliveryAction = async (formula: Formula) => {
+    if (deliveryStatusFilter === 'em_producao') {
+      setPendingWhatsAppStatus(formula);
       return;
     }
-    if (batchActionLabel === 'Aguardando retirada') {
-      setPendingWhatsAppStatus(selected[0]);
+    if (deliveryStatusFilter !== 'aguardando_retirada') return;
+    if (formula.payment_status !== 'pago') {
+      onDeliveryBlocked?.(formula, ['Status de pagamento: Pago']);
       return;
     }
-    await applyBatchDeliveryStatus('entregue');
+    await applyDeliveryStatus(formula, 'entregue');
   };
 
   const handleWhatsAppStatusChoice = async (notifyCustomer: boolean) => {
@@ -119,7 +116,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         alert('Cliente sem telefone válido para contato.');
       }
     }
-    await applyBatchDeliveryStatus('aguardando_retirada');
+    await applyDeliveryStatus(formula, 'aguardando_retirada');
   };
 
   const all = (formulas as Formula[]) ?? [];
@@ -159,30 +156,31 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
     parcial: 'bg-amber-50 border-amber-200',
-    nao_pago: 'bg-red-50 border-red-200',
     pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
   };
   const paymentTintFocused: Record<string, string> = {
     pago: 'bg-emerald-100 border-emerald-300',
     parcial: 'bg-amber-100 border-amber-300',
-    nao_pago: 'bg-red-100 border-red-300',
     pagar_na_retirada: 'bg-cyan-100 border-cyan-300',
   };
   const paymentLabels: Record<string, string> = {
     pago: 'Pago',
     parcial: 'Parcial',
-    nao_pago: 'Não Pago',
     pagar_na_retirada: 'Pagar na retirada',
   };
   const paymentText: Record<string, string> = {
     pago: 'text-emerald-700',
     parcial: 'text-amber-700',
-    nao_pago: 'text-red-700',
     pagar_na_retirada: 'text-cyan-700',
   };
   const showRepeat = !!onRepeat;
+  const deliveryActionLabel = deliveryStatusFilter === 'em_producao'
+    ? 'Aguardando retirada'
+    : deliveryStatusFilter === 'aguardando_retirada'
+      ? 'Entregue'
+      : null;
   const gridCols = variant === 'confirmed'
-      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.6fr_0.8fr]'
+      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.6fr_2.5fr]'
     : showAndamento
       ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]'
       : showRepeat
@@ -200,7 +198,6 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           <p className="text-zinc-500 text-sm">{subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
-          {batchActionLabel && <button onClick={handleBatchAction} disabled={!selectedIds.length || batchUpdating} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed">{batchUpdating ? 'Atualizando...' : batchActionLabel}</button>}
           <button onClick={reload} className="p-2 text-zinc-400 hover:text-zinc-700 transition-colors" title="Atualizar"><RefreshCw className="w-5 h-5" /></button>
           {statusFilterOptions && (
             <select className="px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm"
@@ -224,7 +221,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       </div>
 
       {monthlySummary && (
-        <div className="flex flex-col md:flex-row md:items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 px-4 py-3 text-zinc-700">
           <span className="font-semibold">Valor total de fórmulas no mês</span>
           <select value={summaryMonth} onChange={e => setSummaryMonth(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none">
             {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((month, index) => <option key={month} value={index}>{month}</option>)}
@@ -242,7 +239,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       {!loading && !error && (
         <div className="space-y-3">
           {filtered.length > 0 && variant === 'confirmed' && (
-            <div className={`hidden md:grid ${gridCols} ${columnGap} ${selectable ? 'pl-[4.25rem] pr-4' : 'px-4'} text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
+            <div className={`hidden md:grid ${gridCols} ${columnGap} px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
               <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
               <span className="text-left">Data criação</span><span className="text-left">Data entrega</span><span className="text-left">Pagamento</span><span className="text-right">Whatsapp</span><span />
             </div>
@@ -259,9 +256,6 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
               const cardTint = isFocused ? tintFocused : tint;
               return variant === 'confirmed' ? (
                 <div key={f.id} className="flex items-stretch gap-3">
-                {selectable && <div onClick={e => e.stopPropagation()} className="flex items-center justify-center shrink-0">
-                  <input type="checkbox" checked={selectedIds.includes(f.id)} onChange={e => setSelectedIds(ids => e.target.checked ? [...ids, f.id] : ids.filter(id => id !== f.id))} aria-label={`Selecionar fórmula de ${f.customer_name}`} className="h-10 w-10 md:h-16 md:w-8 cursor-pointer accent-emerald-500" />
-                </div>}
                 <div onClick={() => onSelect?.(f)}
                   tabIndex={0}
                   role="button"
@@ -331,6 +325,16 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       })()}
                     </div>
                     <div className="flex justify-end items-center gap-2">
+                      {deliveryActionLabel && (
+                        <button
+                          type="button"
+                          disabled={updatingDeliveryId === f.id}
+                          onClick={(e) => { e.stopPropagation(); void handleDeliveryAction(f); }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                          {updatingDeliveryId === f.id ? 'Atualizando...' : deliveryActionLabel}
+                        </button>
+                      )}
                       {showRepeat && (
                         <button type="button" onClick={(e) => { e.stopPropagation(); onRepeat?.(f); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold hover:opacity-90 transition-all whitespace-nowrap"
