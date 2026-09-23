@@ -13,7 +13,10 @@ export function AdminUserManager() {
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
 
-  const admins = ((users as any[]) ?? []).filter(u => u.role === 'admin');
+  const allUsers = (users as any[]) ?? [];
+  const roleLabels: Record<string, string> = {
+    admin: 'Administrador', manager: 'Gerente', pharmacist: 'Farmacêutico', employee: 'Funcionário',
+  };
 
   const reset = () => {
     setForm({ name: '', username: '', password: '' });
@@ -143,8 +146,8 @@ export function AdminUserManager() {
       {/* Lista */}
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-zinc-700 uppercase tracking-wide">Administradores do sistema</h3>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700">{admins.length}</span>
+          <h3 className="text-sm font-bold text-zinc-700 uppercase tracking-wide">Usuários cadastrados</h3>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700">{allUsers.length}</span>
         </div>
         {loading && <LoadingState />}
         {error && <ErrorState message={error} onRetry={reload} />}
@@ -155,27 +158,29 @@ export function AdminUserManager() {
                 <tr className="border-b border-zinc-100 bg-zinc-50 text-zinc-400 text-xs uppercase font-semibold">
                   <th className="px-4 py-3">Nome</th>
                   <th className="px-4 py-3">Usuário</th>
+                  <th className="px-4 py-3">Perfil</th>
                   <th className="px-4 py-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50 bg-white">
-                {admins.map(u => (
+                {allUsers.map(u => (
                   <tr key={u.id} className={`transition-colors ${editingId === u.id ? 'bg-blue-50' : 'hover:bg-zinc-50'}`}>
                     <td className="px-4 py-3 font-medium text-zinc-900">{u.name}</td>
                     <td className="px-4 py-3 text-zinc-500 font-mono text-sm">{u.username}</td>
+                    <td className="px-4 py-3 text-sm text-zinc-600">{roleLabels[u.role] ?? u.role}</td>
                     <td className="px-4 py-3 text-right space-x-2">
-                      <button
+                      {u.role === 'admin' && <button
                         onClick={() => editingId === u.id ? reset() : startEdit(u)}
                         className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${editingId === u.id ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'text-blue-600 hover:bg-blue-50'}`}>
                         {editingId === u.id ? 'Cancelar' : 'Editar'}
-                      </button>
+                      </button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {admins.length === 0 && (
-              <p className="text-center py-10 text-zinc-400">Nenhum administrador cadastrado ainda.</p>
+            {allUsers.length === 0 && (
+              <p className="text-center py-10 text-zinc-400">Nenhum usuário cadastrado ainda.</p>
             )}
           </div>
         )}

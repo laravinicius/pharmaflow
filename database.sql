@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
   name       VARCHAR(255) NOT NULL,
   username   VARCHAR(50)  NOT NULL UNIQUE,
   password   VARCHAR(64)  NOT NULL COMMENT 'SHA-256 hex',
-  role       ENUM('admin','employee') NOT NULL DEFAULT 'employee',
+  role       ENUM('admin','manager','pharmacist','employee') NOT NULL DEFAULT 'employee',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -30,10 +30,13 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS customers (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   name       VARCHAR(255) NOT NULL,
-  phone      VARCHAR(20)  NOT NULL,
+  phone      VARCHAR(20)  NULL,
+  responsible_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_customers_phone (phone)
+  UNIQUE KEY uq_customers_phone (phone),
+  KEY idx_customers_responsible (responsible_id),
+  CONSTRAINT fk_customers_responsible FOREIGN KEY (responsible_id) REFERENCES customers(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS insumos (
@@ -53,6 +56,7 @@ CREATE TABLE IF NOT EXISTS formulas (
   payment_status  VARCHAR(20)  NOT NULL DEFAULT '',
   payment_method  VARCHAR(20)  NULL,
   delivery_status VARCHAR(20)  NOT NULL DEFAULT '' COMMENT 'Andamento: em_producao (padrão ao confirmar), aguardando_retirada, entregue',
+  manager_verified TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Verificação visual do Histórico pelo Gerente',
   cancel_reason   TEXT         NULL,
   status          ENUM('pending','confirmed','cancelled','delivered') NOT NULL DEFAULT 'pending',
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

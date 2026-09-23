@@ -17,6 +17,8 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
   const { data: customers, loading, error, reload } = useData(() => db.customers.list());
   const { sessionToken } = useAuth();
   const [form, setForm] = useState({ firstName: initialName ?? '', lastName: '', phone: '' });
+  const [isDependent, setIsDependent] = useState(false);
+  const [responsibleCustomerId, setResponsibleCustomerId] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState({ name: '', phone: '' });
@@ -29,7 +31,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingPayload, setPendingPayload] = useState<{ name: string; phone: string } | null>(null);
+  const [pendingPayload, setPendingPayload] = useState<{ name: string; phone: string | null; responsible_customer_id?: number } | null>(null);
   const { getDraft, saveDraft, removeDraft } = useFormDraft();
   const DRAFT_KEY = 'customer';
   const isDraftMode = !compact;
@@ -56,21 +58,22 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDraftMode]);
 
-  const reset = () => { setForm({ firstName: '', lastName: '', phone: '' }); setEditingId(null); setFormError(''); setSuccess(null); };
+  const reset = () => { setForm({ firstName: '', lastName: '', phone: '' }); setEditingId(null); setIsDependent(false); setResponsibleCustomerId(''); setFormError(''); setSuccess(null); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValidPhone(form.phone)) { setFormError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
+    if (isDependent && !responsibleCustomerId) { setFormError('Selecione o responsável do dependente.'); return; }
+    if (!isDependent && !isValidPhone(form.phone)) { setFormError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
     const rawPhone = form.phone.replace(/\D/g, '');
-    const formatted = formatPhone(form.phone);
+    const formatted = isDependent ? null : formatPhone(form.phone);
     // Verificação de duplicata local
-    if (!editingId) {
-      const dup = (customers as Customer[])?.find(c => c.phone.replace(/\D/g,'') === rawPhone);
+    if (!editingId && !isDependent) {
+      const dup = (customers as Customer[])?.find(c => c.phone && c.phone.replace(/\D/g,'') === rawPhone);
       if (dup) { setFormError(`Celular já cadastrado para: ${dup.name}`); return; }
     }
     setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const payload = { name: `${form.firstName} ${form.lastName}`.trim(), phone: formatted };
+      const payload = { name: `${form.firstName} ${form.lastName}`.trim(), phone: formatted, ...(isDependent ? { responsible_customer_id: Number(responsibleCustomerId) } : {}) };
       if (editingId) {
         const res: any = await db.customers.update(editingId, payload, sessionToken ?? undefined);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
@@ -101,7 +104,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
       setPendingPayload(null);
       removeDraft(DRAFT_KEY);
       reset(); reload();
-      setSuccess('Cliente cadastrado com sucesso!');
+      setSuccess(pendingPayload.responsible_customer_id ? 'Dependente cadastrado com sucesso!' : 'Cliente cadastrado com sucesso!');
     } catch (err: any) {
       setFormError(err.message ?? 'Erro ao salvar.');
       setPendingPayload(null);
@@ -127,11 +130,12 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
 
   const handleRowSave = async () => {
     if (editingRow === null) return;
-    if (!isValidPhone(rowDraft.phone)) { setFormError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
+    const rowCustomer = available.find(c => c.id === editingRow);
+    if (!rowCustomer?.responsible_id && !isValidPhone(rowDraft.phone)) { setFormError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
     const formatted = formatPhone(rowDraft.phone);
     setSaving(true); setFormError('');
     try {
-      const res: any = await db.customers.update(editingRow, { name: rowDraft.name, phone: formatted }, sessionToken ?? undefined);
+      const res: any = await db.customers.update(editingRow, { name: rowDraft.name, phone: rowCustomer?.responsible_id ? '' : formatted }, sessionToken ?? undefined);
       if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
       setEditingRow(null); setRowDraft({ name: '', phone: '' });
       reload();
@@ -141,6 +145,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
   };
 
   const available = (customers as Customer[]) ?? [];
+  const eligibleResponsibles = available.filter(c => c.phone && !c.responsible_id);
   const q = stripDiacritics(search.trim().toLowerCase());
   const qDigits = search.replace(/\D/g, '');
   const list = available
@@ -192,8 +197,19 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
       </div>
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Celular</label>
-        <input required inputMode="numeric" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => { setFormError(''); setForm({ ...form, phone: formatPhone(e.target.value) }); }} maxLength={15} />
+        {isDependent && !compact ? <p className="px-3 py-2 text-sm text-zinc-500">Celular compartilhado do responsável</p> : <input required inputMode="numeric" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => { setFormError(''); setForm({ ...form, phone: formatPhone(e.target.value) }); }} maxLength={15} />}
       </div>
+      {!compact && <div className="md:col-span-4 flex items-center gap-2">
+        <input id="customer-dependent" type="checkbox" checked={isDependent} onChange={e => { setIsDependent(e.target.checked); setResponsibleCustomerId(''); setForm(d => ({ ...d, phone: '' })); setFormError(''); }} />
+        <label htmlFor="customer-dependent" className="text-sm text-zinc-700">Cadastrar como dependente</label>
+      </div>}
+      {isDependent && !compact && <div className="md:col-span-3">
+        <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Responsável</label>
+        <select required value={responsibleCustomerId} onChange={e => setResponsibleCustomerId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white">
+          <option value="">Selecione um responsável</option>
+          {eligibleResponsibles.map(c => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
+        </select>
+      </div>}
       <div className="space-y-1">
         {formError && <p className="text-xs text-red-600 font-medium">{formError}</p>}
         <div className="flex gap-2">
@@ -213,9 +229,9 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
         isOpen={confirmOpen}
         onClose={() => { setConfirmOpen(false); setPendingPayload(null); }}
         onConfirm={handleCreateConfirm}
-        title="Criar cliente"
-        message="Deseja realmente cadastrar este novo cliente?"
-        confirmLabel="Confirmar cadastro"
+        title={pendingPayload?.responsible_customer_id ? 'Criar dependente' : 'Criar cliente'}
+        message={pendingPayload?.responsible_customer_id ? 'Deseja cadastrar este dependente vinculado ao responsável selecionado?' : 'Deseja realmente cadastrar este novo cliente?'}
+        confirmLabel={pendingPayload?.responsible_customer_id ? 'Confirmar dependente' : 'Confirmar cadastro'}
       />
     </>
   );
@@ -273,7 +289,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead><tr className="border-b border-zinc-100 text-zinc-400 text-xs uppercase font-semibold">
-                      <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Celular</th><th className="px-4 py-3">Cadastro</th><th className="px-4 py-3 text-right">Ações</th>
+                      <th className="px-4 py-3">Nome</th><th className="px-4 py-3">Celular</th><th className="px-4 py-3">Responsável</th><th className="px-4 py-3">Cadastro</th><th className="px-4 py-3 text-right">Ações</th>
                     </tr></thead>
                     <tbody className="divide-y divide-zinc-50">
                       {list.map(c => (
@@ -290,16 +306,17 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
                           <td className="px-4 py-3 text-zinc-600">
                             {editingRow === c.id ? (
                               <div>
-                                <input inputMode="numeric" maxLength={15}
+                                {c.responsible_id ? <span className="text-sm text-zinc-500">{c.responsible_phone ?? ''}</span> : <input inputMode="numeric" maxLength={15}
                                   className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
                                   value={rowDraft.phone} onChange={e => setRowDraft(d => ({ ...d, phone: formatPhone(e.target.value) }))}
-                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />}
                                 {formError && <p className="text-xs text-red-600 font-medium mt-1">{formError}</p>}
                               </div>
                             ) : (
-                              <HighlightMatch text={c.phone} query={search} />
+                              <HighlightMatch text={c.phone ?? ''} query={search} />
                             )}
                           </td>
+                          <td className="px-4 py-3 text-zinc-600">{c.responsible_name ? <><span>{c.responsible_name}</span><br /><span className="text-xs text-zinc-400">{c.responsible_phone ?? ''}</span></> : '—'}</td>
                           <td className="px-4 py-3 text-zinc-500 text-sm">{c.created_at ? new Date(c.created_at).toLocaleString('pt-BR') : '—'}</td>
                           <td className="px-4 py-3 text-right space-x-3">
                             {editingRow === c.id ? (

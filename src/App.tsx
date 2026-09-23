@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
-import { User, Formula } from './types';
+import { User, Formula, USER_ROLE_LABELS } from './types';
 import { BrandLogo } from './components/Logo';
 import { BRAND, COLORS, GRADIENTS } from '../config/branding';
 import { NavItem } from './components/NavItem';
@@ -125,6 +125,13 @@ function AppInner() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
   const [fontScale, setFontScale] = useState(() => Number(localStorage.getItem('pharmaflow.fontScale')) || 1);
+  const canViewSavedFormulas = user?.role === 'pharmacist' || user?.role === 'admin' || user?.role === 'manager';
+
+  useEffect(() => {
+    if (!canViewSavedFormulas && activeTab === 'savedFormulas') {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab, canViewSavedFormulas]);
 
   const isTabActive = useCallback((tab: string) => {
     if (activeTab === tab) return true;
@@ -474,8 +481,10 @@ function AppInner() {
                 <NavItem icon={<History />} label="Histórico" active={isTabActive('history')} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Users />} label="Clientes" active={isTabActive('customers')} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
                 <NavItem icon={<Cross />} label="Insumos" active={isTabActive('insumos')} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Bookmark />} label="Minhas Fórmulas" active={isTabActive('savedFormulas')} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
-                {user.role === 'admin' && (
+                {canViewSavedFormulas && (
+                  <NavItem icon={<Bookmark />} label="Minhas Fórmulas" active={isTabActive('savedFormulas')} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
+                )}
+                {user.role !== 'employee' && (
                   <NavItem icon={<Settings />} label="Administração" active={isTabActive('admin')} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
                 )}
               </>
@@ -494,7 +503,7 @@ function AppInner() {
               {isSidebarOpen && (
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">{user.name}</p>
-                  <p className="text-xs opacity-50 text-white capitalize">{user.role === 'admin' ? 'Administrador' : 'Funcionário'}</p>
+                  <p className="text-xs opacity-50 text-white">{USER_ROLE_LABELS[user.role]}</p>
                 </div>
               )}
               {isSidebarOpen && (
@@ -560,11 +569,11 @@ function AppInner() {
                 </div>
                 <FormulaList screenKey={`confirmed-${confirmedStage}`} variant="confirmed" statuses={['confirmed']} employeeName={user.name} title={confirmedStage === 'em_producao' ? 'Fórmulas em produção' : 'Fórmulas aguardando retirada'} subtitle="Fórmulas confirmadas para manipulação" deliveryStatusFilter={confirmedStage} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} onDeliveryBlocked={(f, reasons) => { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('confirmed'); }} />
               </>}
-              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} monthlySummary onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
+              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" employeeName={user.name} title="Histórico" subtitle="Fórmulas canceladas e entregues" statuses={['cancelled', 'delivered']} statusFilterOptions={[{ value: 'cancelled', label: 'Canceladas' }, { value: 'delivered', label: 'Entregues' }]} showAndamento={false} showVerification monthlySummary onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
               {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
               {activeTab === 'insumos' && <InsumoManager />}
-              {activeTab === 'savedFormulas' && <SavedFormulaManager />}
+              {activeTab === 'savedFormulas' && canViewSavedFormulas && <SavedFormulaManager />}
             </AnimatePresence>
           </div>
         </main>

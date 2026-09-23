@@ -258,6 +258,15 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   })();
   const parsedDeliveryDate = parseDateBR(deliveryDate);
   const deliveryDateIsPast = !!parsedDeliveryDate && parsedDeliveryDate < todayIso;
+  const selectedBudgetValue = selectedBudgetIndex !== null
+    ? budgetItems[selectedBudgetIndex]?.value ?? null
+    : null;
+  const parsedPartialPaymentAmount = parseCurrency(partialPaymentAmount);
+  const partialPaymentIsInvalid = paymentStatus === 'parcial' && (
+    selectedBudgetValue === null ||
+    parsedPartialPaymentAmount <= 0 ||
+    parsedPartialPaymentAmount > selectedBudgetValue
+  );
   const validateDeliveryDate = (value: string) => {
     const parsed = parseDateBR(value);
     const error = parsed && parsed < todayIso ? 'A previsão de entrega não pode ser anterior à data atual.' : '';
@@ -268,7 +277,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const canSave = !!selectedCustomerId && items.length > 0 &&
     !!budgetNumber && budgetItems.length > 0 &&
     !!attendantName && !deliveryDateIsPast &&
-    (paymentStatus !== 'parcial' || parseCurrency(partialPaymentAmount) > 0);
+    !partialPaymentIsInvalid;
   const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
 
   const getSaveErrorMessage = (err: any) => {
@@ -374,13 +383,13 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         .filter(c => {
           const name = stripDiacritics((c.name ?? '').toLowerCase());
           const matchesName = q && name.includes(q);
-          const matchesPhone = qDigits && (c.phone ?? '').replace(/\D/g, '').includes(qDigits);
+          const matchesPhone = qDigits && (c.phone ?? c.responsible_phone ?? '').replace(/\D/g, '').includes(qDigits);
           return matchesName || matchesPhone;
         })
         .sort((a, b) => {
           const score = (c: Customer) => {
             const name = stripDiacritics((c.name ?? '').toLowerCase());
-            const phone = (c.phone ?? '').replace(/\D/g, '');
+            const phone = (c.phone ?? c.responsible_phone ?? '').replace(/\D/g, '');
             let s = 0;
             if (q && name.startsWith(q)) s += 4;
             else if (q && name.includes(q)) s += 3;
@@ -488,7 +497,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               </div>
               <div className="min-w-0">
                 <p className="font-semibold text-zinc-900 text-sm truncate">{selectedCustomer.name}</p>
-                <p className="text-xs text-zinc-500">📱 {selectedCustomer.phone}</p>
+                <p className="text-xs text-zinc-500">📱 {selectedCustomer.phone ?? selectedCustomer.responsible_phone ?? 'Sem celular cadastrado'}</p>
               </div>
             </div>
             {!locked && (
@@ -561,7 +570,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                     className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === customerFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
                     <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                     <span className="text-sm truncate flex-1">{c.name}</span>
-                    <span className="text-xs text-zinc-400 shrink-0">{c.phone}</span>
+                    <span className="text-xs text-zinc-400 shrink-0">{c.phone ?? c.responsible_phone ?? ''}</span>
                   </button>
                 ))}
               </div>
@@ -1065,7 +1074,10 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   value={partialPaymentAmount}
                   disabled={locked && !confirmed}
                   onChange={e => {
-                    const value = formatCurrency(e.target.value);
+                    const formattedValue = formatCurrency(e.target.value);
+                    const value = selectedBudgetValue !== null && parseCurrency(formattedValue) > selectedBudgetValue
+                      ? formatCurrency(String(Math.round(selectedBudgetValue * 100)))
+                      : formattedValue;
                     setPartialPaymentAmount(value);
                     onPartialPaymentAmountChange?.(value || null);
                   }}
@@ -1074,8 +1086,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
-              {!partialPaymentAmount || parseCurrency(partialPaymentAmount) <= 0 ? (
+              {selectedBudgetValue === null ? (
+                <p className="mt-1 text-xs text-red-600">Selecione uma opção de orçamento para validar o limite.</p>
+              ) : !partialPaymentAmount || parsedPartialPaymentAmount <= 0 ? (
                 <p className="mt-1 text-xs text-red-600">Informe uma quantia maior que zero.</p>
+              ) : parsedPartialPaymentAmount > selectedBudgetValue ? (
+                <p className="mt-1 text-xs text-red-600">A quantia paga não pode ser maior que o valor do orçamento selecionado (R$ {selectedBudgetValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).</p>
               ) : null}
             </div>
           )}

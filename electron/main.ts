@@ -13,6 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MASTER_USERNAME = 'admin';
 const MASTER_PASSWORD = 'admin123';
 const hasMasterSetupCredentials = true;
+const setupModeWindows = new Set<number>();
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -54,18 +55,21 @@ initPool();
 
 // ─── IPC: Auth ────────────────────────────────────────────────────────────────
 
-ipcMain.handle('auth:login', async (_, username: string, password: string, force = false) => {
+ipcMain.handle('auth:login', async (event, username: string, password: string, force = false) => {
   if (hasMasterSetupCredentials && username === MASTER_USERNAME && password === MASTER_PASSWORD) {
+    setupModeWindows.add(event.sender.id);
     await db.logAction('Configuração', 'login', 'system', null, 'Login no modo configuração (admin/admin123).');
     return {
       success: true, setupMode: true,
       user: { id: 0, name: 'Configuração', username: MASTER_USERNAME, role: 'admin' },
     };
   }
+  setupModeWindows.delete(event.sender.id);
   return await db.login(username, password, force);
 });
 
-ipcMain.handle('auth:logout', async (_, token: string) => {
+ipcMain.handle('auth:logout', async (event, token: string) => {
+  setupModeWindows.delete(event.sender.id);
   await db.revokeSession(token);
   return { success: true };
 });
@@ -80,8 +84,8 @@ setInterval(() => { db.cleanupStaleSessions().catch(() => {}); }, 60_000);
 // ─── Usuários ────────────────────────────────────────────────────────────────
 
 ipcMain.handle('users:list',   ()          => db.listUsers());
-ipcMain.handle('users:add',    async (_, u, sessionToken)      => { const r = await db.addUser(u, sessionToken); if (r?.success) notifyDataChanged(); return r; });
-ipcMain.handle('users:update', async (_, id, u, sessionToken)  => { const r = await db.updateUser(id, u, sessionToken); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('users:add',    async (event, u, sessionToken)      => { const r = await db.addUser(u, sessionToken, setupModeWindows.has(event.sender.id)); if (r?.success) notifyDataChanged(); return r; });
+ipcMain.handle('users:update', async (event, id, u, sessionToken)  => { const r = await db.updateUser(id, u, sessionToken, setupModeWindows.has(event.sender.id)); if (r?.success) notifyDataChanged(); return r; });
 ipcMain.handle('users:delete', async (_, id, adminCreds, sessionToken) => { const r = await db.deleteUser(id, adminCreds, sessionToken); if (r?.success) notifyDataChanged(); return r; });
 
 // ─── Clientes ────────────────────────────────────────────────────────────────
@@ -105,6 +109,7 @@ ipcMain.handle('formulas:add',           async (_, f, sessionToken)          => 
 ipcMain.handle('formulas:update',        async (_, id, f, sessionToken)      => { const r = await db.updateFormula(id, f, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:update-status', async (_, id, status, sessionToken) => { const r = await db.updateFormulaStatus(id, status, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:update-delivery-status', async (_, id, deliveryStatus, sessionToken) => { const r = await db.updateFormulaDeliveryStatus(id, deliveryStatus, sessionToken); notifyDataChanged(); return r; });
+ipcMain.handle('formulas:verify', async (_, id, sessionToken) => { const r = await db.verifyFormula(id, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:update-delivery-status-batch', async (_, ids, deliveryStatus, sessionToken) => { const r = await db.updateFormulasDeliveryStatus(ids, deliveryStatus, sessionToken); notifyDataChanged(); return r; });
 ipcMain.handle('formulas:delete',        async (_, id, adminCreds, sessionToken) => { const r = await db.deleteFormula(id, adminCreds, sessionToken); notifyDataChanged(); return r; });
 
@@ -191,6 +196,9 @@ const createWindow = () => {
       contextIsolation: true,
     },
   });
+
+  const webContentsId = win.webContents.id;
+  win.on('closed', () => setupModeWindows.delete(webContentsId));
 
   win.on('close', (event) => {
     if (!pendingExitConfirm && BrowserWindow.getAllWindows().length === 1) {

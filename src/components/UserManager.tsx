@@ -9,14 +9,15 @@ import { LoadingState, ErrorState } from './Feedback';
 import { AdminAuthModal } from './AdminAuthModal';
 import { useAuth } from '../context/AuthContext';
 import { GRADIENTS } from '../../config/branding';
+import { canManageUsers, USER_ROLE_LABELS, UserRole } from '../types';
 
 export function AdminPanel({ user }: { user: User }) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-        {user.role === 'admin'
+        {canManageUsers(user.role)
           ? <UserManager user={user} />
-          : <p className="p-6 text-sm text-zinc-500">Somente administradores podem gerenciar funcionários.</p>}
+          : <p className="p-6 text-sm text-zinc-500">Somente perfis Farmacêutico, Gerente ou Administrador podem gerenciar usuários.</p>}
       </div>
     </motion.div>
   );
@@ -25,7 +26,7 @@ export function AdminPanel({ user }: { user: User }) {
 export function UserManager({ user }: { user: User }) {
   const { data: users, loading, error, reload } = useData(() => db.users.list());
   const { sessionToken } = useAuth();
-  const emptyForm = { name: '', username: '', password: '', role: 'employee' as 'admin' | 'employee' };
+  const emptyForm = { name: '', username: '', password: '', role: 'employee' as UserRole };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -195,6 +196,8 @@ export function UserManager({ user }: { user: User }) {
               value={form.role}
               onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))}>
               <option value="employee">Funcionário</option>
+              <option value="pharmacist">Farmacêutico</option>
+              <option value="manager">Gerente</option>
               <option value="admin">Administrador</option>
             </select>
           </div>
@@ -235,8 +238,13 @@ export function UserManager({ user }: { user: User }) {
                   <td className="px-4 py-3 font-medium text-zinc-900">{u.name}</td>
                   <td className="px-4 py-3 text-zinc-500 font-mono text-sm">{u.username}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
-                      {u.role === 'admin' ? 'Administrador' : 'Funcionário'}
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      u.role === 'admin' ? 'bg-red-50 text-red-700' :
+                      u.role === 'manager' ? 'bg-green-50 text-green-700' :
+                      u.role === 'pharmacist' ? 'bg-blue-50 text-blue-700' :
+                      'bg-amber-50 text-amber-700'
+                    }`}>
+                      {USER_ROLE_LABELS[u.role as UserRole] ?? u.role}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">

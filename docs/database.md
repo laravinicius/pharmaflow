@@ -6,7 +6,7 @@ MariaDB é acessado por `mysql2/promise` através de `Db` em `electron/db.ts`. `
 
 ## Entidades
 
-- `users`: usuários e roles `admin`/`employee`.
+- `users`: usuários e roles `employee`, `pharmacist`, `manager` e `admin`, nessa ordem de acesso.
 - `customers`: clientes, com telefone único.
 - `insumos`: matérias-primas.
 - `formulas`: cliente, orçamento, pagamento, entrega e status.

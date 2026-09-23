@@ -45,15 +45,18 @@ export function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
+export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, showVerification = false, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; showVerification?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
-  const { sessionToken } = useAuth();
+  const { sessionToken, user } = useAuth();
+  const canVerify = showVerification && user?.role === 'manager';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [focusedIdx, setFocusedIdx] = useState(-1);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [pendingWhatsAppStatus, setPendingWhatsAppStatus] = useState<Formula | null>(null);
+  const [pendingDeliveryConfirmation, setPendingDeliveryConfirmation] = useState<{ formula: Formula; deliveryStatus: 'aguardando_retirada' | 'entregue' } | null>(null);
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState<number | null>(null);
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
   const now = new Date();
   const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
   const [summaryYear, setSummaryYear] = useState(now.getFullYear());
@@ -88,9 +91,22 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     }
   };
 
+  const verifyFormula = async (formula: Formula) => {
+    if (!sessionToken || formula.manager_verified || verifyingId === formula.id) return;
+    setVerifyingId(formula.id);
+    try {
+      await db.formulas.verify(formula.id, sessionToken);
+      await reload();
+    } catch (err: any) {
+      alert('Erro ao verificar fórmula: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
   const handleDeliveryAction = async (formula: Formula) => {
     if (deliveryStatusFilter === 'em_producao') {
-      setPendingWhatsAppStatus(formula);
+      setPendingDeliveryConfirmation({ formula, deliveryStatus: 'aguardando_retirada' });
       return;
     }
     if (deliveryStatusFilter !== 'aguardando_retirada') return;
@@ -98,7 +114,19 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       onDeliveryBlocked?.(formula, ['Status de pagamento: Pago']);
       return;
     }
-    await applyDeliveryStatus(formula, 'entregue');
+    setPendingDeliveryConfirmation({ formula, deliveryStatus: 'entregue' });
+  };
+
+  const handleDeliveryConfirmation = () => {
+    const pending = pendingDeliveryConfirmation;
+    setPendingDeliveryConfirmation(null);
+    if (!pending) return;
+
+    if (pending.deliveryStatus === 'aguardando_retirada') {
+      setPendingWhatsAppStatus(pending.formula);
+      return;
+    }
+    void applyDeliveryStatus(pending.formula, pending.deliveryStatus);
   };
 
   const handleWhatsAppStatusChoice = async (notifyCustomer: boolean) => {
@@ -120,7 +148,49 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   };
 
   const all = (formulas as Formula[]) ?? [];
-  const searchLower = search.toLowerCase();
+  const searchLower = search.trim().toLocaleLowerCase('pt-BR');
+
+  const matchesHistorySearch = (formula: Formula) => {
+    if (!searchLower) return true;
+
+    const selectedBudgets = (formula.budget_items ?? []).filter(item => item.is_selected);
+    const normalizedSearch = searchLower.replace(/\D/g, '');
+    const paymentLabels: Record<string, string> = {
+      pago: 'Pago',
+      parcial: 'Parcial',
+      pagar_na_retirada: 'Pagar na retirada',
+    };
+    const statusLabels: Record<string, string> = {
+      cancelled: 'Cancelada',
+      delivered: 'Entregue',
+    };
+    const searchableValues = [
+      formula.id,
+      formula.customer_name,
+      formula.customer_phone,
+      (formula.customer_phone ?? '').replace(/\D/g, ''),
+      formula.budget_number,
+      formula.attendant_name,
+      employeeName,
+      new Date(formula.created_at).toLocaleDateString('pt-BR'),
+      formula.delivery_date ? formatDateToBR(formula.delivery_date) : '',
+      formula.delivery_date ?? '',
+      paymentLabels[formula.payment_status ?? ''] ?? formula.payment_status,
+      statusLabels[formula.status] ?? formula.status,
+      formula.manager_verified ? 'Verificado' : 'Verificar Não verificado',
+      ...(formula.items ?? []).flatMap(item => [item.insumo_name, item.quantity, item.unit]),
+      ...selectedBudgets.flatMap(item => [
+        formatQuantity(item.quantity),
+        item.quantity,
+        item.unit,
+        item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      ]),
+    ];
+
+    return searchableValues.some(value => String(value ?? '').toLocaleLowerCase('pt-BR').includes(searchLower))
+      || (normalizedSearch.length > 0 && (formula.customer_phone ?? '').replace(/\D/g, '').includes(normalizedSearch));
+  };
 
   const summaryYears = useMemo(() => {
     const years = new Set<number>([new Date().getFullYear()]);
@@ -146,12 +216,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       .filter(f => statuses.includes(f.status))
       .filter(f => !deliveryStatusFilter || f.delivery_status === deliveryStatusFilter)
       .filter(f => !statusFilter || f.status === statusFilter)
-      .filter(f =>
+      .filter(f => screenKey === 'history'
+        ? matchesHistorySearch(f)
+        : (
         f.customer_name.toLowerCase().includes(searchLower) ||
         (f.attendant_name || '').toLowerCase().includes(searchLower) ||
         String(f.id).includes(searchLower)
-      );
-  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter]);
+      ));
+  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter, screenKey, employeeName]);
 
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
@@ -180,7 +252,9 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       ? 'Entregue'
       : null;
   const gridCols = variant === 'confirmed'
-      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.6fr_2.5fr]'
+      ? canVerify
+        ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.25fr_1.6fr_2.5fr]'
+        : 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.6fr_2.5fr]'
     : showAndamento
       ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]'
       : showRepeat
@@ -241,7 +315,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           {filtered.length > 0 && variant === 'confirmed' && (
             <div className={`hidden md:grid ${gridCols} ${columnGap} px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
               <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
-              <span className="text-left">Data criação</span><span className="text-left">Data entrega</span><span className="text-left">Pagamento</span><span className="text-right">Whatsapp</span><span />
+              <span className="text-left">Data criação</span><span className="text-left">Data entrega</span><span className="text-left">Pagamento</span>{canVerify && <span className="text-left">Verificação</span>}<span className="text-right">Whatsapp</span><span />
             </div>
           )}
           {filtered.length > 0 && variant === 'pending' && (
@@ -302,6 +376,19 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                         {paymentLabels[f.payment_status ?? ''] ?? 'Não informado'}
                       </button>
                     </div>
+                    {canVerify && (
+                      <div className="flex justify-start" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          disabled={!!f.manager_verified || verifyingId === f.id}
+                          aria-label={f.manager_verified ? 'Fórmula verificada' : `Verificar fórmula de ${f.customer_name}`}
+                          onClick={() => void verifyFormula(f)}
+                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors disabled:cursor-default ${f.manager_verified ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60'}`}
+                        >
+                          {verifyingId === f.id ? 'Salvando...' : f.manager_verified ? 'Verificado' : 'Verificar'}
+                        </button>
+                      </div>
+                    )}
                     <div className="flex justify-end">
                       {(() => {
                         const whatsappUrl = getWhatsAppUrl(f.customer_phone);
@@ -328,7 +415,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       {deliveryActionLabel && (
                         <button
                           type="button"
-                          disabled={updatingDeliveryId === f.id}
+                          disabled={updatingDeliveryId === f.id || pendingDeliveryConfirmation?.formula.id === f.id || pendingWhatsAppStatus?.id === f.id}
                           onClick={(e) => { e.stopPropagation(); void handleDeliveryAction(f); }}
                           className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                         >
@@ -418,6 +505,17 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         </div>
       )}
     </motion.div>
+    <ConfirmModal
+      isOpen={!!pendingDeliveryConfirmation}
+      title={pendingDeliveryConfirmation?.deliveryStatus === 'entregue' ? 'Confirmar entrega' : 'Aguardando retirada'}
+      message={pendingDeliveryConfirmation?.deliveryStatus === 'entregue'
+        ? `Confirma que a fórmula de ${pendingDeliveryConfirmation.formula.customer_name} foi entregue?`
+        : `Confirma que a fórmula de ${pendingDeliveryConfirmation?.formula.customer_name} está aguardando retirada?`}
+      confirmLabel="Sim"
+      cancelLabel="Não"
+      onConfirm={handleDeliveryConfirmation}
+      onClose={() => setPendingDeliveryConfirmation(null)}
+    />
     <ConfirmModal
       isOpen={!!pendingWhatsAppStatus}
       title="Avisar cliente"

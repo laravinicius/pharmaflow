@@ -10,7 +10,7 @@ interface AdminAuthModalProps {
   message?: string;
 }
 
-export function AdminAuthModal({ isOpen, onClose, onConfirm, title = 'Confirmação de exclusão', message = 'Esta ação requer credenciais de administrador.' }: AdminAuthModalProps) {
+export function AdminAuthModal({ isOpen, onClose, onConfirm, title = 'Confirmação de exclusão', message = 'Esta ação requer credenciais de um perfil Farmacêutico, Gerente ou Administrador.' }: AdminAuthModalProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -55,7 +55,7 @@ export function AdminAuthModal({ isOpen, onClose, onConfirm, title = 'Confirmaç
           </button>
         </div>
 
-        <p className="text-xs text-zinc-500 mb-4">Informe usuário e senha de um administrador para confirmar a exclusão.</p>
+        <p className="text-xs text-zinc-500 mb-4">Informe usuário e senha de um perfil Farmacêutico, Gerente ou Administrador para confirmar a exclusão.</p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

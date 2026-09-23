@@ -216,8 +216,8 @@ export class Db {
   async verifyAdmin(username: string, password: string): Promise<AdminVerifyResult> {
     try {
       const rows = await this.q<any[]>(
-        'SELECT id, name, username, role FROM users WHERE username = ? AND password = ? AND role = ?',
-        [username, hash(password), 'admin']
+        "SELECT id, name, username, role FROM users WHERE username = ? AND password = ? AND role IN ('admin', 'manager', 'pharmacist')",
+        [username, hash(password)]
       );
       if (rows.length === 0) {
         return { success: false, error: 'Credenciais de administrador inválidas' };
@@ -260,7 +260,7 @@ export class Db {
         [username, hash(password)]
       );
       if (rows.length === 0) return { success: false, error: 'Usuário ou senha inválidos.' };
-      if (rows[0].role !== 'admin' && rows[0].role !== 'employee') {
+      if (!['admin', 'manager', 'pharmacist', 'employee'].includes(rows[0].role)) {
         return { success: false, error: 'Acesso negado. Este sistema é exclusivo para funcionários.' };
       }
       const user = rows[0];
@@ -301,8 +301,15 @@ export class Db {
     return this.q('SELECT id, name, username, role FROM users ORDER BY name');
   }
 
-  async addUser(user: { name: string; username: string; password: string; role: string }, sessionToken?: string) {
+  async addUser(user: { name: string; username: string; password: string; role: string }, sessionToken?: string, setupAuthorized = false) {
     try {
+      if (!setupAuthorized) {
+        const access = await this.checkAdminAccess(undefined, sessionToken);
+        if (!access.success) return { success: false, error: access.error };
+      }
+      if (!['admin', 'manager', 'pharmacist', 'employee'].includes(user.role)) {
+        return { success: false, error: 'Perfil inválido.' };
+      }
       const dup = await this.q<any[]>('SELECT id FROM users WHERE username = ?', [user.username]);
       if (dup.length > 0) return { success: false, error: 'Usuário já existe.' };
       const r: any = await this.q('INSERT INTO users (name, username, password, role) VALUES (?,?,?,?)',
@@ -315,8 +322,15 @@ export class Db {
     }
   }
 
-  async updateUser(id: number, user: { name: string; username: string; password?: string; role: string }, sessionToken?: string) {
+  async updateUser(id: number, user: { name: string; username: string; password?: string; role: string }, sessionToken?: string, setupAuthorized = false) {
     try {
+      if (!setupAuthorized) {
+        const access = await this.checkAdminAccess(undefined, sessionToken);
+        if (!access.success) return { success: false, error: access.error };
+      }
+      if (!['admin', 'manager', 'pharmacist', 'employee'].includes(user.role)) {
+        return { success: false, error: 'Perfil inválido.' };
+      }
       if (user.password && user.password.trim() !== '') {
         await this.q('UPDATE users SET name=?, username=?, password=?, role=? WHERE id=?',
           [user.name, user.username, hash(user.password), user.role, id]);
@@ -363,7 +377,7 @@ export class Db {
     }
     if (sessionToken) {
       const sessionResult = await this.getSessionUser(sessionToken);
-      if (sessionResult.user?.role === 'admin') {
+      if (sessionResult.user?.role === 'admin' || sessionResult.user?.role === 'manager' || sessionResult.user?.role === 'pharmacist') {
         return { success: true, user: sessionResult.user };
       }
       return { success: false, error: 'Credenciais de administrador inválidas' };
@@ -374,10 +388,38 @@ export class Db {
   // ── Clientes ──────────────────────────────────────────────────────────────────
 
   listCustomers() {
-    return this.q('SELECT id, name, phone, created_at FROM customers ORDER BY name');
+    return this.q(`SELECT c.id, c.name, c.phone, c.responsible_id, r.name AS responsible_name,
+                          r.phone AS responsible_phone, c.created_at
+                   FROM customers c LEFT JOIN customers r ON r.id = c.responsible_id
+                   ORDER BY c.name`);
   }
 
-  async addCustomer(c: { name: string; phone: string }, sessionToken?: string) {
+  async addCustomer(c: { name: string; phone: string | null; responsible_customer_id?: number | null }, sessionToken?: string) {
+    if (c.responsible_customer_id) {
+      if (c.phone || !c.name.trim()) return { success: false, error: 'Dependente deve ter nome e não pode ter celular próprio.' };
+      if (!this.pool) throw new Error('Sem conexão com o servidor');
+      const conn = await this.pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        const [selected]: any = await conn.query(
+          'SELECT id, responsible_id, phone FROM customers WHERE id=? FOR UPDATE', [c.responsible_customer_id]
+        );
+        if (!selected.length || selected[0].responsible_id || !selected[0].phone) {
+          await conn.rollback();
+          return { success: false, error: 'Selecione um responsável cadastrado com celular.' };
+        }
+        const [r]: any = await conn.query(
+          'INSERT INTO customers (name, phone, responsible_id) VALUES (?,NULL,?)', [c.name, c.responsible_customer_id]
+        );
+        await conn.commit();
+        const actor = await this.resolveActor(sessionToken);
+        await this.logAction(actor, 'add', 'customers', r.insertId, `Dependente cadastrado: ${c.name} (responsável id ${c.responsible_customer_id}).`);
+        return { success: true, id: r.insertId };
+      } catch (e) {
+        await conn.rollback();
+        return { success: false, error: friendlyError(e) };
+      } finally { conn.release(); }
+    }
     try {
       const r: any = await this.q('INSERT INTO customers (name, phone) VALUES (?,?)', [c.name, c.phone]);
       const actor = await this.resolveActor(sessionToken);
@@ -393,8 +435,14 @@ export class Db {
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
-      await conn.query('UPDATE customers SET name=?, phone=? WHERE id=?', [c.name, c.phone, id]);
-      await conn.query('UPDATE formulas SET customer_phone=? WHERE customer_id=?', [c.phone, id]);
+      const [current]: any = await conn.query('SELECT responsible_id FROM customers WHERE id=? FOR UPDATE', [id]);
+      if (current[0]?.responsible_id) {
+        await conn.query('UPDATE customers SET name=?, phone=NULL WHERE id=?', [c.name, id]);
+      } else {
+        await conn.query('UPDATE customers SET name=?, phone=? WHERE id=?', [c.name, c.phone, id]);
+        await conn.query(`UPDATE formulas SET customer_phone=? WHERE customer_id=? OR customer_id IN
+                          (SELECT id FROM customers WHERE responsible_id=?)`, [c.phone, id, id]);
+      }
       await conn.commit();
       const actor = await this.resolveActor(sessionToken);
       await this.logAction(actor, 'update', 'customers', id, `Cliente atualizado: ${c.name} (tel: ${c.phone}).`);
@@ -431,6 +479,8 @@ export class Db {
       const adminCheck = await this.checkAdminAccess(adminCreds, sessionToken);
       if (!adminCheck.success) return { success: false, error: adminCheck.error };
 
+      const dependents = await this.q<any[]>('SELECT id FROM customers WHERE responsible_id=? LIMIT 1', [id]);
+      if (dependents.length) return { success: false, error: 'Não é possível excluir um responsável com clientes vinculados.' };
       const target = await this.q<any[]>('SELECT name, phone FROM customers WHERE id = ?', [id]);
       await this.q('DELETE FROM customers WHERE id = ?', [id]);
       const actor = adminCheck.user
@@ -503,6 +553,7 @@ export class Db {
              COALESCE(f.budget_number,'') AS budget_number,
              f.delivery_date, COALESCE(f.payment_status,'') AS payment_status,
              f.payment_method, COALESCE(f.delivery_status,'') AS delivery_status,
+             f.manager_verified,
              f.cancel_reason, f.status, f.created_at
       FROM formulas f JOIN customers c ON f.customer_id = c.id
       ORDER BY f.created_at DESC
@@ -562,7 +613,8 @@ export class Db {
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
-      const customer = await this.q<any[]>('SELECT phone FROM customers WHERE id=?', [formula.customer_id]);
+      const customer = await this.q<any[]>(`SELECT COALESCE(c.phone, r.phone, '') AS phone
+        FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
 const [r]: any = await conn.query(
         `INSERT INTO formulas (customer_id, customer_phone, attendant_name, budget_number, delivery_date, payment_status, payment_method, delivery_status, cancel_reason, status)
@@ -621,7 +673,8 @@ const [r]: any = await conn.query(
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
-      const customer = await this.q<any[]>('SELECT phone FROM customers WHERE id=?', [formula.customer_id]);
+      const customer = await this.q<any[]>(`SELECT COALESCE(c.phone, r.phone, '') AS phone
+        FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
       await conn.query(
         `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, payment_method=?, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
@@ -680,6 +733,19 @@ const [r]: any = await conn.query(
     );
     const actor = await this.resolveActor(sessionToken);
     await this.logAction(actor, 'update_delivery_status', 'formulas', id, `Andamento da fórmula ${id} alterado para ${deliveryStatus}.`);
+    return { success: true };
+  }
+
+  async verifyFormula(id: number, sessionToken?: string) {
+    if (!sessionToken) throw new Error('Sessão de Gerente obrigatória.');
+    const session = await this.getSessionUser(sessionToken);
+    if (session.user?.role !== 'manager') throw new Error('Apenas o perfil Gerente pode verificar fórmulas.');
+    const result: any = await this.q('UPDATE formulas SET manager_verified=1 WHERE id=?', [id]);
+    if (!result?.affectedRows) {
+      const existing = await this.q<any[]>('SELECT id FROM formulas WHERE id=?', [id]);
+      if (!existing.length) throw new Error('Fórmula não encontrada.');
+    }
+    await this.logAction({ id: session.user.id, name: session.user.name }, 'verify', 'formulas', id, `Fórmula ${id} marcada como verificada no Histórico.`);
     return { success: true };
   }
 
