@@ -14,7 +14,7 @@ import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
 import { UnitCycle, INGREDIENT_UNITS, BUDGET_UNITS } from './UnitCycle';
 
-export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, partialPaymentAmount: savedPartialPaymentAmount = '', onPartialPaymentAmountChange, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; partialPaymentAmount?: string; onPartialPaymentAmountChange?: (value: string | null) => void; onComplete: (dest: 'pending' | 'confirmed') => void }) {
+export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, partialPaymentAmount: savedPartialPaymentAmount = '', onPartialPaymentAmountChange, onClearTemplate, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; partialPaymentAmount?: string; onPartialPaymentAmountChange?: (value: string | null) => void; onClearTemplate?: () => void; onComplete: (dest: 'pending' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
   const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
   const { data: savedFormulas } = useData(() => db.savedFormulas.list());
@@ -149,6 +149,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   }, [formula, initialLocked]);
 
   const clearForm = () => {
+    draftRef.current = {
+      selectedCustomerId: '', items: [], budgetNumber: '', budgetItems: [], selectedBudgetIndex: null,
+      attendantName: '', deliveryDate: '', paymentStatus: '', paymentMethod: '',
+    };
+    removeDraft(DRAFT_KEY);
+    if (template) onClearTemplate?.();
     setSelectedCustomerId('');
     setItems([]);
     setCustomerQuery('');
