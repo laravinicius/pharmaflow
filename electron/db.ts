@@ -548,6 +548,7 @@ export class Db {
   async listFormulas() {
     const formulas = await this.q<any[]>(`
       SELECT f.id, f.customer_id, c.name AS customer_name,
+             r.name AS responsible_name,
              COALESCE(f.customer_phone,'') AS customer_phone,
              COALESCE(f.attendant_name,'') AS attendant_name,
              COALESCE(f.budget_number,'') AS budget_number,
@@ -556,6 +557,7 @@ export class Db {
              f.manager_verified,
              f.cancel_reason, f.status, f.created_at
       FROM formulas f JOIN customers c ON f.customer_id = c.id
+      LEFT JOIN customers r ON r.id = c.responsible_id
       ORDER BY f.created_at DESC
     `);
 

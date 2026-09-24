@@ -197,13 +197,13 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
       </div>
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Celular</label>
-        {isDependent && !compact ? <p className="px-3 py-2 text-sm text-zinc-500">Celular compartilhado do responsável</p> : <input required inputMode="numeric" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => { setFormError(''); setForm({ ...form, phone: formatPhone(e.target.value) }); }} maxLength={15} />}
+        {isDependent ? <p className="px-3 py-2 text-sm text-zinc-500">Celular compartilhado do responsável</p> : <input required inputMode="numeric" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.phone} onChange={e => { setFormError(''); setForm({ ...form, phone: formatPhone(e.target.value) }); }} maxLength={15} />}
       </div>
-      {!compact && <div className="md:col-span-4 flex items-center gap-2">
-        <input id="customer-dependent" type="checkbox" checked={isDependent} onChange={e => { setIsDependent(e.target.checked); setResponsibleCustomerId(''); setForm(d => ({ ...d, phone: '' })); setFormError(''); }} />
-        <label htmlFor="customer-dependent" className="text-sm text-zinc-700">Cadastrar como dependente</label>
+      {!editingId && <div className={compact ? 'flex items-center gap-2' : 'md:col-span-4 flex items-center gap-2'}>
+        <input id={compact ? 'customer-dependent-compact' : 'customer-dependent'} type="checkbox" checked={isDependent} onChange={e => { setIsDependent(e.target.checked); setResponsibleCustomerId(''); setForm(d => ({ ...d, phone: '' })); setFormError(''); }} />
+        <label htmlFor={compact ? 'customer-dependent-compact' : 'customer-dependent'} className="text-sm text-zinc-700">Cadastrar como dependente</label>
       </div>}
-      {isDependent && !compact && <div className="md:col-span-3">
+      {isDependent && <div className={compact ? '' : 'md:col-span-3'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Responsável</label>
         <select required value={responsibleCustomerId} onChange={e => setResponsibleCustomerId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white">
           <option value="">Selecione um responsável</option>

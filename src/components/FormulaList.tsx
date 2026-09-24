@@ -228,12 +228,12 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
     parcial: 'bg-amber-50 border-amber-200',
-    pagar_na_retirada: 'bg-cyan-50 border-cyan-200',
+    pagar_na_retirada: 'bg-red-50 border-red-200',
   };
   const paymentTintFocused: Record<string, string> = {
     pago: 'bg-emerald-100 border-emerald-300',
     parcial: 'bg-amber-100 border-amber-300',
-    pagar_na_retirada: 'bg-cyan-100 border-cyan-300',
+    pagar_na_retirada: 'bg-red-100 border-red-300',
   };
   const paymentLabels: Record<string, string> = {
     pago: 'Pago',
@@ -243,7 +243,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const paymentText: Record<string, string> = {
     pago: 'text-emerald-700',
     parcial: 'text-amber-700',
-    pagar_na_retirada: 'text-cyan-700',
+    pagar_na_retirada: 'text-red-700',
   };
   const showRepeat = !!onRepeat;
   const deliveryActionLabel = deliveryStatusFilter === 'em_producao'
@@ -351,7 +351,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   <div className={`grid grid-cols-1 ${gridCols} ${columnGap} items-center text-sm`}>
                     <div className="min-w-0 text-left">
                       <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
-                      {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
+                      {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.responsible_name ? `${f.responsible_name} - ${f.customer_phone}` : f.customer_phone}</p>}
                     </div>
                     <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
                     <div className="text-zinc-700 space-y-1 font-medium text-right">
@@ -458,7 +458,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 <div className={`grid grid-cols-1 ${pendingGridCols} ${columnGap} items-center text-sm`}>
                   <div className="min-w-0 text-left">
                     <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
-                    {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.customer_phone}</p>}
+                    {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.responsible_name ? `${f.responsible_name} - ${f.customer_phone}` : f.customer_phone}</p>}
                   </div>
                   <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
                   <div className="text-zinc-700 space-y-1 font-medium text-right">
