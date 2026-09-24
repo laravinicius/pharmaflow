@@ -5,7 +5,7 @@ export function NavItem({ icon, label, active, onClick, collapsed }: {
   icon: React.ReactNode; label: string; active: boolean; onClick: () => void; collapsed: boolean
 }) {
   return (
-    <button onClick={onClick}
+    <button onClick={onClick} title={collapsed ? label : undefined} aria-label={collapsed ? label : undefined}
       style={active
         ? { background: COLORS.navActiveBg, color: 'white' }
         : undefined}

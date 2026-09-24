@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  Users, Cross, ClipboardList, User as UserIcon, PlusCircle, LogOut,
+  Users, Cross, ClipboardList, BarChart3, User as UserIcon, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
-  CheckCircle, History, AlertTriangle, Bookmark,
+  CheckCircle, History, AlertTriangle, Bookmark, ChevronDown, FlaskConical, BookOpen, Cog,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
@@ -112,6 +112,9 @@ function AppInner() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'admin' | 'recipe' | 'pending' | 'confirmed' | 'formulaDetail' | 'confirmedDetail' | 'history' | 'historyDetail' | 'customers' | 'insumos' | 'savedFormulas' | 'settings'>('dashboard');
   const [confirmedStage, setConfirmedStage] = useState<'em_producao' | 'aguardando_retirada'>('em_producao');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [formulasMenuOpen, setFormulasMenuOpen] = useState(true);
+  const [managementMenuOpen, setManagementMenuOpen] = useState(true);
+  const [consultationsMenuOpen, setConsultationsMenuOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -139,6 +142,15 @@ function AppInner() {
     if (tab === 'confirmed' && activeTab === 'confirmedDetail') return true;
     if (tab === 'history' && activeTab === 'historyDetail') return true;
     return false;
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (['recipe', 'pending', 'confirmed', 'formulaDetail', 'confirmedDetail', 'history', 'historyDetail', 'insumos'].includes(activeTab)) {
+      setFormulasMenuOpen(true);
+    }
+    if (['customers', 'savedFormulas'].includes(activeTab)) {
+      setManagementMenuOpen(true);
+    }
   }, [activeTab]);
 
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -474,22 +486,65 @@ function AppInner() {
           <nav className="flex-1 px-4 space-y-1">
             {!setupMode && (
               <>
-                <NavItem icon={<ClipboardList />} label="Dashboard" active={isTabActive('dashboard')} onClick={() => setActiveTab('dashboard')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<PlusCircle />} label="Nova Fórmula" active={isTabActive('recipe')} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Clock />} label="Pendentes" active={isTabActive('pending')} onClick={() => setActiveTab('pending')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={isTabActive('confirmed')} onClick={() => { setConfirmedStage('em_producao'); setActiveTab('confirmed'); }} collapsed={!isSidebarOpen} />
-                <NavItem icon={<History />} label="Histórico" active={isTabActive('history')} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Users />} label="Clientes" active={isTabActive('customers')} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
-                <NavItem icon={<Cross />} label="Insumos" active={isTabActive('insumos')} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
-                {canViewSavedFormulas && (
-                  <NavItem icon={<Bookmark />} label="Minhas Fórmulas" active={isTabActive('savedFormulas')} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />
+                <NavItem icon={<BarChart3 />} label="Dashboard" active={isTabActive('dashboard')} onClick={() => setActiveTab('dashboard')} collapsed={!isSidebarOpen} />
+                <button type="button" onClick={() => {
+                  if (!isSidebarOpen) {
+                    setIsSidebarOpen(true);
+                    setFormulasMenuOpen(true);
+                  } else {
+                    setFormulasMenuOpen(open => !open);
+                  }
+                }} title={!isSidebarOpen ? 'Fórmulas' : undefined} aria-label={!isSidebarOpen ? 'Fórmulas' : undefined} aria-expanded={isSidebarOpen && formulasMenuOpen}
+                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-all text-white ${isSidebarOpen ? 'opacity-70 hover:opacity-100 hover:bg-white/10' : 'justify-center opacity-60 hover:opacity-100 hover:bg-white/10'}`}>
+                  <span className="flex items-center gap-3 truncate"><FlaskConical className="w-5 h-5 shrink-0" />{isSidebarOpen && 'Fórmulas'}</span>
+                  {isSidebarOpen && <ChevronDown className={`w-4 h-4 transition-transform ${formulasMenuOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                {formulasMenuOpen && <div className={`${isSidebarOpen ? 'pl-3 ' : ''}space-y-1`}>
+                  <NavItem icon={<PlusCircle />} label="Nova Fórmula" active={isTabActive('recipe')} onClick={() => setActiveTab('recipe')} collapsed={!isSidebarOpen} />
+                  <NavItem icon={<Clock />} label="Pendentes" active={isTabActive('pending')} onClick={() => setActiveTab('pending')} collapsed={!isSidebarOpen} />
+                  <NavItem icon={<CheckCircle2 />} label="Confirmadas" active={isTabActive('confirmed')} onClick={() => { setConfirmedStage('em_producao'); setActiveTab('confirmed'); }} collapsed={!isSidebarOpen} />
+                  <NavItem icon={<History />} label="Histórico" active={isTabActive('history')} onClick={() => setActiveTab('history')} collapsed={!isSidebarOpen} />
+                  <NavItem icon={<Cross />} label="Insumos" active={isTabActive('insumos')} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
+                </div>}
+                {(user.role === 'manager' || user.role === 'admin') && (
+                  <button type="button" onClick={() => {
+                    if (!isSidebarOpen) {
+                      setIsSidebarOpen(true);
+                      setConsultationsMenuOpen(true);
+                    } else {
+                      setConsultationsMenuOpen(open => !open);
+                    }
+                  }} title={!isSidebarOpen ? 'Consultas' : undefined} aria-label={!isSidebarOpen ? 'Consultas' : undefined} aria-expanded={isSidebarOpen && consultationsMenuOpen}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-all text-white ${isSidebarOpen ? 'opacity-70 hover:opacity-100 hover:bg-white/10' : 'justify-center opacity-60 hover:opacity-100 hover:bg-white/10'}`}>
+                    <span className="flex items-center gap-3 truncate"><BookOpen className="w-5 h-5 shrink-0" />{isSidebarOpen && 'Consultas'}</span>
+                    {isSidebarOpen && <ChevronDown className={`w-4 h-4 transition-transform ${consultationsMenuOpen ? 'rotate-180' : ''}`} />}
+                  </button>
                 )}
-                {user.role !== 'employee' && (
-                  <NavItem icon={<Settings />} label="Administração" active={isTabActive('admin')} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
-                )}
+                <button type="button" onClick={() => {
+                  if (!isSidebarOpen) {
+                    setIsSidebarOpen(true);
+                    setManagementMenuOpen(true);
+                  } else {
+                    setManagementMenuOpen(open => !open);
+                  }
+                }} title={!isSidebarOpen ? 'Gerenciamento' : undefined} aria-label={!isSidebarOpen ? 'Gerenciamento' : undefined} aria-expanded={isSidebarOpen && managementMenuOpen}
+                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-all text-white ${isSidebarOpen ? 'opacity-70 hover:opacity-100 hover:bg-white/10' : 'justify-center opacity-60 hover:opacity-100 hover:bg-white/10'}`}>
+                  <span className="flex items-center gap-3 truncate"><Cog className="w-5 h-5 shrink-0" />{isSidebarOpen && 'Gerenciamento'}</span>
+                  {isSidebarOpen && <ChevronDown className={`w-4 h-4 transition-transform ${managementMenuOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                {managementMenuOpen && <div className={`${isSidebarOpen ? 'pl-3 ' : ''}space-y-1`}>
+                  <NavItem icon={<Users />} label="Clientes" active={isTabActive('customers')} onClick={() => setActiveTab('customers')} collapsed={!isSidebarOpen} />
+                  {canViewSavedFormulas && <NavItem icon={<Bookmark />} label="Minhas Fórmulas" active={isTabActive('savedFormulas')} onClick={() => setActiveTab('savedFormulas')} collapsed={!isSidebarOpen} />}
+                </div>}
               </>
             )}
           </nav>
+
+          {!setupMode && user.role !== 'employee' && (
+            <div className="px-4 pb-3">
+              <NavItem icon={<Settings />} label="Administração" active={isTabActive('admin')} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
+            </div>
+          )}
 
           <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div className={`flex items-center gap-3 p-2 rounded-lg ${isSidebarOpen ? '' : ''}`}
