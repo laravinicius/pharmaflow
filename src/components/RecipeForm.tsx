@@ -480,7 +480,13 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
           style={{ background: COLORS.lightRedBg, border: `1px solid ${COLORS.lightRedBorder}`, color: COLORS.primary }}>
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {readOnly ? 'Fórmula no histórico — visualização somente leitura.' : confirmed ? 'Fórmula confirmada — previsão de entrega, pagamento, forma de pagamento e andamento podem ser alterados.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
+          {readOnly ? (formula?.status === 'cancelled' ? 'Fórmula cancelada — visualização somente leitura.' : 'Fórmula no histórico — visualização somente leitura.') : confirmed ? 'Fórmula confirmada — previsão de entrega, pagamento, forma de pagamento e andamento podem ser alterados.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
+        </div>
+      )}
+      {formula?.status === 'cancelled' && (
+        <div className="px-4 py-3 rounded-xl text-sm" style={{ background: COLORS.lightRedBg, border: `1px solid ${COLORS.lightRedBorder}`, color: COLORS.primary }}>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-1">Justificativa do cancelamento</p>
+          <p className="whitespace-pre-wrap">{formula.cancel_reason?.trim() || 'Justificativa não informada.'}</p>
         </div>
       )}
       {/* Linha 1 — Seleção do Cliente */}
