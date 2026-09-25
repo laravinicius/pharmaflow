@@ -3,7 +3,7 @@ import { CheckCircle, Trash2, Search, X, PlusCircle, ClipboardList } from 'lucid
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { SavedFormula, SavedFormulaItem, Insumo, BudgetItem } from '../types';
-import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency, formatQuantityInput, parseQuantity } from '../utils/format';
+import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency, currencyCaretPosition, formatQuantityInput, parseQuantity } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
@@ -30,6 +30,7 @@ export function SavedFormulaManager() {
   const [bQty, setBQty] = useState('');
   const [bUnit, setBUnit] = useState('doses');
   const [bValue, setBValue] = useState('');
+  const budgetValueRef = useRef<HTMLInputElement>(null);
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const pendingInsumoName = useRef('');
   const insumoQueryRef = useRef<HTMLInputElement>(null);
@@ -242,10 +243,17 @@ export function SavedFormulaManager() {
           </div>
           <div className="flex-1">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
-            <input inputMode="numeric"
+            <input ref={budgetValueRef} type="text" inputMode="numeric"
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
               value={bValue}
-              onChange={e => { setFormError(''); setBValue(e.target.value.replace(/[^0-9,]/g, '').replace(/,/g, '').replace(/(\d{2})$/, ',$1')); }}
+              onChange={e => {
+                setFormError('');
+                const input = e.currentTarget;
+                const formatted = formatCurrency(input.value);
+                const caret = currencyCaretPosition(input.value, input.selectionStart ?? input.value.length);
+                setBValue(formatted);
+                requestAnimationFrame(() => input.setSelectionRange(caret, caret));
+              }}
               onKeyDown={e => {
                 if (e.key === 'Enter' && bQty && bValue) {
                   e.preventDefault();

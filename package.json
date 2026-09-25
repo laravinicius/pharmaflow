@@ -1,7 +1,7 @@
 {
   "name": "pharmaflow",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Aplicativo de gerenciamento de fórmulas farmacêuticas.",
   "author": "Vinicius Lara",
   "type": "module",

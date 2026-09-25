@@ -15,19 +15,45 @@ export function isValidPhone(value: string): boolean {
   return value.replace(/\D/g, '').length === 11;
 }
 
-// Máscara de moeda (R$): dígitos digitados viram centavos — ex.: "123456" → "1.234,56"
+// Formata moeda com dígitos na parte inteira e mantém os centavos após a vírgula.
 export function formatCurrency(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 15);
-  if (!digits) return '';
-  const cents = digits.padStart(3, '0');
-  const reais = (cents.slice(0, -2).replace(/^0+/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${reais},${cents.slice(-2)}`;
+  const normalized = value.replace(/[^\d,]/g, '');
+  if (!normalized) return '';
+  const commaIndex = normalized.lastIndexOf(',');
+  const rawReais = commaIndex >= 0 ? normalized.slice(0, commaIndex).replace(/,/g, '') : normalized;
+  const rawCents = commaIndex >= 0 ? normalized.slice(commaIndex + 1) : '';
+  const reais = (rawReais.slice(0, 13).replace(/^0+(?=\d)/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${reais},${rawCents.slice(0, 2).padEnd(2, '0')}`;
 }
 
-// Converte texto com máscara de moeda para número (ex.: "1.234,56" → 1234.56)
+// Converte texto com máscara de moeda para número (ex.: "1.234,56" → 1234.56).
+// Sem vírgula, os dígitos representam reais inteiros.
 export function parseCurrency(value: string): number {
-  const digits = value.replace(/\D/g, '');
-  return digits ? Number(digits) / 100 : 0;
+  const normalized = value.replace(/[^\d,]/g, '');
+  if (!normalized) return 0;
+  const commaIndex = normalized.lastIndexOf(',');
+  const reais = commaIndex >= 0 ? normalized.slice(0, commaIndex).replace(/,/g, '') : normalized;
+  const cents = commaIndex >= 0 ? normalized.slice(commaIndex + 1) : '';
+  return Number(reais || 0) + Number(cents.padEnd(2, '0').slice(0, 2) || 0) / 100;
+}
+
+// Calcula a posição equivalente do cursor após aplicar a máscara monetária.
+export function currencyCaretPosition(value: string, selectionStart: number): number {
+  const commaIndex = value.indexOf(',');
+  const [integerPart, centsPart = ''] = value.split(',', 2);
+  const formattedInteger = (integerPart.replace(/\D/g, '').replace(/^0+(?=\d)/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  if (commaIndex >= 0 && selectionStart > commaIndex) {
+    const centsBeforeCaret = value.slice(commaIndex + 1, selectionStart).replace(/\D/g, '').length;
+    return formattedInteger.length + 1 + Math.min(centsBeforeCaret, centsPart.length);
+  }
+  const digitsBeforeCaret = value.slice(0, selectionStart).replace(/\D/g, '').length;
+  if (!digitsBeforeCaret) return 0;
+  let seen = 0;
+  for (let i = 0; i < formattedInteger.length; i++) {
+    if (/\d/.test(formattedInteger[i])) seen++;
+    if (seen === digitsBeforeCaret) return i + 1;
+  }
+  return formattedInteger.length;
 }
 
 // Máscara de data ao digitar (ex.: "15082026" → "15/08/2026")

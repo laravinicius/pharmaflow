@@ -6,7 +6,7 @@ import { COLORS, GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
-import { formatCurrency, parseCurrency, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput } from '../utils/format';
+import { formatCurrency, parseCurrency, currencyCaretPosition, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { useFormDraft } from '../context/FormDraftContext';
@@ -924,7 +924,14 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
                   value={bValue}
                   disabled={locked}
-                  onChange={e => { setBudgetError(''); setBValue(formatCurrency(e.target.value)); }}
+                  onChange={e => {
+                    setBudgetError('');
+                    const input = e.currentTarget;
+                    const formatted = formatCurrency(input.value);
+                    const caret = currencyCaretPosition(input.value, input.selectionStart ?? input.value.length);
+                    setBValue(formatted);
+                    requestAnimationFrame(() => input.setSelectionRange(caret, caret));
+                  }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && bQty && bValue) {
                       e.preventDefault();
@@ -1082,16 +1089,21 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">R$</span>
                 <input
                   type="text"
-                  inputMode="decimal"
+                  inputMode="numeric"
                   value={partialPaymentAmount}
                   disabled={locked && !confirmed}
                   onChange={e => {
-                    const formattedValue = formatCurrency(e.target.value);
+                    const input = e.currentTarget;
+                    const formattedValue = formatCurrency(input.value);
                     const value = selectedBudgetValue !== null && parseCurrency(formattedValue) > selectedBudgetValue
-                      ? formatCurrency(String(Math.round(selectedBudgetValue * 100)))
+                      ? formatCurrency(selectedBudgetValue.toFixed(2).replace('.', ','))
                       : formattedValue;
+                    const caret = value === formattedValue
+                      ? currencyCaretPosition(input.value, input.selectionStart ?? input.value.length)
+                      : value.length;
                     setPartialPaymentAmount(value);
                     onPartialPaymentAmountChange?.(value || null);
+                    requestAnimationFrame(() => input.setSelectionRange(caret, caret));
                   }}
                   placeholder="0,00"
                   aria-label="Quantia paga"

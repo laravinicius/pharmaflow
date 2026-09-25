@@ -426,7 +426,7 @@ function AppInner() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Usuário</label>
-                <input type="text" required
+                <input type="text" required autoFocus
                   className="w-full px-4 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none transition-all"
                   value={loginForm.username}
                   onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
