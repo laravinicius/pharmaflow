@@ -1,7 +1,7 @@
 {
   "name": "pharmaflow",
   "private": true,
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Aplicativo de gerenciamento de fórmulas farmacêuticas.",
   "author": "Vinicius Lara",
   "type": "module",
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "node scripts/patch-icon.js && vite build --configLoader native && electron-builder --win",
+    "build:release": "node scripts/patch-icon.js && vite build --configLoader native && electron-builder --win --publish always",
     "preview": "vite preview",
     "clean": "node -e \"const fs=require('fs'); for (const dir of ['dist','dist-electron','release','../pharmaflow-release']) fs.rmSync(dir, { recursive: true, force: true });\"",
     "lint": "tsc --noEmit"
@@ -25,8 +26,15 @@
       "dist-electron"
     ],
     "forceCodeSigning": false,
+    "publish": {
+      "provider": "github",
+      "owner": "laravinicius",
+      "repo": "pharmaflow",
+      "releaseType": "release"
+    },
     "win": {
       "icon": "public/icon.ico",
+      "artifactName": "PIX-Farma-Setup-${version}.${ext}",
       "target": [
         "dir",
         "nsis"
@@ -34,6 +42,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "mysql2": "^3.18.2",
@@ -47,6 +56,7 @@
     "autoprefixer": "^10.4.21",
     "electron": "^36.9.5",
     "electron-builder": "^25.1.8",
+    "esbuild": "^0.25.12",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",

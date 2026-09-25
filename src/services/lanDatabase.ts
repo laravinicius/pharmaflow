@@ -1,6 +1,7 @@
 // Camada de serviço — comunicação exclusiva com o processo principal do Electron.
 
 interface AdminCreds { username: string; password: string; }
+type UpdateStatus = 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error';
 
 declare global {
   interface Window {
@@ -14,6 +15,8 @@ declare global {
       listLogs: (filters?: any) => Promise<{ rows: any[]; total: number }>; showMessageBox: (options: { type?: 'none' | 'info' | 'error' | 'question' | 'warning'; title?: string; message: string }) => Promise<any>; openWhatsApp: (url: string) => Promise<any>;
       onDataChanged: (cb: () => void) => () => void; getConfig: () => Promise<any>; saveConfig: (cfg: any) => Promise<any>; testConnection: () => Promise<any>;
       onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => () => void; confirmAppExit: (token?: string) => Promise<void>;
+      getAppVersion: () => Promise<string>; getUpdateStatus: () => Promise<UpdateStatus>; installAppUpdate: (token?: string) => Promise<{ success: boolean }>;
+      onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void;
     };
   }
 }
@@ -30,5 +33,5 @@ export const db = {
   logs: { list: (filters?: any) => electron().listLogs(filters) },
   data: { onChanged: (cb: () => void) => electron().onDataChanged(cb) },
   config: { get: () => electron().getConfig(), save: (c: any) => electron().saveConfig(c), test: () => electron().testConnection() },
-  app: { onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => electron().onConfirmExit(cb), confirmExit: (token?: string) => electron().confirmAppExit(token) },
+  app: { onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => electron().onConfirmExit(cb), confirmExit: (token?: string) => electron().confirmAppExit(token), version: () => electron().getAppVersion(), updateStatus: () => electron().getUpdateStatus(), onUpdateStatus: (cb: (status: UpdateStatus) => void) => electron().onUpdateStatus(cb), installUpdate: (token?: string) => electron().installAppUpdate(token) },
 };

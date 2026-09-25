@@ -43,6 +43,47 @@ const heartbeatMetrics: HeartbeatMetrics = {
   lastError: null,
 };
 
+function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
+  const [version, setVersion] = useState('');
+  const [status, setStatus] = useState<'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'>('checking');
+  const [installRequested, setInstallRequested] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([db.app.version(), db.app.updateStatus()]).then(([currentVersion, currentStatus]) => {
+      if (!active) return;
+      setVersion(currentVersion);
+      setStatus(currentStatus);
+    }).catch(() => {});
+    const cleanup = db.app.onUpdateStatus(nextStatus => {
+      setStatus(nextStatus);
+      if (nextStatus === 'error' || nextStatus === 'not-available') setInstallRequested(false);
+    });
+    return () => { active = false; cleanup(); };
+  }, []);
+
+  const canInstall = status === 'available' || status === 'downloading' || status === 'downloaded';
+  const handleInstall = async () => {
+    setInstallRequested(true);
+    const result = await db.app.installUpdate(sessionToken ?? undefined).catch(() => ({ success: false }));
+    if (!result.success) setInstallRequested(false);
+  };
+
+  return (
+    <div className="fixed bottom-3 right-4 z-40 flex items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-500 shadow-md backdrop-blur">
+      {canInstall && (
+        <button type="button" onClick={handleInstall} disabled={installRequested}
+          className="flex items-center gap-1.5 font-semibold text-[#C5243E] hover:text-[#9B1A2E] disabled:cursor-wait disabled:opacity-60"
+          title={installRequested ? 'A atualização será instalada quando o download terminar' : 'Atualização disponível; clique para instalar'}>
+          <span className={`h-2 w-2 rounded-full bg-[#C5243E] ${installRequested ? 'animate-pulse' : 'animate-pulse'}`} />
+          {installRequested ? (status === 'downloaded' ? 'Instalando atualização…' : 'Baixando atualização…') : 'Atualização disponível'}
+        </button>
+      )}
+      <span>Versão {version || '—'}</span>
+    </div>
+  );
+}
+
 export function getHeartbeatMetrics(): HeartbeatMetrics {
   return { ...heartbeatMetrics };
 }
@@ -335,6 +376,7 @@ function AppInner() {
   if (!user) {
     return (
       <>
+        <UpdateIndicator sessionToken={sessionToken} />
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4" style={{ background: `linear-gradient(135deg, ${COLORS.pinkSoft} 0%, #fff 50%, ${COLORS.blueSoft} 100%)` }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -674,6 +716,7 @@ function AppInner() {
         </div>
       )}
       {exitModal}
+      <UpdateIndicator sessionToken={sessionToken} />
     </>
   );
 }

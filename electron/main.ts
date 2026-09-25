@@ -3,11 +3,13 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import mysql from 'mysql2/promise';
+import electronUpdater from 'electron-updater';
 import { Db } from './db';
 import { formatDbError } from './dbError';
 import { BRAND, COLORS } from '../config/branding';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { autoUpdater } = electronUpdater;
 
 // ─── Master key (modo setup) ─────────────────────────────────────────────────
 const MASTER_USERNAME = 'admin';
@@ -171,6 +173,51 @@ const notifyDataChanged = () => {
 };
 
 let pendingExitConfirm = false;
+let updateStatus: 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error' = 'checking';
+let updateInstallRequested = false;
+let updateSessionToken: string | undefined;
+
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = false;
+
+const broadcastUpdateStatus = () => {
+  for (const win of BrowserWindow.getAllWindows()) win.webContents.send('app:update-status', updateStatus);
+};
+
+autoUpdater.on('checking-for-update', () => { updateStatus = 'checking'; broadcastUpdateStatus(); });
+autoUpdater.on('update-available', () => { updateStatus = 'available'; broadcastUpdateStatus(); });
+autoUpdater.on('download-progress', () => { updateStatus = 'downloading'; broadcastUpdateStatus(); });
+autoUpdater.on('update-not-available', () => { updateStatus = 'not-available'; updateInstallRequested = false; updateSessionToken = undefined; broadcastUpdateStatus(); });
+autoUpdater.on('error', (error) => { console.error('Erro ao atualizar o aplicativo:', error); updateStatus = 'error'; updateInstallRequested = false; updateSessionToken = undefined; broadcastUpdateStatus(); });
+autoUpdater.on('update-downloaded', async () => {
+  updateStatus = 'downloaded';
+  broadcastUpdateStatus();
+  if (!updateInstallRequested) return;
+  if (updateSessionToken) await db.revokeSession(updateSessionToken).catch(() => {});
+  pendingExitConfirm = true;
+  autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('app:get-version', () => app.getVersion());
+ipcMain.handle('app:get-update-status', () => updateStatus);
+ipcMain.handle('app:install-update', async (_, token?: string) => {
+  updateInstallRequested = true;
+  updateSessionToken = token;
+  if (updateStatus === 'downloaded') {
+    if (updateSessionToken) await db.revokeSession(updateSessionToken).catch(() => {});
+    pendingExitConfirm = true;
+    autoUpdater.quitAndInstall();
+    return { success: true };
+  }
+  if (updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'checking') {
+    updateStatus = 'downloading';
+    broadcastUpdateStatus();
+    return { success: true };
+  }
+  updateInstallRequested = false;
+  updateSessionToken = undefined;
+  return { success: false };
+});
 
 const createWindow = () => {
   const iconPath = process.env.VITE_DEV_SERVER_URL
@@ -237,6 +284,11 @@ app.on('ready', () => {
     app.setAppUserModelId('com.pharmaflow.app');
   }
   createWindow();
+  if (app.isPackaged && process.platform === 'win32') {
+    autoUpdater.checkForUpdates().catch((error) => console.error('Falha ao verificar atualizações:', error));
+  } else {
+    updateStatus = 'not-available';
+  }
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

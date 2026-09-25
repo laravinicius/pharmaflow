@@ -46,6 +46,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showMessageBox: (options: { type?: 'none' | 'info' | 'error' | 'question' | 'warning'; title?: string; message: string }) =>
     ipcRenderer.invoke('app:show-message-box', options),
   openWhatsApp: (url: string) => ipcRenderer.invoke('app:open-whatsapp', url),
+  getAppVersion: () => ipcRenderer.invoke('app:get-version'),
+  getUpdateStatus: () => ipcRenderer.invoke('app:get-update-status'),
+  installAppUpdate: (sessionToken?: string) => ipcRenderer.invoke('app:install-update', sessionToken),
+  onUpdateStatus: (cb: (status: 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error') => void) => {
+    const listener = (_: unknown, status: 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error') => cb(status);
+    ipcRenderer.on('app:update-status', listener);
+    return () => ipcRenderer.removeListener('app:update-status', listener);
+  },
 
   // Atualização ao vivo — avisa quando os dados mudam no servidor
   onDataChanged: (cb: () => void) => {
