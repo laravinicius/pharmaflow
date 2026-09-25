@@ -196,6 +196,22 @@ autoUpdater.on('update-downloaded', () => {
 
 ipcMain.handle('app:get-version', () => app.getVersion());
 ipcMain.handle('app:get-update-status', () => updateStatus);
+ipcMain.handle('app:check-for-updates', async () => {
+  if (!app.isPackaged || process.platform !== 'win32') {
+    updateStatus = 'not-available';
+    broadcastUpdateStatus();
+    return { success: false, supported: false };
+  }
+  try {
+    await autoUpdater.checkForUpdates();
+    return { success: true, supported: true };
+  } catch (error) {
+    console.error('Falha ao verificar atualizações:', error);
+    updateStatus = 'error';
+    broadcastUpdateStatus();
+    return { success: false, supported: true };
+  }
+});
 ipcMain.handle('app:install-update', async (_, token?: string) => {
   updateInstallRequested = true;
   updateSessionToken = token;

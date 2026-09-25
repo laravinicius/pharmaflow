@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users, Cross, ClipboardList, BarChart3, User as UserIcon, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
@@ -48,7 +49,11 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
   const [status, setStatus] = useState<'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'>('checking');
   const [installRequested, setInstallRequested] = useState(false);
   const [showUpdateReady, setShowUpdateReady] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState('');
+  const [manualCheckInProgress, setManualCheckInProgress] = useState(false);
   const installRequestedRef = useRef(false);
+  const manualCheckRequestedRef = useRef(false);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -59,13 +64,24 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
     }).catch(() => {});
     const cleanup = db.app.onUpdateStatus(nextStatus => {
       setStatus(nextStatus);
+      if (nextStatus !== 'checking' && nextStatus !== 'downloading') setManualCheckInProgress(false);
       if (nextStatus === 'downloaded' && installRequestedRef.current) setShowUpdateReady(true);
+      if (nextStatus === 'available' || nextStatus === 'downloaded') {
+        manualCheckRequestedRef.current = false;
+        setUpdateNotice('');
+      }
       if (nextStatus === 'error' || nextStatus === 'not-available') {
         installRequestedRef.current = false;
         setInstallRequested(false);
+        if (manualCheckRequestedRef.current) {
+          manualCheckRequestedRef.current = false;
+          setUpdateNotice(nextStatus === 'not-available' ? 'O aplicativo já está atualizado.' : 'Não foi possível verificar atualizações.');
+          if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+          noticeTimerRef.current = setTimeout(() => setUpdateNotice(''), 4000);
+        }
       }
     });
-    return () => { active = false; cleanup(); };
+    return () => { active = false; cleanup(); if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current); };
   }, []);
 
   const canInstall = status === 'available' || status === 'downloading' || status === 'downloaded';
@@ -88,7 +104,25 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
     if (!result.success) { installRequestedRef.current = false; setInstallRequested(false); }
   };
 
+  const handleCheckForUpdates = async () => {
+    if (status === 'checking' || status === 'downloading' || manualCheckInProgress) return;
+    setManualCheckInProgress(true);
+    manualCheckRequestedRef.current = true;
+    setUpdateNotice('');
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    const result = await db.app.checkForUpdates().catch(() => ({ success: false, supported: true }));
+    if (!result.success) {
+      setManualCheckInProgress(false);
+      manualCheckRequestedRef.current = false;
+      setUpdateNotice(result.supported
+        ? 'Não foi possível verificar atualizações.'
+        : 'A verificação está disponível na versão instalada do aplicativo.');
+      noticeTimerRef.current = setTimeout(() => setUpdateNotice(''), 4000);
+    }
+  };
+
   return (
+    <>
     <div className="fixed bottom-3 right-4 z-40 flex items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-500 shadow-md backdrop-blur">
       {canInstall && (
         <button type="button" onClick={handleInstall} disabled={installRequested}
@@ -99,8 +133,16 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
         </button>
       )}
       <span>Versão {version || '—'}</span>
+      <button type="button" onClick={handleCheckForUpdates} disabled={status === 'checking' || status === 'downloading' || manualCheckInProgress}
+        className="flex items-center gap-1 font-semibold text-[#243465] hover:text-[#1A2850] disabled:cursor-wait disabled:opacity-50"
+        title="Verificar atualizações" aria-label="Verificar atualizações">
+        <RefreshCw className={`h-3.5 w-3.5 ${status === 'checking' ? 'animate-spin' : ''}`} />
+        {status === 'checking' ? 'Verificando…' : 'Verificar atualizações'}
+      </button>
+      {updateNotice && <span role="status" className="fixed bottom-14 right-4 z-40 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-lg">{updateNotice}</span>}
+      </div>
       {showUpdateReady && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="update-ready-title">
+        createPortal(<div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="update-ready-title">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl">
             <h2 id="update-ready-title" className="mb-5 text-lg font-bold text-zinc-900">Atualização baixada, clique OK para atualizar</h2>
             <button type="button" onClick={confirmInstall} autoFocus
@@ -109,9 +151,9 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
               OK
             </button>
           </div>
-        </div>
+        </div>, document.body)
       )}
-    </div>
+    </>
   );
 }
 

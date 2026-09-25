@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openWhatsApp: (url: string) => ipcRenderer.invoke('app:open-whatsapp', url),
   getAppVersion: () => ipcRenderer.invoke('app:get-version'),
   getUpdateStatus: () => ipcRenderer.invoke('app:get-update-status'),
+  checkForAppUpdates: () => ipcRenderer.invoke('app:check-for-updates'),
   installAppUpdate: (sessionToken?: string) => ipcRenderer.invoke('app:install-update', sessionToken),
   onUpdateStatus: (cb: (status: 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error') => void) => {
     const listener = (_: unknown, status: 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error') => cb(status);
