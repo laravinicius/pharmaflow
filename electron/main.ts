@@ -189,13 +189,9 @@ autoUpdater.on('update-available', () => { updateStatus = 'available'; broadcast
 autoUpdater.on('download-progress', () => { updateStatus = 'downloading'; broadcastUpdateStatus(); });
 autoUpdater.on('update-not-available', () => { updateStatus = 'not-available'; updateInstallRequested = false; updateSessionToken = undefined; broadcastUpdateStatus(); });
 autoUpdater.on('error', (error) => { console.error('Erro ao atualizar o aplicativo:', error); updateStatus = 'error'; updateInstallRequested = false; updateSessionToken = undefined; broadcastUpdateStatus(); });
-autoUpdater.on('update-downloaded', async () => {
+autoUpdater.on('update-downloaded', () => {
   updateStatus = 'downloaded';
   broadcastUpdateStatus();
-  if (!updateInstallRequested) return;
-  if (updateSessionToken) await db.revokeSession(updateSessionToken).catch(() => {});
-  pendingExitConfirm = true;
-  autoUpdater.quitAndInstall();
 });
 
 ipcMain.handle('app:get-version', () => app.getVersion());

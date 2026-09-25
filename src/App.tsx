@@ -47,6 +47,8 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
   const [version, setVersion] = useState('');
   const [status, setStatus] = useState<'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'>('checking');
   const [installRequested, setInstallRequested] = useState(false);
+  const [showUpdateReady, setShowUpdateReady] = useState(false);
+  const installRequestedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -57,16 +59,33 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
     }).catch(() => {});
     const cleanup = db.app.onUpdateStatus(nextStatus => {
       setStatus(nextStatus);
-      if (nextStatus === 'error' || nextStatus === 'not-available') setInstallRequested(false);
+      if (nextStatus === 'downloaded' && installRequestedRef.current) setShowUpdateReady(true);
+      if (nextStatus === 'error' || nextStatus === 'not-available') {
+        installRequestedRef.current = false;
+        setInstallRequested(false);
+      }
     });
     return () => { active = false; cleanup(); };
   }, []);
 
   const canInstall = status === 'available' || status === 'downloading' || status === 'downloaded';
   const handleInstall = async () => {
+    if (status === 'downloaded') {
+      setShowUpdateReady(true);
+      return;
+    }
+    installRequestedRef.current = true;
     setInstallRequested(true);
     const result = await db.app.installUpdate(sessionToken ?? undefined).catch(() => ({ success: false }));
-    if (!result.success) setInstallRequested(false);
+    if (!result.success) { installRequestedRef.current = false; setInstallRequested(false); }
+  };
+
+  const confirmInstall = async () => {
+    setShowUpdateReady(false);
+    installRequestedRef.current = true;
+    setInstallRequested(true);
+    const result = await db.app.installUpdate(sessionToken ?? undefined).catch(() => ({ success: false }));
+    if (!result.success) { installRequestedRef.current = false; setInstallRequested(false); }
   };
 
   return (
@@ -80,6 +99,18 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
         </button>
       )}
       <span>Versão {version || '—'}</span>
+      {showUpdateReady && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="update-ready-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl">
+            <h2 id="update-ready-title" className="mb-5 text-lg font-bold text-zinc-900">Atualização baixada, clique OK para atualizar</h2>
+            <button type="button" onClick={confirmInstall} autoFocus
+              className="rounded-xl px-8 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+              style={{ background: GRADIENTS.primary }}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
