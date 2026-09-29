@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Users, Cross, ClipboardList, BarChart3, User as UserIcon, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
-  CheckCircle, History, AlertTriangle, Bookmark, ChevronDown, FlaskConical, BookOpen, Cog, X,
+  CheckCircle, History, AlertTriangle, Bookmark, ChevronDown, FlaskConical, Cog, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
@@ -228,7 +228,6 @@ function AppInner() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [formulasMenuOpen, setFormulasMenuOpen] = useState(true);
   const [managementMenuOpen, setManagementMenuOpen] = useState(true);
-  const [consultationsMenuOpen, setConsultationsMenuOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -623,20 +622,6 @@ function AppInner() {
                   <NavItem icon={<X />} label="Canceladas" active={isTabActive('cancelled')} onClick={() => setActiveTab('cancelled')} collapsed={!isSidebarOpen} />
                   <NavItem icon={<Cross />} label="Insumos" active={isTabActive('insumos')} onClick={() => setActiveTab('insumos')} collapsed={!isSidebarOpen} />
                 </div>}
-                {(user.role === 'manager' || user.role === 'admin') && (
-                  <button type="button" onClick={() => {
-                    if (!isSidebarOpen) {
-                      setIsSidebarOpen(true);
-                      setConsultationsMenuOpen(true);
-                    } else {
-                      setConsultationsMenuOpen(open => !open);
-                    }
-                  }} title={!isSidebarOpen ? 'Consultas' : undefined} aria-label={!isSidebarOpen ? 'Consultas' : undefined} aria-expanded={isSidebarOpen && consultationsMenuOpen}
-                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-all text-white ${isSidebarOpen ? 'opacity-70 hover:opacity-100 hover:bg-white/10' : 'justify-center opacity-60 hover:opacity-100 hover:bg-white/10'}`}>
-                    <span className="flex items-center gap-3 truncate"><BookOpen className="w-5 h-5 shrink-0" />{isSidebarOpen && 'Consultas'}</span>
-                    {isSidebarOpen && <ChevronDown className={`w-4 h-4 transition-transform ${consultationsMenuOpen ? 'rotate-180' : ''}`} />}
-                  </button>
-                )}
                 <button type="button" onClick={() => {
                   if (!isSidebarOpen) {
                     setIsSidebarOpen(true);
