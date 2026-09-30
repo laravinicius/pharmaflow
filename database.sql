@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS formulas (
   budget_number   VARCHAR(6)   NOT NULL DEFAULT '',
   delivery_date   DATE         NULL,
   payment_status  VARCHAR(20)  NOT NULL DEFAULT '',
+  partial_payment_amount DECIMAL(10,2) NULL COMMENT 'quantia paga quando payment_status=parcial',
   payment_method  VARCHAR(20)  NULL,
   delivery_status VARCHAR(20)  NOT NULL DEFAULT '' COMMENT 'Andamento: em_producao (padrão ao confirmar), aguardando_retirada, entregue',
   manager_verified TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Verificação visual do Histórico pelo Gerente',

@@ -32,6 +32,37 @@ export function getFocusables(scope: HTMLElement): HTMLElement[] {
   });
 }
 
+export function handleDialogArrowNavigation(e: React.KeyboardEvent<HTMLElement>) {
+  if (e.defaultPrevented || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+
+  const target = e.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.isContentEditable || target.matches('input, textarea, select')) return;
+
+  const focusedButton = target.closest('button');
+  if (!focusedButton || !e.currentTarget.contains(focusedButton)) return;
+
+  const buttons: HTMLButtonElement[] = [];
+  e.currentTarget.querySelectorAll('button:not(:disabled)').forEach(button => {
+    if (button.tabIndex < 0 || button.hidden || button.closest('[aria-hidden="true"]')) return;
+    if (!button.textContent?.trim() && !button.getAttribute('aria-label') && !button.title) return;
+    const isVisible = typeof button.checkVisibility === 'function'
+      ? button.checkVisibility()
+      : button.offsetParent !== null;
+    if (isVisible) buttons.push(button);
+  });
+  const index = buttons.indexOf(focusedButton);
+  if (index === -1) return;
+
+  const nextIndex = e.key === 'ArrowLeft' ? index - 1 : index + 1;
+  const nextButton = buttons[nextIndex];
+  if (!nextButton) return;
+
+  e.preventDefault();
+  nextButton.focus();
+}
+
 function isSubmitControl(el: HTMLElement): boolean {
   if (el.tagName === 'BUTTON') return (el as HTMLButtonElement).type === 'submit';
   if (el.tagName === 'INPUT') return (el as HTMLInputElement).type === 'submit';

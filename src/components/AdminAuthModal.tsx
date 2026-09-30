@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { GRADIENTS } from '../../config/branding';
+import { handleDialogArrowNavigation } from '../utils/enterNavigation';
 
 interface AdminAuthModalProps {
   isOpen: boolean;
@@ -39,7 +40,7 @@ export function AdminAuthModal({ isOpen, onClose, onConfirm, title = 'Confirmaç
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}
       onKeyDown={e => { if (e.key === 'Escape' && !loading) onClose(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">

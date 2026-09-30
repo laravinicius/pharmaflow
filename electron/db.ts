@@ -553,6 +553,7 @@ export class Db {
              COALESCE(f.attendant_name,'') AS attendant_name,
              COALESCE(f.budget_number,'') AS budget_number,
              f.delivery_date, COALESCE(f.payment_status,'') AS payment_status,
+             f.partial_payment_amount,
              f.payment_method, COALESCE(f.delivery_status,'') AS delivery_status,
              f.manager_verified,
              f.cancel_reason, f.status, f.created_at
@@ -606,6 +607,7 @@ export class Db {
     budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
     delivery_date?: string | null;
     payment_status?: string;
+    partial_payment_amount?: number | null;
     payment_method?: string | null;
     delivery_status?: string;
     cancel_reason?: string | null;
@@ -619,10 +621,11 @@ export class Db {
         FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
 const [r]: any = await conn.query(
-        `INSERT INTO formulas (customer_id, customer_phone, attendant_name, budget_number, delivery_date, payment_status, payment_method, delivery_status, cancel_reason, status)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO formulas (customer_id, customer_phone, attendant_name, budget_number, delivery_date, payment_status, partial_payment_amount, payment_method, delivery_status, cancel_reason, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
          formula.delivery_date ?? null, formula.payment_status ?? '',
+         formula.payment_status === 'parcial' ? formula.partial_payment_amount ?? null : null,
          formula.payment_method ?? null, formula.status === 'confirmed' ? 'em_producao' : (formula.delivery_status ?? ''),
          formula.cancel_reason ?? null,
          formula.status ?? 'pending']
@@ -656,19 +659,23 @@ const [r]: any = await conn.query(
     budget_items?: Array<{ quantity: number; unit: string; value: number; is_selected?: number }>;
     delivery_date?: string | null;
     payment_status?: string;
+    partial_payment_amount?: number | null;
     payment_method?: string | null;
     delivery_status?: string;
     cancel_reason?: string | null;
     status?: string;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
-    const current = await this.q<Array<{ delivery_status: string; payment_status: string }>>(
-      'SELECT delivery_status, payment_status FROM formulas WHERE id=?', [id]
+    const current = await this.q<Array<{ delivery_status: string; payment_status: string; partial_payment_amount: number | string | null }>>(
+      'SELECT delivery_status, payment_status, partial_payment_amount FROM formulas WHERE id=?', [id]
     );
     const deliveryStatus = formula.status === 'confirmed'
       ? (formula.delivery_status || 'em_producao')
       : (formula.delivery_status || current[0]?.delivery_status || '');
     const paymentStatus = formula.payment_status ?? current[0]?.payment_status ?? '';
+    const partialPaymentAmount = paymentStatus === 'parcial'
+      ? formula.partial_payment_amount ?? current[0]?.partial_payment_amount ?? null
+      : null;
     if (deliveryStatus === 'entregue' && paymentStatus !== 'pago') {
       throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
     }
@@ -679,9 +686,10 @@ const [r]: any = await conn.query(
         FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
       await conn.query(
-        `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, payment_method=?, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
+        `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, partial_payment_amount=?, payment_method=?, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
         [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
          formula.delivery_date ?? null, paymentStatus,
+         partialPaymentAmount,
          formula.payment_method ?? null, deliveryStatus, formula.cancel_reason ?? null,
          formula.status ?? 'pending', id]
       );

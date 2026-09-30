@@ -253,14 +253,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       : null;
   const gridCols = variant === 'confirmed'
       ? canVerify
-        ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.25fr_1.6fr_2.5fr]'
-        : 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.6fr_2.5fr]'
+        ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.25fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
+        : 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
     : showAndamento
-      ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]'
+      ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.6fr)]'
       : showRepeat
-        ? 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_1.6fr]'
-        : 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
-  const pendingGridCols = 'md:grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1fr_1fr_1.2fr_0.6fr]';
+        ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.6fr)]'
+        : 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.6fr)]';
+  const pendingGridCols = 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.6fr)]';
   const columnGap = 'gap-4';
 
   return (
@@ -313,13 +313,13 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       {!loading && !error && (
         <div className="space-y-3">
           {filtered.length > 0 && variant === 'confirmed' && (
-            <div className={`hidden md:grid ${gridCols} ${columnGap} px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
-              <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
+            <div className={`hidden md:grid ${gridCols} ${columnGap} mx-px px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
+              <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-right">Restante</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
               <span className="text-left">Data criação</span><span className="text-left">Data entrega</span><span className="text-left">Pagamento</span>{canVerify && <span className="text-left">Verificação</span>}<span className="text-right">Whatsapp</span><span />
             </div>
           )}
           {filtered.length > 0 && variant === 'pending' && (
-            <div className={`hidden md:grid ${pendingGridCols} ${columnGap} px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
+            <div className={`hidden md:grid ${pendingGridCols} ${columnGap} mx-px px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
               <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span><span className="text-left">Insumos</span><span className="text-right">Confirmar</span><span />
             </div>
           )}
@@ -348,7 +348,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   onFocus={() => setFocusedIdx(idx)}
                   onBlur={() => setFocusedIdx(-1)}
                   className={`w-full text-left rounded-2xl border shadow-sm px-4 py-4 hover:shadow-md transition-all group cursor-pointer ${cardTint} focus:outline-none`}>
-                  <div className={`grid grid-cols-1 ${gridCols} ${columnGap} items-center text-sm`}>
+                  <div className={`grid grid-cols-1 ${gridCols} ${columnGap} items-center text-sm [&>*]:min-w-0`}>
                     <div className="min-w-0 text-left">
                       <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                       {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.responsible_name ? `${f.responsible_name} - ${f.customer_phone}` : f.customer_phone}</p>}
@@ -362,10 +362,15 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                     </div>
+                    <p className="text-zinc-700 tabular-nums text-right whitespace-nowrap">
+                      {f.payment_status === 'parcial' && f.partial_payment_amount != null && (f.budget_items ?? []).some(bi => bi.is_selected)
+                        ? `R$ ${Math.max(0, Number((f.budget_items ?? []).find(bi => bi.is_selected)!.value) - Number(f.partial_payment_amount)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '—'}
+                    </p>
                     <p className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
                     <p className="text-zinc-700 truncate text-left">{employeeName || '—'}</p>
                     <p className="text-zinc-500 text-left">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
-                    <p className="text-zinc-500 whitespace-nowrap text-left">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
+                    <p className="text-zinc-500 truncate text-left">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
                     <div className="flex justify-start" onClick={e => e.stopPropagation()}>
                       <button
                         type="button"
@@ -455,7 +460,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 onFocus={() => setFocusedIdx(idx)}
                 onBlur={() => setFocusedIdx(-1)}
                 className={`w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-4 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
-                <div className={`grid grid-cols-1 ${pendingGridCols} ${columnGap} items-center text-sm`}>
+                <div className={`grid grid-cols-1 ${pendingGridCols} ${columnGap} items-center text-sm [&>*]:min-w-0`}>
                   <div className="min-w-0 text-left">
                     <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                     {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.responsible_name ? `${f.responsible_name} - ${f.customer_phone}` : f.customer_phone}</p>}

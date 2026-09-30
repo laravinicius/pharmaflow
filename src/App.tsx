@@ -22,7 +22,7 @@ import { SavedFormulaManager } from './components/SavedFormulaManager';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FormDraftProvider, useFormDraft } from './context/FormDraftContext';
 import { AdminAuthModal } from './components/AdminAuthModal';
-import { handleEnterAsTab } from './utils/enterNavigation';
+import { handleDialogArrowNavigation, handleEnterAsTab } from './utils/enterNavigation';
 
 interface HeartbeatMetrics {
   callCount: number;
@@ -142,7 +142,7 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
       {updateNotice && <span role="status" className="fixed bottom-14 right-4 z-40 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-lg">{updateNotice}</span>}
       </div>
       {showUpdateReady && (
-        createPortal(<div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="update-ready-title">
+        createPortal(<div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4" onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true" aria-labelledby="update-ready-title">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl">
             <h2 id="update-ready-title" className="mb-5 text-lg font-bold text-zinc-900">Atualização baixada, clique OK para atualizar</h2>
             <button type="button" onClick={confirmInstall} autoFocus
@@ -183,7 +183,7 @@ function ExitConfirmModal({ show, context, onConfirm, onCancel }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}
       onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -511,7 +511,7 @@ function AppInner() {
           {loginConflict && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setLoginConflict(false)}
               onKeyDown={e => { if (e.key === 'Escape') setLoginConflict(false); }}>
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
                     <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -741,7 +741,7 @@ function AppInner() {
       {missingReasons && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { setMissingReasons(null); setMissingReasonsTarget(null); }}
           onKeyDown={e => { if (e.key === 'Escape') { setMissingReasons(null); setMissingReasonsTarget(null); } }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5 text-red-600" />

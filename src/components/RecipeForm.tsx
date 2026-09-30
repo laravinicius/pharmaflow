@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
 import { formatCurrency, parseCurrency, currencyCaretPosition, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput } from '../utils/format';
+import { handleDialogArrowNavigation } from '../utils/enterNavigation';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { useFormDraft } from '../context/FormDraftContext';
@@ -129,6 +130,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       setAttendantName((formula.attendant_name ?? '').toUpperCase());
       setDeliveryDate(formula.delivery_date ? formatDateToBR(formula.delivery_date) : '');
       setPaymentStatus(formula.payment_status ?? '');
+      setPartialPaymentAmount(formula.payment_status === 'parcial' && formula.partial_payment_amount != null
+        ? formatCurrency(String(formula.partial_payment_amount).replace('.', ','))
+        : '');
       setPaymentMethod(formula.payment_method ?? '');
       setDeliveryStatus(formula.delivery_status ?? (formula.status === 'confirmed' ? 'em_producao' : ''));
     }
@@ -306,6 +310,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       budget_items: payloadBudgetItems.length > 0 ? payloadBudgetItems : undefined,
       delivery_date: parseDateBR(deliveryDate),
       payment_status: paymentStatus || undefined,
+      partial_payment_amount: paymentStatus === 'parcial' ? parsedPartialPaymentAmount : null,
       payment_method: paymentMethod || null,
       delivery_status: status === 'confirmed' ? (deliveryStatus || 'em_producao') : deliveryStatus,
       status,
@@ -446,12 +451,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: GRADIENTS.secondary }}>
               <RefreshCw className="w-3.5 h-3.5" /> Editar previsão
-            </button>
-          )}
-          {formula && confirmed && (
-            <button type="button" disabled={saving} onClick={() => setShowCancelModal(true)}
-              className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-              <X className="w-3.5 h-3.5" /> Cancelar
             </button>
           )}
           {!formula && (
@@ -1177,7 +1176,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { if (!saving) setShowCancelModal(false); }}
           onKeyDown={e => { if (e.key === 'Escape' && !saving) setShowCancelModal(false); }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                 <X className="w-5 h-5 text-red-600" />
@@ -1212,7 +1211,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={() => setShowDeliveryErrorModal(false)}
           onKeyDown={e => { if (e.key === 'Escape') setShowDeliveryErrorModal(false); }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                 <AlertCircle className="w-5 h-5 text-red-600" />
@@ -1238,7 +1237,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setSaveError('')}
           onKeyDown={e => { if (e.key === 'Escape') setSaveError(''); }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="save-error-title">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true" aria-labelledby="save-error-title">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                 <AlertCircle className="w-5 h-5 text-red-600" />
