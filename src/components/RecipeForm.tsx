@@ -379,7 +379,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         payment_status: paymentStatus || undefined,
         payment_method: paymentMethod || null,
       }, sessionToken ?? undefined);
-      onComplete('confirmed');
+      onComplete(formula.status === 'pending' ? 'pending' : 'confirmed');
     } catch (err: any) {
       setSaveError(getSaveErrorMessage(err));
     } finally { setSaving(false); }
@@ -433,6 +433,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <p className="text-zinc-500 text-sm">Funcionário: <strong>{user.name}</strong></p>
         </div>
         <div className="flex items-center gap-3">
+          {formula && !readOnly && (formula.status === 'pending' || (formula.status === 'confirmed' && (formula.delivery_status ?? 'em_producao') === 'em_producao')) && (
+            <button type="button" disabled={saving} onClick={() => setShowCancelModal(true)}
+              className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+              <X className="w-3.5 h-3.5" /> Cancelar fórmula
+            </button>
+          )}
           {formula && locked && !confirmed && !readOnly && (
             <button type="button" onClick={() => setLocked(false)}
               className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md"
