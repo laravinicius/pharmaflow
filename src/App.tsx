@@ -1,12 +1,13 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Users, Cross, ClipboardList, BarChart3, User as UserIcon, PlusCircle, LogOut,
   CheckCircle2, Clock, Menu, Settings, RefreshCw, AlertCircle,
-  CheckCircle, History, AlertTriangle, Bookmark, ChevronDown, FlaskConical, Cog, X,
+  CheckCircle, History, AlertTriangle, Bookmark, ChevronDown, FlaskConical, Cog, X, Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db } from './services/lanDatabase';
+import { TitleBar } from './components/TitleBar';
 import { User, Formula, USER_ROLE_LABELS } from './types';
 import { BrandLogo } from './components/Logo';
 import { BRAND, COLORS, GRADIENTS } from '../config/branding';
@@ -44,7 +45,11 @@ const heartbeatMetrics: HeartbeatMetrics = {
   lastError: null,
 };
 
-function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
+function UpdateIndicator({ sessionToken, placement = 'floating', collapsed = false }: {
+  sessionToken: string | null;
+  placement?: 'floating' | 'sidebar';
+  collapsed?: boolean;
+}) {
   const [version, setVersion] = useState('');
   const [status, setStatus] = useState<'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'>('checking');
   const [installRequested, setInstallRequested] = useState(false);
@@ -54,6 +59,8 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
   const installRequestedRef = useRef(false);
   const manualCheckRequestedRef = useRef(false);
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const indicatorRef = useRef<HTMLDivElement>(null);
+  const [noticePosition, setNoticePosition] = useState({ left: 16, bottom: 56 });
 
   useEffect(() => {
     let active = true;
@@ -85,6 +92,28 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
   }, []);
 
   const canInstall = status === 'available' || status === 'downloading' || status === 'downloaded';
+  const isChecking = status === 'checking' || manualCheckInProgress;
+  const installLabel = installRequested
+    ? (status === 'downloaded' ? 'Instalando atualização…' : 'Baixando atualização…')
+    : 'Atualização disponível; clique para instalar';
+
+  useLayoutEffect(() => {
+    if (!updateNotice || !indicatorRef.current) return;
+    const indicator = indicatorRef.current;
+    const repositionNotice = () => {
+      const rect = indicator.getBoundingClientRect();
+      setNoticePosition({ left: Math.max(16, rect.left), bottom: window.innerHeight - rect.top + 8 });
+    };
+    repositionNotice();
+    const observer = new ResizeObserver(repositionNotice);
+    observer.observe(indicator);
+    window.addEventListener('resize', repositionNotice);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', repositionNotice);
+    };
+  }, [updateNotice, collapsed, canInstall, installRequested]);
+
   const handleInstall = async () => {
     if (status === 'downloaded') {
       setShowUpdateReady(true);
@@ -123,24 +152,30 @@ function UpdateIndicator({ sessionToken }: { sessionToken: string | null }) {
 
   return (
     <>
-    <div className="fixed bottom-3 right-4 z-40 flex items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-500 shadow-md backdrop-blur">
+    <div ref={indicatorRef}
+      className={`${placement === 'floating' ? 'fixed bottom-3 left-4 z-40 max-w-[calc(100vw-2rem)] text-zinc-500 gap-2 py-1' : 'w-full text-white/60 gap-1'} flex ${collapsed ? 'flex-col' : 'flex-wrap'} items-center ${collapsed ? 'px-0' : 'px-3'} text-xs`}>
       {canInstall && (
         <button type="button" onClick={handleInstall} disabled={installRequested}
-          className="flex items-center gap-1.5 font-semibold text-[#C5243E] hover:text-[#9B1A2E] disabled:cursor-wait disabled:opacity-60"
-          title={installRequested ? 'A atualização será instalada quando o download terminar' : 'Atualização disponível; clique para instalar'}>
-          <span className={`h-2 w-2 rounded-full bg-[#C5243E] ${installRequested ? 'animate-pulse' : 'animate-pulse'}`} />
-          {installRequested ? (status === 'downloaded' ? 'Instalando atualização…' : 'Baixando atualização…') : 'Atualização disponível'}
+          className={`flex ${collapsed ? 'relative h-8 w-8 justify-center' : 'w-full gap-1.5 text-left'} items-center rounded font-semibold ${placement === 'sidebar' ? 'text-[#FED7DB] hover:text-[#FEF0F2] focus-visible:outline-white' : 'text-[#C5243E] hover:text-[#9B1A2E] focus-visible:outline-[#243465]'} focus-visible:outline focus-visible:outline-2 disabled:cursor-wait disabled:opacity-60`}
+          title={installRequested ? 'A atualização será instalada quando o download terminar' : installLabel}
+          aria-label={installLabel}>
+          {collapsed && <Download className="h-4 w-4" aria-hidden="true" />}
+          <span aria-hidden="true" className={`${collapsed ? 'absolute right-0 top-0' : 'shrink-0'} h-2 w-2 rounded-full bg-[#C5243E] animate-pulse`} />
+          {!collapsed && (installRequested ? (status === 'downloaded' ? 'Instalando atualização…' : 'Baixando atualização…') : 'Atualização disponível')}
         </button>
       )}
-      <span>Versão {version || '—'}</span>
+      {!collapsed && <span className="min-w-0 break-words">Versão {version || '—'}</span>}
       <button type="button" onClick={handleCheckForUpdates} disabled={status === 'checking' || status === 'downloading' || manualCheckInProgress}
-        className="flex items-center gap-1 font-semibold text-[#243465] hover:text-[#1A2850] disabled:cursor-wait disabled:opacity-50"
-        title="Verificar atualizações" aria-label="Verificar atualizações">
-        <RefreshCw className={`h-3.5 w-3.5 ${status === 'checking' ? 'animate-spin' : ''}`} />
-        {status === 'checking' ? 'Verificando…' : 'Verificar atualizações'}
+        className={`flex shrink-0 items-center justify-center rounded ${placement === 'sidebar' ? 'h-6 w-6 text-white/70 hover:text-white focus-visible:outline-white' : 'h-8 w-8 text-[#243465] hover:text-[#1A2850] focus-visible:outline-[#243465]'} focus-visible:outline focus-visible:outline-2 disabled:cursor-wait disabled:opacity-50`}
+        title={collapsed ? `Verificar atualizações — Versão ${version || '—'}` : 'Verificar atualizações'}
+        aria-label={isChecking ? 'Verificando atualizações' : 'Verificar atualizações'} aria-busy={isChecking}>
+        <RefreshCw aria-hidden="true" className={`h-3.5 w-3.5 ${isChecking ? 'animate-spin' : ''}`} />
       </button>
-      {updateNotice && <span role="status" className="fixed bottom-14 right-4 z-40 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-lg">{updateNotice}</span>}
       </div>
+      {updateNotice && createPortal(
+        <span role="status" style={noticePosition} className="fixed z-40 max-w-[calc(100vw-2rem)] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-lg">{updateNotice}</span>,
+        document.body
+      )}
       {showUpdateReady && (
         createPortal(<div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4" onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true" aria-labelledby="update-ready-title">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl">
@@ -642,11 +677,12 @@ function AppInner() {
             )}
           </nav>
 
-          {!setupMode && user.role !== 'employee' && (
-            <div className="shrink-0 px-4 pb-3">
+          <div className="shrink-0 px-4 pb-3">
+            {user.role !== 'employee' && (
               <NavItem icon={<Settings />} label="Administração" active={isTabActive('admin')} onClick={() => setActiveTab('admin')} collapsed={!isSidebarOpen} />
-            </div>
-          )}
+            )}
+            <UpdateIndicator sessionToken={sessionToken} placement="sidebar" collapsed={!isSidebarOpen} />
+          </div>
 
           <div className="shrink-0 p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div className={`flex items-center gap-3 p-2 rounded-lg ${isSidebarOpen ? '' : ''}`}
@@ -774,7 +810,6 @@ function AppInner() {
         </div>
       )}
       {exitModal}
-      <UpdateIndicator sessionToken={sessionToken} />
     </>
   );
 }
@@ -784,7 +819,7 @@ export default function App() {
     <AuthProvider>
       <FormDraftProvider>
         <div className="h-screen overflow-hidden bg-zinc-50 flex flex-col pt-[30px]" onKeyDown={handleEnterAsTab}>
-          <div className="titlebar">{BRAND.name}</div>
+          <TitleBar />
           <AppInner />
         </div>
       </FormDraftProvider>

@@ -1,6 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Controles da janela em tela cheia
+  isWindowFullscreen: () => ipcRenderer.invoke('window:is-fullscreen'),
+  minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
+  leaveWindowFullscreen: () => ipcRenderer.invoke('window:leave-fullscreen'),
+  closeWindow: () => ipcRenderer.invoke('window:close'),
+  onWindowFullscreenChanged: (cb: (fullscreen: boolean) => void) => {
+    const listener = (_: unknown, fullscreen: boolean) => cb(fullscreen);
+    ipcRenderer.on('window:fullscreen-changed', listener);
+    return () => ipcRenderer.removeListener('window:fullscreen-changed', listener);
+  },
+
   // Auth
   login: (username: string, password: string, force: boolean = false) =>
     ipcRenderer.invoke('auth:login', username, password, force),

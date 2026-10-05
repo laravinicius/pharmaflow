@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS formulas (
   attendant_name  VARCHAR(255) NOT NULL DEFAULT '',
   budget_number   VARCHAR(6)   NOT NULL DEFAULT '',
   delivery_date   DATE         NULL,
+  delivered_at    DATETIME     NULL COMMENT 'Entrega efetiva no fuso America/Sao_Paulo, registrada pelo backend',
   payment_status  VARCHAR(20)  NOT NULL DEFAULT '',
   partial_payment_amount DECIMAL(10,2) NULL COMMENT 'quantia paga quando payment_status=parcial',
   payment_method  VARCHAR(20)  NULL,

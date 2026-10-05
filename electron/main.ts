@@ -172,6 +172,11 @@ const notifyDataChanged = () => {
   }
 };
 
+ipcMain.handle('window:is-fullscreen', (event) => BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false);
+ipcMain.handle('window:minimize', (event) => BrowserWindow.fromWebContents(event.sender)?.minimize());
+ipcMain.handle('window:leave-fullscreen', (event) => BrowserWindow.fromWebContents(event.sender)?.setFullScreen(false));
+ipcMain.handle('window:close', (event) => BrowserWindow.fromWebContents(event.sender)?.close());
+
 let pendingExitConfirm = false;
 let updateStatus: 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error' = 'checking';
 let updateInstallRequested = false;
@@ -258,6 +263,8 @@ const createWindow = () => {
 
   const webContentsId = win.webContents.id;
   win.on('closed', () => setupModeWindows.delete(webContentsId));
+  win.on('enter-full-screen', () => win.webContents.send('window:fullscreen-changed', true));
+  win.on('leave-full-screen', () => win.webContents.send('window:fullscreen-changed', false));
 
   win.on('close', (event) => {
     if (!pendingExitConfirm && BrowserWindow.getAllWindows().length === 1) {

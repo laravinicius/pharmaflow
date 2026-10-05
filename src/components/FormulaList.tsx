@@ -195,7 +195,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const summaryYears = useMemo(() => {
     const years = new Set<number>([new Date().getFullYear()]);
     for (const formula of all) {
-      const year = Number(formula.delivery_date?.slice(0, 4));
+      const year = Number(formula.delivered_at?.slice(0, 4));
       if (Number.isInteger(year) && year > 1900) years.add(year);
     }
     return [...years].sort((a, b) => b - a);
@@ -204,7 +204,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const monthlyTotal = useMemo(() => all
     .filter(formula => formula.payment_status === 'pago' && formula.delivery_status === 'entregue')
     .filter(formula => {
-      const date = formula.delivery_date ?? '';
+      const date = formula.delivered_at ?? '';
       return Number(date.slice(0, 4)) === summaryYear && Number(date.slice(5, 7)) === summaryMonth + 1;
     })
     .reduce((total, formula) => total + (formula.budget_items ?? [])

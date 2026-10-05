@@ -19,4 +19,10 @@ Fórmulas pertencem a clientes; seus itens referenciam insumos; modelos salvos t
 
 Uma mudança de schema normalmente exige revisar `database.sql`, `src/types.ts`, queries/payloads em `db.ts`, bridge/service e endpoint web. Consulte `database.sql` para tipos e constraints, sem duplicá-lo aqui.
 
+## Entrega efetiva e total mensal
+
+`formulas.delivery_date` é a previsão preenchida no formulário. `formulas.delivered_at` registra automaticamente a entrega efetiva pelo backend como `DATETIME` no fuso `America/Sao_Paulo`. O histórico usa o mês e o ano de `delivered_at` para somar os orçamentos selecionados das fórmulas pagas e entregues. Edições e operações repetidas preservam essa data; sair do andamento `entregue` limpa o registro, e uma nova entrega registra uma nova data.
+
+Fórmulas antigas sem `delivered_at` continuam no histórico, mas não entram no total mensal. Não há recuperação automática pelos logs nem uso da previsão como aproximação. Para um banco de teste já inicializado, adicionar a coluna com `ALTER TABLE formulas ADD COLUMN IF NOT EXISTS delivered_at DATETIME NULL COMMENT 'Entrega efetiva no fuso America/Sao_Paulo, registrada pelo backend';`. Antes da implantação em produção, validar a atualização do schema e definir o tratamento das entregas antigas, preservando os dados existentes.
+
 > SECURITY: senhas atualmente usam SHA-256 sem salt. Não copie credenciais, hashes ou valores de configuração sensíveis para documentação.

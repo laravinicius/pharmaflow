@@ -6,6 +6,8 @@ type UpdateStatus = 'checking' | 'available' | 'downloading' | 'downloaded' | 'n
 declare global {
   interface Window {
     electronAPI: {
+      isWindowFullscreen: () => Promise<boolean>; minimizeWindow: () => Promise<void>; leaveWindowFullscreen: () => Promise<void>; closeWindow: () => Promise<void>;
+      onWindowFullscreenChanged: (cb: (fullscreen: boolean) => void) => () => void;
       login: (u: string, p: string, force?: boolean) => Promise<any>; logout: (token: string) => Promise<any>; sessionHeartbeat: (token: string) => Promise<any>;
       listUsers: () => Promise<any[]>; addUser: (u: any, t?: string) => Promise<any>; updateUser: (id: number, u: any, t?: string) => Promise<any>; deleteUser: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
       listCustomers: () => Promise<any[]>; addCustomer: (c: any, t?: string) => Promise<any>; updateCustomer: (id: number, c: any, t?: string) => Promise<any>; deleteCustomer: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
@@ -24,6 +26,13 @@ declare global {
 const electron = () => window.electronAPI;
 
 export const db = {
+  window: {
+    isFullscreen: () => electron().isWindowFullscreen(),
+    minimize: () => electron().minimizeWindow(),
+    leaveFullscreen: () => electron().leaveWindowFullscreen(),
+    close: () => electron().closeWindow(),
+    onFullscreenChanged: (cb: (fullscreen: boolean) => void) => electron().onWindowFullscreenChanged(cb),
+  },
   auth: { login: (u: string, p: string, f?: boolean) => electron().login(u, p, f), logout: (t: string) => electron().logout(t), heartbeat: (t: string) => electron().sessionHeartbeat(t) },
   users: { list: () => electron().listUsers(), add: (u: any, t?: string) => electron().addUser(u, t), update: (id: number, u: any, t?: string) => electron().updateUser(id, u, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteUser(id, c, t) },
   customers: { list: () => electron().listCustomers(), add: (c: any, t?: string) => electron().addCustomer(c, t), update: (id: number, c: any, t?: string) => electron().updateCustomer(id, c, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteCustomer(id, c, t) },

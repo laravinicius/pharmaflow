@@ -18,6 +18,7 @@ export interface Formula {
   attendant_name: string; status: 'pending' | 'confirmed' | 'cancelled' | 'delivered';
   created_at: string; items: FormulaItem[]; budget_number?: string; budget_items?: BudgetItem[];
   delivery_date?: string | null;
+  delivered_at?: string | null;
   payment_status?: string; partial_payment_amount?: number | string | null; payment_method?: string | null;
   delivery_status?: string; manager_verified?: boolean | number; cancel_reason?: string | null;
 }

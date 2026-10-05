@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import mysql from 'mysql2/promise';
 import { formatDbError, isUnsupportedAuthPluginError } from './dbError';
+import { getDeliveryTimestamp } from './deliveryTime';
 
 interface AdminVerifyResult {
   success: boolean;
@@ -16,6 +17,11 @@ interface SessionUserResult {
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
+
+// Avaliar antes de atribuir delivery_status preserva a data apenas da mesma entrega.
+const deliveredAtUpdate = `delivered_at=CASE WHEN ?='entregue'
+  THEN CASE WHEN delivery_status='entregue' THEN delivered_at ELSE ? END
+  ELSE NULL END`;
 
 interface SqlMetrics {
   queryCount: number;
@@ -552,7 +558,7 @@ export class Db {
              COALESCE(f.customer_phone,'') AS customer_phone,
              COALESCE(f.attendant_name,'') AS attendant_name,
              COALESCE(f.budget_number,'') AS budget_number,
-             f.delivery_date, COALESCE(f.payment_status,'') AS payment_status,
+             f.delivery_date, f.delivered_at, COALESCE(f.payment_status,'') AS payment_status,
              f.partial_payment_amount,
              f.payment_method, COALESCE(f.delivery_status,'') AS delivery_status,
              f.manager_verified,
@@ -614,6 +620,10 @@ export class Db {
     status?: string;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
+    const deliveryStatus = formula.status === 'confirmed' ? 'em_producao' : (formula.delivery_status ?? '');
+    if (deliveryStatus === 'entregue' && formula.payment_status !== 'pago') {
+      throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
+    }
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -621,12 +631,12 @@ export class Db {
         FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
 const [r]: any = await conn.query(
-        `INSERT INTO formulas (customer_id, customer_phone, attendant_name, budget_number, delivery_date, payment_status, partial_payment_amount, payment_method, delivery_status, cancel_reason, status)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO formulas (customer_id, customer_phone, attendant_name, budget_number, delivery_date, delivered_at, payment_status, partial_payment_amount, payment_method, delivery_status, cancel_reason, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
-         formula.delivery_date ?? null, formula.payment_status ?? '',
+         formula.delivery_date ?? null, deliveryStatus === 'entregue' ? getDeliveryTimestamp() : null, formula.payment_status ?? '',
          formula.payment_status === 'parcial' ? formula.partial_payment_amount ?? null : null,
-         formula.payment_method ?? null, formula.status === 'confirmed' ? 'em_producao' : (formula.delivery_status ?? ''),
+         formula.payment_method ?? null, deliveryStatus,
          formula.cancel_reason ?? null,
          formula.status ?? 'pending']
       );
@@ -686,11 +696,11 @@ const [r]: any = await conn.query(
         FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
       await conn.query(
-        `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, partial_payment_amount=?, payment_method=?, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
+        `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, partial_payment_amount=?, payment_method=?, ${deliveredAtUpdate}, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
         [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
          formula.delivery_date ?? null, paymentStatus,
          partialPaymentAmount,
-         formula.payment_method ?? null, deliveryStatus, formula.cancel_reason ?? null,
+         formula.payment_method ?? null, deliveryStatus, getDeliveryTimestamp(), deliveryStatus, formula.cancel_reason ?? null,
          formula.status ?? 'pending', id]
       );
       await conn.query('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['formula', id]);
@@ -719,7 +729,7 @@ const [r]: any = await conn.query(
 
   async updateFormulaStatus(id: number, status: string, sessionToken?: string) {
     if (status === 'confirmed') {
-      await this.q('UPDATE formulas SET status=?, delivery_status=? WHERE id=?', [status, 'em_producao', id]);
+      await this.q('UPDATE formulas SET status=?, delivery_status=?, delivered_at=NULL WHERE id=?', [status, 'em_producao', id]);
     } else {
       await this.q('UPDATE formulas SET status=? WHERE id=?', [status, id]);
     }
@@ -738,8 +748,8 @@ const [r]: any = await conn.query(
       }
     }
     await this.q(
-      `UPDATE formulas SET delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' ELSE status END WHERE id=?`,
-      [deliveryStatus, deliveryStatus, id]
+      `UPDATE formulas SET ${deliveredAtUpdate}, delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' WHEN status='delivered' THEN 'confirmed' ELSE status END WHERE id=?`,
+      [deliveryStatus, getDeliveryTimestamp(), deliveryStatus, deliveryStatus, id]
     );
     const actor = await this.resolveActor(sessionToken);
     await this.logAction(actor, 'update_delivery_status', 'formulas', id, `Andamento da fórmula ${id} alterado para ${deliveryStatus}.`);
@@ -769,8 +779,9 @@ const [r]: any = await conn.query(
       if (unpaid.length) throw new Error(`A fórmula ${unpaid.join(', ')} só pode ser entregue quando o pagamento estiver como "Pago".`);
     }
     const actor = await this.resolveActor(sessionToken);
+    const deliveredAt = getDeliveryTimestamp();
     for (const id of ids) {
-      await this.q(`UPDATE formulas SET delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' ELSE status END WHERE id=?`, [deliveryStatus, deliveryStatus, id]);
+      await this.q(`UPDATE formulas SET ${deliveredAtUpdate}, delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' WHEN status='delivered' THEN 'confirmed' ELSE status END WHERE id=?`, [deliveryStatus, deliveredAt, deliveryStatus, deliveryStatus, id]);
       await this.logAction(actor, 'update_delivery_status', 'formulas', id, `Andamento da fórmula ${id} alterado para ${deliveryStatus}.`);
     }
     return { success: true };
