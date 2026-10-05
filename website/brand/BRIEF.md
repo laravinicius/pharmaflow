@@ -1,8 +1,8 @@
-# MagisFormula — briefing de identidade
+# MagisForm — briefing de identidade
 
 Software desktop para organizar o fluxo de fórmulas de farmácias de manipulação, do orçamento à entrega. Público: gestores, proprietários e farmacêuticos. Personalidade: precisão, organização, confiança e proximidade.
 
-A identidade será independente de qualquer cliente. Paleta: verde #173E35, creme #FFFDF8 e coral #D95C4F. A primeira apresentação é monocromática para avaliar as formas. O nome se escreve MagisFormula, sem acento.
+A identidade será independente de qualquer cliente. Paleta: verde #173E35, creme #FFFDF8 e coral #D95C4F. A primeira apresentação é monocromática para avaliar as formas. O nome se escreve MagisForm, sem acento.
 
 ## Exploração
 

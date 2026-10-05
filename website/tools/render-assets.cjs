@@ -15,7 +15,7 @@ const root = path.resolve(__dirname, '..');
   }
   const symbol = await fs.readFile(path.join(brand, 'symbol-white.svg'), 'utf8');
   const body = symbol.slice(symbol.indexOf('<g'), symbol.lastIndexOf('</svg>'));
-  const tile = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>MagisFormula</title><rect width="256" height="256" rx="56" fill="#173E35"/><g transform="translate(18 18) scale(.86)">${body}</g></svg>`;
+  const tile = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><title>MagisForm</title><rect width="256" height="256" rx="56" fill="#173E35"/><g transform="translate(18 18) scale(.86)">${body}</g></svg>`;
   await fs.writeFile(path.join(brand, 'favicon.svg'), tile);
   for (const size of [32, 180, 192, 512]) {
     const name = size === 180 ? 'apple-touch-icon.png' : size === 32 ? 'favicon-32.png' : `icon-${size}.png`;

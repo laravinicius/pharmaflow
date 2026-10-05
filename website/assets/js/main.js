@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const config = window.MAGISFORMULA_CONFIG;
+  const config = window.MAGISFORM_CONFIG;
   const number = config?.whatsappNumber ?? '';
   const validNumber = /^55\d{10,11}$/.test(number);
   const contactStatus = document.querySelector('[data-contact-status]');

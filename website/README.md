@@ -1,4 +1,4 @@
-# MagisFormula — website comercial
+# MagisForm — website comercial
 
 Landing page estática em português para apresentar o software desktop a farmácias de manipulação. HTML, CSS e JavaScript sem etapa de build. Este projeto funciona independentemente da aplicação desktop.
 
@@ -32,7 +32,7 @@ Sem uma configuração válida, os links levam à seção de contato e aparece �
 
 ## Conteúdo e imagens
 
-As três prévias são ilustrações baseadas nos módulos de painel inicial, cadastro e fórmulas confirmadas. Usam exclusivamente dados sintéticos, com a identidade MagisFormula. Não são capturas de uma versão instalada com essa marca; não há conexão com IPC, API ou banco de dados. Seus valores não são estatísticas comerciais.
+As três prévias são ilustrações baseadas nos módulos de painel inicial, cadastro e fórmulas confirmadas. Usam exclusivamente dados sintéticos, com a identidade MagisForm. Não são capturas de uma versão instalada com essa marca; não há conexão com IPC, API ou banco de dados. Seus valores não são estatísticas comerciais.
 
 O site apresenta o produto como aplicativo desktop para Windows que depende de conexão ao banco de dados da operação. A contratação é sob consulta. Não há preços, depoimentos ou serviços de implantação/suporte prometidos.
 

@@ -27,13 +27,13 @@ def shell(active, title, subtitle):
     parts=[]
     rect(0,0,1280,768,'#F6F7F5')
     rect(0,0,1280,32,GREEN)
-    text(18,21,'MagisFormula — Manipulação',12,'#FFFFFF',600)
+    text(18,21,'MagisForm — Manipulação',12,'#FFFFFF',600)
     text(1164,21,'—    □    ×',13,'#FFFFFF')
     rect(0,32,212,736,GREEN)
     art=(ROOT/'assets/brand/symbol-white.svg').read_text(encoding='utf-8')
     art=art[art.index('<g'):art.rindex('</svg>')]
     parts.append(f'<g transform="translate(19 53) scale(.15)">{art}</g>')
-    text(64,78,'MagisFormula',17,'#FFFFFF',650)
+    text(64,78,'MagisForm',17,'#FFFFFF',650)
     text(25,118,'GESTÃO DE FÓRMULAS',10,'#DCE8E1',600)
     menu=['Painel inicial','Nova fórmula','Pendentes','Confirmadas','Histórico','Clientes','Insumos','Fórmulas salvas','Usuários','Auditoria']
     for i,label in enumerate(menu):
@@ -55,7 +55,7 @@ def shell(active, title, subtitle):
 
 def finish(name):
     text(242,748,'PRÉVIA ILUSTRATIVA COM DADOS FICTÍCIOS',10,MUTED,600)
-    raw=f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="768" viewBox="0 0 1280 768" role="img"><title>MagisFormula — {html.escape(name)} — dados fictícios</title>{"".join(parts)}</svg>\n'
+    raw=f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="768" viewBox="0 0 1280 768" role="img"><title>MagisForm — {html.escape(name)} — dados fictícios</title>{"".join(parts)}</svg>\n'
     (OUT/f'{name}.svg').write_text(raw,encoding='utf-8')
 
 shell('Confirmadas','Fórmulas em produção','Fórmulas confirmadas para manipulação')

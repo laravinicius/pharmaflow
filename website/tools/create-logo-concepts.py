@@ -25,7 +25,7 @@ scale = 70 / font['head'].unitsPerEm
 
 def wordmark():
     paths, cursor = [], 285
-    for char in 'MagisFormula':
+    for char in 'MagisForm':
         name = cmap[ord(char)]
         pen = SVGPathPen(glyphs)
         glyphs[name].draw(TransformPen(pen, (scale, 0, 0, -scale, cursor, 153)))
@@ -44,7 +44,7 @@ word, width = wordmark()
 for key, art in symbols.items():
     if key == 'a-manipulacao':
         art = f'<g transform="translate(0 -4)">{art}</g>'
-    title = html.escape(f'MagisFormula — conceito {names[key]}')
+    title = html.escape(f'MagisForm — conceito {names[key]}')
     for suffix, body, canvas in [('symbol', art, '0 0 256 256'), ('horizontal', f'<g id="symbol">{art}</g><g id="wordmark">{word}</g>', f'0 0 {width} 256')]:
         svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{canvas}" role="img" aria-labelledby="title"><title id="title">{title}</title><g fill="#17201D">{body}</g></svg>\n'
         (CONCEPTS / f'{key}-{suffix}-v2.svg').write_text(svg, encoding='utf-8')

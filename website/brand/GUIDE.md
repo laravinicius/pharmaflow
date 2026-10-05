@@ -1,8 +1,8 @@
-# MagisFormula — guia curto de identidade
+# MagisForm — guia curto de identidade
 
 ## Conceito escolhido
 
-**A — Manipulação**, escolhido pelo usuário durante a revisão. O almofariz recebe o pistilo e sua abertura sugere o M: uma associação com o trabalho de manipulação, em uma forma simples. O nome é sempre **MagisFormula**.
+**A — Manipulação**, escolhido pelo usuário durante a revisão. O almofariz recebe o pistilo e sua abertura sugere o M: uma associação com o trabalho de manipulação, em uma forma simples. O nome é sempre **MagisForm**.
 
 ## Arquivos
 
