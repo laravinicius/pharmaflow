@@ -10,7 +10,7 @@ import { db } from './services/lanDatabase';
 import { TitleBar } from './components/TitleBar';
 import { User, Formula, USER_ROLE_LABELS } from './types';
 import { BrandLogo } from './components/Logo';
-import { BRAND, COLORS, GRADIENTS, CLIENT, RULES } from '../config/branding';
+import { BRAND, COLORS, GRADIENTS } from '../config/branding';
 import { NavItem } from './components/NavItem';
 import { AdminPanel } from './components/UserManager';
 import { CustomerManager } from './components/CustomerManager';
@@ -156,17 +156,17 @@ function UpdateIndicator({ sessionToken, placement = 'floating', collapsed = fal
       className={`${placement === 'floating' ? 'fixed bottom-3 left-4 z-40 max-w-[calc(100vw-2rem)] text-zinc-500 gap-2 py-1' : 'w-full text-white/60 gap-1'} flex ${collapsed ? 'flex-col' : 'flex-wrap'} items-center ${collapsed ? 'px-0' : 'px-3'} text-xs`}>
       {canInstall && (
         <button type="button" onClick={handleInstall} disabled={installRequested}
-          className={`flex ${collapsed ? 'relative h-8 w-8 justify-center' : 'w-full gap-1.5 text-left'} items-center rounded font-semibold ${placement === 'sidebar' ? 'text-[var(--pf-light-red-border)] hover:text-[var(--pf-light-red-bg)] focus-visible:outline-white' : 'text-[var(--pf-primary)] hover:text-[var(--pf-primary-dark)] focus-visible:outline-[var(--pf-secondary)]'} focus-visible:outline focus-visible:outline-2 disabled:cursor-wait disabled:opacity-60`}
+          className={`flex ${collapsed ? 'relative h-8 w-8 justify-center' : 'w-full gap-1.5 text-left'} items-center rounded font-semibold ${placement === 'sidebar' ? 'text-[#FED7DB] hover:text-[#FEF0F2] focus-visible:outline-white' : 'text-[#C5243E] hover:text-[#9B1A2E] focus-visible:outline-[#243465]'} focus-visible:outline focus-visible:outline-2 disabled:cursor-wait disabled:opacity-60`}
           title={installRequested ? 'A atualização será instalada quando o download terminar' : installLabel}
           aria-label={installLabel}>
           {collapsed && <Download className="h-4 w-4" aria-hidden="true" />}
-          <span aria-hidden="true" className={`${collapsed ? 'absolute right-0 top-0' : 'shrink-0'} h-2 w-2 rounded-full bg-[var(--pf-primary)] animate-pulse`} />
+          <span aria-hidden="true" className={`${collapsed ? 'absolute right-0 top-0' : 'shrink-0'} h-2 w-2 rounded-full bg-[#C5243E] animate-pulse`} />
           {!collapsed && (installRequested ? (status === 'downloaded' ? 'Instalando atualização…' : 'Baixando atualização…') : 'Atualização disponível')}
         </button>
       )}
       {!collapsed && <span className="min-w-0 break-words">Versão {version || '—'}</span>}
       <button type="button" onClick={handleCheckForUpdates} disabled={status === 'checking' || status === 'downloading' || manualCheckInProgress}
-        className={`flex shrink-0 items-center justify-center rounded ${placement === 'sidebar' ? 'h-6 w-6 text-white/70 hover:text-white focus-visible:outline-white' : 'h-8 w-8 text-[var(--pf-secondary)] hover:text-[var(--pf-secondary-dark)] focus-visible:outline-[var(--pf-secondary)]'} focus-visible:outline focus-visible:outline-2 disabled:cursor-wait disabled:opacity-50`}
+        className={`flex shrink-0 items-center justify-center rounded ${placement === 'sidebar' ? 'h-6 w-6 text-white/70 hover:text-white focus-visible:outline-white' : 'h-8 w-8 text-[#243465] hover:text-[#1A2850] focus-visible:outline-[#243465]'} focus-visible:outline focus-visible:outline-2 disabled:cursor-wait disabled:opacity-50`}
         title={collapsed ? `Verificar atualizações — Versão ${version || '—'}` : 'Verificar atualizações'}
         aria-label={isChecking ? 'Verificando atualizações' : 'Verificar atualizações'} aria-busy={isChecking}>
         <RefreshCw aria-hidden="true" className={`h-3.5 w-3.5 ${isChecking ? 'animate-spin' : ''}`} />
@@ -304,7 +304,7 @@ function AppInner() {
 
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleInactivityLogoutRef = useRef<() => Promise<void>>();
-  const INACTIVITY_TIMEOUT_MS = RULES.inactivityTimeoutMs;
+  const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 
   const handleInactivityLogout = useCallback(async () => {
     if (sessionToken) {
@@ -316,7 +316,7 @@ function AppInner() {
     setSetupMode(false);
     setActiveTab('dashboard');
     setLoginForm({ username: '', password: '' });
-    setLoginError(`Sessão encerrada por inatividade (${RULES.inactivityTimeoutMs / 60_000} min).`);
+    setLoginError('Sessão encerrada por inatividade (5 min).');
   }, [sessionToken, clearAuth, clearDrafts]);
 
   useEffect(() => {
@@ -484,12 +484,12 @@ function AppInner() {
     return (
       <>
         <UpdateIndicator sessionToken={sessionToken} />
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4" style={{ background: CLIENT.visual.loginBackground }}>
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-4" style={{ background: `linear-gradient(135deg, ${COLORS.pinkSoft} 0%, #fff 50%, ${COLORS.blueSoft} 100%)` }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-200 overflow-hidden"
           >
-            <div className="h-1.5 w-full" style={{ background: CLIENT.visual.style === 'website' ? COLORS.accent : `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.secondary}, ${COLORS.primary})` }} />
+            <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.secondary}, ${COLORS.primary})` }} />
             <div className="flex justify-center px-8 pt-6">
               <div style={{ maxWidth: 408 }}>
                 <BrandLogo size="lg" />
@@ -627,7 +627,7 @@ function AppInner() {
           </div>
 
           {setupMode && isSidebarOpen && (
-            <div className="mx-4 mb-4 px-3 py-2 rounded-lg" style={{ background: COLORS.navActiveBg, border: `1px solid ${COLORS.navActiveBg}` }}>
+            <div className="mx-4 mb-4 px-3 py-2 rounded-lg" style={{ background: 'rgba(196,30,60,0.15)', border: '1px solid rgba(196,30,60,0.3)' }}>
               <p className="text-xs font-semibold text-red-300">Modo Configuração</p>
               <p className="text-xs text-red-400 mt-0.5">Configure o servidor e faça login normalmente.</p>
             </div>
@@ -757,8 +757,8 @@ function AppInner() {
               {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" employeeName={user.name} title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setConfirmedStage('em_producao'); setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('pending'); setActiveTab('formulaDetail'); } }} />}
               {activeTab === 'confirmed' && <>
                 <div className="mb-5 flex gap-2 border-b border-zinc-200">
-                  <button onClick={() => setConfirmedStage('em_producao')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'em_producao' ? 'border-[var(--pf-primary)] text-[var(--pf-primary)]' : 'border-transparent text-zinc-400'}`}>Em produção</button>
-                  <button onClick={() => setConfirmedStage('aguardando_retirada')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'aguardando_retirada' ? 'border-[var(--pf-primary)] text-[var(--pf-primary)]' : 'border-transparent text-zinc-400'}`}>Aguardando retirada</button>
+                  <button onClick={() => setConfirmedStage('em_producao')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'em_producao' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Em produção</button>
+                  <button onClick={() => setConfirmedStage('aguardando_retirada')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'aguardando_retirada' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Aguardando retirada</button>
                 </div>
                 <FormulaList screenKey={`confirmed-${confirmedStage}`} variant="confirmed" statuses={['confirmed']} employeeName={user.name} title={confirmedStage === 'em_producao' ? 'Fórmulas em produção' : 'Fórmulas aguardando retirada'} subtitle="Fórmulas confirmadas para manipulação" deliveryStatusFilter={confirmedStage} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} onDeliveryBlocked={(f, reasons) => { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('confirmed'); }} />
               </>}

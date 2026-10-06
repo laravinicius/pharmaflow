@@ -1,4 +1,4 @@
-# MagisForm
+# MagisForm (PIX Farma)
 
 ![Version](https://img.shields.io/badge/version-0.2.0-blue)
 ![Node](https://img.shields.io/badge/Node-20%2B-green)
@@ -12,7 +12,7 @@
 
 Aplicação desktop online-first para gerenciamento do fluxo de manipulação farmacêutica. Usa Electron, React 19, Vite, TypeScript, Tailwind CSS v4 e MariaDB. Não há cache local nem sincronização offline documentada.
 
-O produto mantém uma base comum com perfis de cliente. **PIX Farma** é o perfil padrão; `generic` usa a identidade do site MagisForm. Para trocar o perfil, cadastrar empresas e publicar seletivamente, consulte [o guia de white label](docs/white-label.md).
+O produto é apresentado para o cliente **PIX Farma**; o projeto se chama **MagisForm**.
 
 ## Visão geral
 
@@ -143,11 +143,10 @@ docker compose up -d
 |---|---|
 | `npm install` | Instala dependências. |
 | `npm run dev` | Inicia Vite em `0.0.0.0:3000` com o plugin Electron em desenvolvimento. |
-| `npm run build` | Compila e empacota PIX Farma por padrão; aceita `-- --client=generic`. Não publica. |
+| `npm run build` | Executa patch do ícone, build Vite e `electron-builder --win`. |
 | `npm run preview` | Preview do build Vite, sem Electron. |
-| `npm run lint` | Verifica TypeScript com `tsc --noEmit`. |
-| `npm run verify:clients` | Confere identidades, assets, updater e checksums dos dois pacotes já construídos. |
-| `npm run clean` | Remove `dist/`, `dist-electron/`, `release/` e `.client-build/` dentro do projeto. |
+| `npm run lint` | `tsc --noEmit`; não há suíte de testes configurada. |
+| `npm run clean` | Remove `dist/`, `dist-electron/`, `release/` e `../pharmaflow-release/`. |
 
 ## Build para Windows
 
@@ -158,7 +157,7 @@ npm run build
 Os targets configurados são `dir` e `nsis`. O destino é:
 
 ```text
-release/<perfil>/<versão>/
+../pharmaflow-pix-farma-release/<versão>/
 ```
 
 `dir` gera uma versão descompactada; `nsis` gera o instalador quando os binários necessários estiverem disponíveis.
@@ -179,8 +178,7 @@ pharmaflow/
 │   ├── services/lanDatabase.ts
 │   ├── types.ts, App.tsx, index.css
 │   └── utils/                # formatação, navegação e performance
-├── config/branding.ts       # fachada do perfil selecionado
-├── config/clients/          # perfis tipados e registro
+├── config/branding.ts
 ├── database.sql
 ├── docker-compose.yml
 ├── public/, scripts/, docs/
@@ -194,7 +192,7 @@ pharmaflow/
 - Novo acesso a dados segue `main.ts` → `preload.ts` → `lanDatabase.ts` → banco.
 - Mudanças de schema atualizam `database.sql`; não criar migrations sem decisão arquitetural.
 - Mutações preservam auditoria e `data:changed`.
-- Cores de marca vêm do perfil em `config/clients/`, pela fachada `config/branding.ts`; não usar cores fixas de outro cliente nos componentes compartilhados.
+- Cores de marca: vermelho `#C5243E`, azul `#243465` e azul claro `#4A90D9`; não usar `red-500`/`blue-500` como substitutos.
 - Capturas de tela podem ser colocadas em `docs/screenshots/` (recomendado: 1280x800, PNG/WebP).
 
 ## Licença e autor

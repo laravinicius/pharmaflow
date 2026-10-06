@@ -1,5 +1,5 @@
 import React from 'react';
-import { BRAND, COLORS, LOGO, CLIENT } from '../../config/branding';
+import { BRAND, COLORS, LOGO } from '../../config/branding';
 
 export function CrossIcon({ size = 22, color = '#FFFFFF' }: { size?: number; color?: string }) {
   return (
@@ -15,12 +15,6 @@ function LogoImage({ sizePx, rounded = 'rounded-xl', fillWidth = false, variant 
   const gradient = `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 100%)`;
   const asset = variant === 'original' ? LOGO.original : LOGO.white;
   const src = useFallback ? asset.fallback : asset.src;
-
-  if (CLIENT.visual.style === 'website') {
-    const image = fillWidth ? src : variant === 'white' ? LOGO.symbol.white : LOGO.symbol.src;
-    return <img src={image} alt={BRAND.name} className={fillWidth ? 'w-full h-auto object-contain' : 'shrink-0 object-contain'}
-      style={fillWidth ? { maxWidth: sizePx } : { width: sizePx, height: sizePx }} />;
-  }
 
   if (!src) {
     return (
@@ -39,7 +33,6 @@ function LogoImage({ sizePx, rounded = 'rounded-xl', fillWidth = false, variant 
 }
 
 export function BrandLogo({ size = 'md' }: { size?: 'icon' | 'md' | 'lg' | 'sidebar' }) {
-  if (CLIENT.visual.style === 'website' && size === 'md') return <LogoImage sizePx={200} fillWidth variant="original" />;
   if (size === 'icon') return <LogoImage sizePx={40} variant="white" />;
 
   if (size === 'sidebar') {
@@ -61,7 +54,7 @@ export function BrandLogo({ size = 'md' }: { size?: 'icon' | 'md' | 'lg' | 'side
     <div className="flex items-center gap-3">
       <LogoImage sizePx={40} variant="white" />
       <div>
-        <div className="font-black text-lg leading-tight tracking-tight" style={{ fontFamily: CLIENT.visual.headingFont }}>
+        <div className="font-black text-lg leading-tight tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>
           {LOGO.textParts.map((part, i) => (
             <span key={i} style={{ color: part.color }}>{part.text}</span>
           ))}

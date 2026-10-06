@@ -6,15 +6,10 @@ import mysql from 'mysql2/promise';
 import electronUpdater from 'electron-updater';
 import { Db } from './db';
 import { formatDbError } from './dbError';
-import { BRAND, COLORS, CLIENT } from '../config/branding';
+import { BRAND, COLORS } from '../config/branding';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { autoUpdater } = electronUpdater;
-
-// Mantém a pasta histórica da PIX e isola a configuração dos novos clientes.
-app.setName(CLIENT.desktop.productName);
-app.setPath('userData', path.join(app.getPath('appData'), CLIENT.desktop.userDataDirectory));
-fs.mkdirSync(app.getPath('userData'), { recursive: true });
 
 // ─── Master key (modo setup) ─────────────────────────────────────────────────
 const MASTER_USERNAME = 'admin';
@@ -30,9 +25,9 @@ interface DbConfig {
   host: string; port: number; user: string; password: string; database: string;
 }
 
-let dbConfig: DbConfig = CLIENT.id === 'pix-farma' ? {
+let dbConfig: DbConfig = {
   host: 'localhost', port: 3306, user: 'pharmaflow_app', password: 'pharmaflow_dev', database: 'pharmaflow',
-} : { host: '', port: 3306, user: '', password: '', database: '' };
+};
 
 if (fs.existsSync(configPath)) {
   try { dbConfig = { ...dbConfig, ...JSON.parse(fs.readFileSync(configPath, 'utf-8')) }; }
@@ -46,9 +41,6 @@ const db = new Db();
 
 const initPool = () => {
   if (pool) pool.end().catch(() => {});
-  pool = null;
-  db.setPool(null);
-  if (!dbConfig.host || !dbConfig.user || !dbConfig.database) return;
   pool = mysql.createPool({
     host: dbConfig.host, port: dbConfig.port, user: dbConfig.user,
     password: dbConfig.password, database: dbConfig.database,
@@ -137,7 +129,7 @@ ipcMain.handle('logs:list', (_, filters) => db.listLogs(filters));
 ipcMain.handle('app:show-message-box', async (_, options: { type?: 'none' | 'info' | 'error' | 'question' | 'warning'; title?: string; message: string }) => {
   return dialog.showMessageBox({
     type: options.type ?? 'info',
-    title: options.title ?? BRAND.name,
+    title: options.title ?? 'PharmaFlow',
     message: options.message,
   });
 });
@@ -164,7 +156,6 @@ initPool();
 
 ipcMain.handle('config:test', async () => {
   try {
-    if (!pool) return { success: false, error: 'Configure a conexão com o banco de dados deste cliente.' };
     await pool!.query('SELECT 1');
     return { success: true };
   } catch (e: any) {
@@ -211,7 +202,7 @@ autoUpdater.on('update-downloaded', () => {
 ipcMain.handle('app:get-version', () => app.getVersion());
 ipcMain.handle('app:get-update-status', () => updateStatus);
 ipcMain.handle('app:check-for-updates', async () => {
-  if (!app.isPackaged || process.platform !== 'win32' || !CLIENT.distribution.configured) {
+  if (!app.isPackaged || process.platform !== 'win32') {
     updateStatus = 'not-available';
     broadcastUpdateStatus();
     return { success: false, supported: false };
@@ -309,10 +300,10 @@ app.on('before-quit', (event) => {
 
 app.on('ready', () => {
   if (process.platform === 'win32') {
-    app.setAppUserModelId(CLIENT.desktop.appId);
+    app.setAppUserModelId('com.pharmaflow.app');
   }
   createWindow();
-  if (app.isPackaged && process.platform === 'win32' && CLIENT.distribution.configured) {
+  if (app.isPackaged && process.platform === 'win32') {
     autoUpdater.checkForUpdates().catch((error) => console.error('Falha ao verificar atualizações:', error));
   } else {
     updateStatus = 'not-available';

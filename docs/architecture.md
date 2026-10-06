@@ -27,11 +27,7 @@ React (src/) → lanDatabase.ts
 - O renderer não importa `mysql2` ou `electron/db.ts`.
 - Novo acesso de dados no Electron atravessa `main.ts` → `preload.ts` → `lanDatabase.ts`.
 - Alterações de schema atualizam `database.sql`; as migrations existentes são históricas.
-- Configuração desktop fica no diretório próprio do perfil (`userData/config.json`); a PIX preserva `%APPDATA%/pharmaflow`.
+- Configuração desktop fica em `app.getPath('userData')/config.json`.
 - Mutations preservam auditoria e a notificação `data:changed`.
 
-## Perfis e distribuição
-
-`config/clients/` define os perfis tipados. `config/branding.ts` expõe a fachada da marca selecionada no build para React e Electron. Assets temporários e bundles ficam em `.client-build/<perfil>`; instaladores e metadados ficam em `release/<perfil>/<versão>`.
-
-O CI verifica TypeScript, constrói os dois perfis e confere seus pacotes. Tags `v*` publicam exclusivamente PIX Farma; um workflow manual publica os demais perfis a partir de um SHA selecionado e para repositórios de distribuição separados. Detalhes, referências de recuperação e limites da validação: [white-label.md](white-label.md).
+> UNKNOWN: não foi encontrado CI/CD ou teste automatizado no repositório.
