@@ -1,7 +1,7 @@
 {
   "name": "pharmaflow",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Aplicativo de gerenciamento de fórmulas farmacêuticas.",
   "author": "Vinicius Lara",
   "type": "module",
@@ -29,7 +29,7 @@
     "publish": {
       "provider": "github",
       "owner": "laravinicius",
-      "repo": "MagisForm",
+      "repo": "pharmaflow",
       "releaseType": "release"
     },
     "win": {
