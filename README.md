@@ -1,6 +1,6 @@
 # MagisForm (PIX Farma)
 
-![Version](https://img.shields.io/badge/version-0.0.1-blue)
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
 ![Node](https://img.shields.io/badge/Node-20%2B-green)
 ![Electron](https://img.shields.io/badge/Electron-36-blue)
 ![React](https://img.shields.io/badge/React-19-61dafb)
