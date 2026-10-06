@@ -1,0 +1,46 @@
+{
+  "appId": "com.pharmaflow.app",
+  "productName": "PIX Farma",
+  "electronDist": "node_modules/electron/dist",
+  "forceCodeSigning": false,
+  "directories": {
+    "output": "C:\\Users\\Vinicius\\Documents\\GitHub\\pharmaflow\\release\\pix-farma\\0.2.0"
+  },
+  "files": [
+    "package.json",
+    {
+      "from": "C:\\Users\\Vinicius\\Documents\\GitHub\\pharmaflow\\.client-build\\pix-farma\\dist",
+      "to": "dist",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "C:\\Users\\Vinicius\\Documents\\GitHub\\pharmaflow\\.client-build\\pix-farma\\dist-electron",
+      "to": "dist-electron",
+      "filter": [
+        "**/*"
+      ]
+    }
+  ],
+  "extraMetadata": {
+    "name": "pharmaflow",
+    "productName": "PIX Farma",
+    "main": "dist-electron/main.js"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "laravinicius",
+    "repo": "pharmaflow",
+    "releaseType": "release"
+  },
+  "win": {
+    "icon": "C:\\Users\\Vinicius\\Documents\\GitHub\\pharmaflow\\.client-build\\pix-farma\\public\\icon.ico",
+    "executableName": "PIX Farma",
+    "artifactName": "PIX-Farma-Setup-${version}.${ext}",
+    "target": [
+      "dir",
+      "nsis"
+    ]
+  }
+}
