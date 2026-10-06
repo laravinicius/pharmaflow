@@ -1,4 +1,4 @@
-# PharmaFlow (PIX Farma)
+# MagisForm (PIX Farma)
 
 ![Version](https://img.shields.io/badge/version-0.0.1-blue)
 ![Node](https://img.shields.io/badge/Node-20%2B-green)
@@ -12,11 +12,11 @@
 
 Aplicação desktop online-first para gerenciamento do fluxo de manipulação farmacêutica. Usa Electron, React 19, Vite, TypeScript, Tailwind CSS v4 e MariaDB. Não há cache local nem sincronização offline documentada.
 
-O produto é exibido como **PIX Farma**; o repositório se chama **PharmaFlow**.
+O produto é apresentado para o cliente **PIX Farma**; o projeto se chama **MagisForm**.
 
 ## Visão geral
 
-![Tela inicial do PharmaFlow](docs/screenshots/homePage.png)
+![Prévia do sistema MagisForm com a lista de fórmulas em produção](website/assets/images/formulas-1600.webp)
 
 ## Funcionalidades
 
