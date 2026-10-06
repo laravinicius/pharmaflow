@@ -8,11 +8,7 @@ import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { ConfirmModal } from './ConfirmModal';
-import { GRADIENTS } from '../../config/branding';
-
-const WHATSAPP_MESSAGE = `Olá!
-Passando para avisar que seu manipulado já chegou aqui na Pix - Jardim Paulista! \u{1F9EA} \u{1F4A0}
-Nosso horário de atendimento é das 08:00 às 20:00 De segunda a sábado.`;
+import { GRADIENTS, MESSAGES } from '../../config/branding';
 
 function getWhatsAppUrl(phone: string | undefined): string | null {
   const digits = (phone ?? '').replace(/\D/g, '');
@@ -20,7 +16,7 @@ function getWhatsAppUrl(phone: string | undefined): string | null {
 
   const phoneWithCountryCode = digits.length <= 11 ? `55${digits}` : digits;
   if (phoneWithCountryCode.length < 12 || phoneWithCountryCode.length > 13) return null;
-  return `whatsapp://send?phone=${phoneWithCountryCode}&text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+  return `whatsapp://send?phone=${phoneWithCountryCode}&text=${encodeURIComponent(MESSAGES.whatsappReady)}`;
 }
 
 function WhatsAppIcon() {

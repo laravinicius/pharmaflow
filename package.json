@@ -7,39 +7,17 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "node scripts/patch-icon.js && vite build --configLoader native && electron-builder --win",
-    "build:release": "node scripts/patch-icon.js && vite build --configLoader native && electron-builder --win --publish always",
+    "dev": "node scripts/client.mjs dev",
+    "build": "node scripts/client.mjs build",
+    "build:release": "node scripts/client.mjs release",
     "preview": "vite preview",
-    "clean": "node -e \"const fs=require('fs'); for (const dir of ['dist','dist-electron','release','../pharmaflow-release']) fs.rmSync(dir, { recursive: true, force: true });\"",
-    "lint": "tsc --noEmit"
-  },
-  "build": {
-    "appId": "com.pharmaflow.app",
-    "productName": "PIX Farma",
-    "electronDist": "node_modules/electron/dist",
-    "directories": {
-      "output": "../pharmaflow-pix-farma-release/${version}"
-    },
-    "files": [
-      "dist",
-      "dist-electron"
-    ],
-    "forceCodeSigning": false,
-    "publish": {
-      "provider": "github",
-      "owner": "laravinicius",
-      "repo": "pharmaflow",
-      "releaseType": "release"
-    },
-    "win": {
-      "icon": "public/icon.ico",
-      "artifactName": "PIX-Farma-Setup-${version}.${ext}",
-      "target": [
-        "dir",
-        "nsis"
-      ]
-    }
+    "clean": "node scripts/clean.mjs",
+    "lint": "tsc --noEmit",
+    "dev:client": "node scripts/client.mjs dev",
+    "build:client": "node scripts/client.mjs build",
+    "client:info": "node scripts/client.mjs info",
+    "release:check": "node scripts/client.mjs check",
+    "verify:clients": "node scripts/verify-clients.mjs"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",

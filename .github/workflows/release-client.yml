@@ -1,0 +1,59 @@
+name: Publicar cliente
+
+on:
+  workflow_dispatch:
+    inputs:
+      client:
+        description: Identificador em config/clients (exceto pix-farma)
+        required: true
+        type: string
+        default: generic
+      commit:
+        description: SHA completo do commit com o perfil e a versão desejados
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    concurrency:
+      group: release-${{ inputs.client }}
+      cancel-in-progress: false
+    steps:
+      - name: Validar seleção
+        shell: pwsh
+        env:
+          CLIENT_ID: ${{ inputs.client }}
+          COMMIT_SHA: ${{ inputs.commit }}
+        run: |
+          if ($env:CLIENT_ID -eq 'pix-farma' -or $env:CLIENT_ID -notmatch '^[a-z][a-z0-9-]*$') {
+            throw 'PIX Farma publica exclusivamente por tags v*. Informe outro perfil válido.'
+          }
+          if ($env:COMMIT_SHA -notmatch '^[0-9a-fA-F]{40}$') { throw 'Informe o SHA completo do commit.' }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Conferir destino e impedir sobrescrita
+        shell: pwsh
+        env:
+          PHARMAFLOW_CLIENT: ${{ inputs.client }}
+          GH_TOKEN: ${{ secrets.CLIENT_RELEASE_TOKEN }}
+        run: |
+          if (-not $env:GH_TOKEN) { throw 'Configure CLIENT_RELEASE_TOKEN com acesso ao repositório de distribuição.' }
+          npm run release:check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compilar e publicar somente o perfil escolhido
+        run: npm run build:release
+        env:
+          PHARMAFLOW_CLIENT: ${{ inputs.client }}
+          GH_TOKEN: ${{ secrets.CLIENT_RELEASE_TOKEN }}
