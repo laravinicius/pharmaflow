@@ -42,7 +42,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [budgetError, setBudgetError] = useState('');
   const [attendantName, setAttendantName] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
-  const [deliveryDateError, setDeliveryDateError] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
   const [partialPaymentAmount, setPartialPaymentAmount] = useState(savedPartialPaymentAmount);
   const [paymentMethod, setPaymentMethod] = useState('');
@@ -180,7 +179,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setBudgetError('');
     setAttendantName('');
     setDeliveryDate('');
-    setDeliveryDateError('');
     setPaymentStatus('');
     setPartialPaymentAmount('');
     onPartialPaymentAmountChange?.(null);
@@ -262,12 +260,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     else if (selectedBudgetIndex !== null && selectedBudgetIndex > idx) setSelectedBudgetIndex(selectedBudgetIndex - 1);
   };
 
-  const todayIso = (() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  })();
   const parsedDeliveryDate = parseDateBR(deliveryDate);
-  const deliveryDateIsPast = !!parsedDeliveryDate && parsedDeliveryDate < todayIso;
   const selectedBudgetValue = selectedBudgetIndex !== null
     ? budgetItems[selectedBudgetIndex]?.value ?? null
     : null;
@@ -277,16 +270,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     parsedPartialPaymentAmount <= 0 ||
     parsedPartialPaymentAmount > selectedBudgetValue
   );
-  const validateDeliveryDate = (value: string) => {
-    const parsed = parseDateBR(value);
-    const error = parsed && parsed < todayIso ? 'A previsão de entrega não pode ser anterior à data atual.' : '';
-    setDeliveryDateError(error);
-    return !error;
-  };
-
   const canSave = !!selectedCustomerId && items.length > 0 &&
     !!budgetNumber && budgetItems.length > 0 &&
-    !!attendantName && !deliveryDateIsPast &&
+    !!attendantName &&
     !partialPaymentIsInvalid;
   const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
 
@@ -318,7 +304,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const handleSave = async () => {
-    if (!canSave || !validateDeliveryDate(deliveryDate)) return;
+    if (!canSave) return;
     setSaving(true);
     try {
       if (formula) await db.formulas.update(formula.id, buildPayload('pending'), sessionToken ?? undefined);
@@ -335,7 +321,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const handleConfirm = async () => {
-    if (!canConfirm || !validateDeliveryDate(deliveryDate)) return;
+    if (!canConfirm) return;
     setSaving(true);
     try {
       if (formula) await db.formulas.update(formula.id, buildPayload('confirmed', true), sessionToken ?? undefined);
@@ -353,7 +339,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   const handleSaveConfirmed = async () => {
     if (!formula) return;
-    if (!validateDeliveryDate(deliveryDate)) return;
     if (deliveryStatus === 'entregue' && paymentStatus !== 'pago') {
       setShowDeliveryErrorModal(true);
       return;
@@ -1027,10 +1012,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className={(confirmed || readOnly) ? 'grid grid-cols-1 gap-6 md:grid-cols-3' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}>
           <div>
             {/** Data liberada separadamente para fórmulas confirmadas. */}
-            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Previsão de entrega</label>
+            <label htmlFor="delivery-date" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Previsão de entrega</label>
             <div className="relative">
               <input
                 ref={deliveryDateTextInputRef}
+                id="delivery-date"
                 type="text"
                 inputMode="numeric"
                 maxLength={10}
@@ -1040,12 +1026,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 onChange={e => {
                   const masked = formatDateBR(e.target.value);
                   setDeliveryDate(masked);
-                  validateDeliveryDate(masked);
                   if (dateInputRef.current) dateInputRef.current.value = parseDateBR(masked) ?? '';
                 }}
               />
               {(!readOnly && (confirmed ? deliveryDateEditing : !locked)) && deliveryDate && (
-                <button type="button" onClick={() => { setDeliveryDate(''); setDeliveryDateError(''); if (dateInputRef.current) dateInputRef.current.value = ''; }}
+                <button type="button" onClick={() => { setDeliveryDate(''); if (dateInputRef.current) dateInputRef.current.value = ''; }}
                   className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors" title="Limpar data">
                   <X className="w-4 h-4" />
                 </button>
@@ -1057,18 +1042,25 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <input
                 ref={dateInputRef}
                 type="date"
-                min={todayIso}
                 className="absolute inset-0 w-full opacity-0 pointer-events-none"
                 tabIndex={-1}
                 aria-hidden="true"
                 onChange={e => {
                   const value = e.target.value ? formatDateToBR(e.target.value) : '';
                   setDeliveryDate(value);
-                  validateDeliveryDate(value);
                 }}
               />
             </div>
-            {deliveryDateError && <p className="mt-1 text-xs text-red-600">{deliveryDateError}</p>}
+            <dl className="mt-3">
+              <dt className="text-xs font-semibold text-zinc-500 uppercase mb-1">Data real da entrega</dt>
+              <dd className="text-sm text-zinc-700">
+                {formula?.delivered_at
+                  ? formatDateToBR(formula.delivered_at.slice(0, 10))
+                  : formula?.delivery_status === 'entregue' || formula?.status === 'delivered'
+                    ? 'Não registrada'
+                    : 'Ainda não entregue'}
+              </dd>
+            </dl>
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>

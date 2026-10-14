@@ -38,7 +38,7 @@ export function getMissingReasons(f: Formula): string[] {
   if (!f.budget_number) reasons.push('Número do orçamento');
   if (!f.budget_items || f.budget_items.length === 0) reasons.push('Itens do orçamento');
   if (!f.attendant_name) reasons.push('Atendente PM');
-  if (!f.delivery_date || !/^\d{4}-\d{2}-\d{2}$/.test(f.delivery_date)) reasons.push('Data de entrega válida');
+  if (!f.delivery_date || !/^\d{4}-\d{2}-\d{2}$/.test(f.delivery_date)) reasons.push('Previsão de entrega válida');
   if (!f.payment_status) reasons.push('Status de pagamento');
   const budgetItems = f.budget_items ?? [];
   if (budgetItems.length > 1 && budgetItems.filter(bi => bi.is_selected).length !== 1) reasons.push('Selecionar um único orçamento');
@@ -173,8 +173,8 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       formula.attendant_name,
       employeeName,
       new Date(formula.created_at).toLocaleDateString('pt-BR'),
-      formula.delivery_date ? formatDateToBR(formula.delivery_date) : '',
-      formula.delivery_date ?? '',
+      formula.delivered_at ? formatDateToBR(formula.delivered_at.slice(0, 10)) : '',
+      formula.delivered_at?.slice(0, 10) ?? '',
       paymentLabels[formula.payment_status ?? ''] ?? formula.payment_status,
       statusLabels[formula.status] ?? formula.status,
       formula.manager_verified ? 'Verificado' : 'Verificar Não verificado',
@@ -253,8 +253,8 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       : null;
   const gridCols = variant === 'confirmed'
       ? canVerify
-        ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.25fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
-        : 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
+        ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(6rem,1.2fr)_minmax(6rem,1fr)_minmax(0,1.2fr)_minmax(0,1.25fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
+        : 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(6rem,1.2fr)_minmax(6rem,1fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
     : showAndamento
       ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.6fr)]'
       : showRepeat
@@ -315,7 +315,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           {filtered.length > 0 && variant === 'confirmed' && (
             <div className={`hidden md:grid ${gridCols} ${columnGap} mx-px px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
               <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-right">Restante</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
-              <span className="text-left">Data criação</span><span className="text-left">Data entrega</span><span className="text-left">Pagamento</span>{canVerify && <span className="text-left">Verificação</span>}<span className="text-right">Whatsapp</span><span />
+              <span className="text-left">Data criação</span><span className="text-left">{screenKey === 'history' ? 'Data real da entrega' : 'Previsão de entrega'}</span><span className="text-left">Pagamento</span>{canVerify && <span className="text-left">Verificação</span>}<span className="text-right">Whatsapp</span><span />
             </div>
           )}
           {filtered.length > 0 && variant === 'pending' && (
@@ -370,7 +370,9 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     <p className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
                     <p className="text-zinc-700 truncate text-left">{employeeName || '—'}</p>
                     <p className="text-zinc-500 text-left">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
-                    <p className="text-zinc-500 truncate text-left">{f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
+                    <p className="text-zinc-500 text-left tabular-nums">{screenKey === 'history'
+                      ? f.delivered_at ? formatDateToBR(f.delivered_at.slice(0, 10)) : 'Não registrada'
+                      : f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
                     <div className="flex justify-start" onClick={e => e.stopPropagation()}>
                       <button
                         type="button"

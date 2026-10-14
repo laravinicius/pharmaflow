@@ -9,7 +9,7 @@ interface UnitCycleProps {
 }
 
 export const INGREDIENT_UNITS = ['g', 'mcg', 'mg', 'ml', 'ui'];
-export const BUDGET_UNITS = ['caps', 'doses', 'g', 'ml'];
+export const BUDGET_UNITS = ['caps', 'doses', 'g', 'ml', 'sachê'];
 
 export function UnitCycle({ value, onChange, options, disabled }: UnitCycleProps) {
   const cycle = useCallback((dir: number) => {
