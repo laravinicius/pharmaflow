@@ -3,7 +3,7 @@ import { CheckCircle, Trash2, Search, X, PlusCircle, ClipboardList } from 'lucid
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { SavedFormula, SavedFormulaItem, Insumo, BudgetItem } from '../types';
-import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency, currencyCaretPosition, formatQuantityInput, parseQuantity } from '../utils/format';
+import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency, currencyCaretPosition, formatQuantityInput, parseQuantity, formatUnit } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
@@ -274,7 +274,7 @@ export function SavedFormulaManager() {
               <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-zinc-100"
                 style={{ background: idx % 2 === 0 ? COLORS.rowAlt : '#fff' }}>
                 <p className="text-sm text-zinc-700 flex-1 min-w-0">
-                  <strong>{formatQuantity(bi.quantity)}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <strong>{formatQuantity(bi.quantity)}</strong> {formatUnit(bi.unit)} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </p>
                 <button type="button" onClick={() => removeBudgetItem(idx)}
                   className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover item do orçamento">

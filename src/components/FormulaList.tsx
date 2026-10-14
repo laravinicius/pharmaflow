@@ -3,7 +3,7 @@ import { RefreshCw, Search, X, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { Formula } from '../types';
-import { formatDateToBR, formatQuantity } from '../utils/format';
+import { formatDateToBR, formatQuantity, formatUnit } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { LoadingState, ErrorState } from './Feedback';
@@ -315,7 +315,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           {filtered.length > 0 && variant === 'confirmed' && (
             <div className={`hidden md:grid ${gridCols} ${columnGap} mx-px px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
               <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-right">Restante</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
-              <span className="text-left">Data criação</span><span className="text-left">{screenKey === 'history' ? 'Data real da entrega' : 'Previsão de entrega'}</span><span className="text-left">Pagamento</span>{canVerify && <span className="text-left">Verificação</span>}<span className="text-right">Whatsapp</span><span />
+              <span className="text-left">Data criação</span><span className="text-left">{screenKey === 'history' ? 'Data de entrega' : 'Previsão de entrega'}</span><span className="text-left">Pagamento</span>{canVerify && <span className="text-left">Verificação</span>}<span className="text-right">Whatsapp</span><span />
             </div>
           )}
           {filtered.length > 0 && variant === 'pending' && (
@@ -355,7 +355,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     </div>
                     <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
                     <div className="text-zinc-700 space-y-1 font-medium text-right">
-                      {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
+                      {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {formatUnit(bi.unit)}</p>)}
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                     </div>
                     <div className="text-zinc-700 space-y-1 tabular-nums text-right">
@@ -469,7 +469,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   </div>
                   <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
                   <div className="text-zinc-700 space-y-1 font-medium text-right">
-                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {bi.unit}</p>)}
+                    {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {formatUnit(bi.unit)}</p>)}
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
                   <div className="text-zinc-700 space-y-1 tabular-nums text-right">

@@ -6,7 +6,7 @@ import { COLORS, GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
-import { formatCurrency, parseCurrency, currencyCaretPosition, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput } from '../utils/format';
+import { formatCurrency, parseCurrency, currencyCaretPosition, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput, formatUnit } from '../utils/format';
 import { handleDialogArrowNavigation } from '../utils/enterNavigation';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
@@ -973,7 +973,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                         onChange={() => { if (!locked) setSelectedBudgetIndex(idx); }}
                         onClick={e => e.stopPropagation()} />
                       <p className="text-sm text-zinc-700 flex-1 min-w-0">
-                        <strong>{formatQuantity(bi.quantity)}</strong> {bi.unit} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <strong>{formatQuantity(bi.quantity)}</strong> {formatUnit(bi.unit)} · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </p>
                       {!locked && (
                         <button type="button" onClick={e => { e.stopPropagation(); removeBudgetItem(idx); }}
@@ -1051,16 +1051,18 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 }}
               />
             </div>
-            <dl className="mt-3">
-              <dt className="text-xs font-semibold text-zinc-500 uppercase mb-1">Data real da entrega</dt>
-              <dd className="text-sm text-zinc-700">
-                {formula?.delivered_at
-                  ? formatDateToBR(formula.delivered_at.slice(0, 10))
-                  : formula?.delivery_status === 'entregue' || formula?.status === 'delivered'
-                    ? 'Não registrada'
-                    : 'Ainda não entregue'}
-              </dd>
-            </dl>
+            {formula && formula.status !== 'pending' && (
+              <dl className="mt-3">
+                <dt className="text-xs font-semibold text-zinc-500 uppercase mb-1">Data de entrega</dt>
+                <dd className="text-sm text-zinc-700">
+                  {formula.delivered_at
+                    ? formatDateToBR(formula.delivered_at.slice(0, 10))
+                    : formula.delivery_status === 'entregue' || formula.status === 'delivered'
+                      ? 'Não registrada'
+                      : 'Ainda não entregue'}
+                </dd>
+              </dl>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>

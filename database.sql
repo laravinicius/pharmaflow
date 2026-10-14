@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS formula_budget_items (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   formula_id  INT            NOT NULL,
   quantity    DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
-  unit        VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, ml, g',
+  unit        VARCHAR(16)    NOT NULL DEFAULT 'caps' COMMENT 'caps, caps s.l., doses, g, ml, sachê',
   value       DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
   is_selected TINYINT(1)     NOT NULL DEFAULT 0 COMMENT 'orçamento escolhido',
   FOREIGN KEY (formula_id) REFERENCES formulas(id) ON DELETE CASCADE
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS saved_formula_budget_items (
   id               INT AUTO_INCREMENT PRIMARY KEY,
   saved_formula_id INT            NOT NULL,
   quantity         DECIMAL(10,3)  NOT NULL COMMENT 'quantidade',
-  unit             VARCHAR(5)     NOT NULL DEFAULT 'caps' COMMENT 'caps, doses, g, ml',
+  unit             VARCHAR(16)    NOT NULL DEFAULT 'caps' COMMENT 'caps, caps s.l., doses, g, ml, sachê',
   value            DECIMAL(10,2)  NOT NULL DEFAULT 0 COMMENT 'valor em R$',
   FOREIGN KEY (saved_formula_id) REFERENCES saved_formulas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
