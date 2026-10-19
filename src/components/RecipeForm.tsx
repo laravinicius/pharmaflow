@@ -6,7 +6,7 @@ import { COLORS, GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula } from '../types';
-import { formatCurrency, parseCurrency, currencyCaretPosition, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput, formatUnit } from '../utils/format';
+import { formatCurrency, parseCurrency, currencyCaretPosition, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput, parseQuantity, formatUnit } from '../utils/format';
 import { handleDialogArrowNavigation } from '../utils/enterNavigation';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +22,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const { sessionToken } = useAuth();
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [items, setItems] = useState<FormulaItem[]>([]);
+  const [editingIngredientId, setEditingIngredientId] = useState<number | null>(null);
   const [customerQuery, setCustomerQuery] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showTemplateBanner, setShowTemplateBanner] = useState(false);
@@ -117,6 +118,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   useEffect(() => {
     if (formula) {
+      resetIngredientFields();
       setDeliveryDateEditing(false);
       setSelectedCustomerId(formula.customer_id);
       setItems(formula.items.map(i => ({ ...i })));
@@ -138,6 +140,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   useEffect(() => {
     if (template) {
+      resetIngredientFields();
       setSelectedCustomerId(template.customer_id);
       setItems(template.items.map(i => ({ ...i })));
       setShowTemplateBanner(true);
@@ -151,6 +154,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   }, [formula, initialLocked]);
 
   const clearForm = () => {
+    resetIngredientFields();
     draftRef.current = {
       selectedCustomerId: '', items: [], budgetNumber: '', budgetItems: [], selectedBudgetIndex: null,
       attendantName: '', deliveryDate: '', paymentStatus: '', paymentMethod: '',
@@ -162,11 +166,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setCustomerQuery('');
     setShowAddCustomer(false);
     setShowTemplateBanner(false);
-    setInsumoQuery('');
-    setSelectedInsumoId('');
-    setQuantity('');
-    setUnit('mg');
-    setItemError('');
     setSavedFormulaQuery('');
     setAppliedSavedFormula(null);
     setBudgetNumber('');
@@ -186,6 +185,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   const allInsumos = (insumos as Insumo[]) ?? [];
   const selectedInsumo = allInsumos.find(m => m.id === selectedInsumoId) ?? null;
+  const editingIngredient = items.find(item => item.insumo_id === editingIngredientId);
+  // Preserva quantidades decimais existentes ao alterar apenas a unidade.
+  const ingredientQuantity = editingIngredient && quantity === formatQuantity(editingIngredient.quantity)
+    ? Number(editingIngredient.quantity) : parseQuantity(quantity);
+  const canEditComposition = !locked && !confirmed && !readOnly && !saving;
   const mq = stripDiacritics(insumoQuery.trim().toLowerCase());
   const filteredInsumos = mq
     ? allInsumos
@@ -199,13 +203,59 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         })
     : [];
 
+  const resetIngredientFields = () => {
+    setEditingIngredientId(null);
+    setSelectedInsumoId('');
+    setInsumoQuery('');
+    setInsumoFocusIdx(-1);
+    setQuantity('');
+    setUnit('mg');
+    setShowAddInsumo(false);
+    setItemError('');
+  };
+
+  const startIngredientEdit = (item: FormulaItem) => {
+    if (!canEditComposition) return;
+    resetIngredientFields();
+    setEditingIngredientId(item.insumo_id);
+    setQuantity(formatQuantity(item.quantity));
+    setUnit(item.unit ?? 'mg');
+    requestAnimationFrame(() => {
+      quantityRef.current?.focus();
+      quantityRef.current?.select();
+    });
+  };
+
+  const cancelIngredientEdit = () => {
+    resetIngredientFields();
+    requestAnimationFrame(() => insumoQueryRef.current?.focus());
+  };
+
+  const updateIngredient = () => {
+    if (!canEditComposition || !editingIngredient) return;
+    const parsedQuantity = ingredientQuantity;
+    if (parsedQuantity <= 0) { setItemError('Informe uma quantidade maior que zero.'); return; }
+    setItems(current => current.map(item => item.insumo_id === editingIngredientId
+      ? { ...item, quantity: parsedQuantity, unit } : item));
+    cancelIngredientEdit();
+  };
+
+  const removeIngredient = (id: number) => {
+    if (!canEditComposition) return;
+    setItems(current => current.filter(item => item.insumo_id !== id));
+    if (editingIngredientId === id) cancelIngredientEdit();
+    setItemError('');
+  };
+
   const addIngredient = () => {
-    if (!selectedInsumoId || !quantity) return;
+    if (!canEditComposition || editingIngredientId !== null || !selectedInsumoId) return;
+    const parsedQuantity = parseQuantity(quantity);
+    if (parsedQuantity <= 0) { setItemError('Informe uma quantidade maior que zero.'); return; }
     if (items.find(i => i.insumo_id === Number(selectedInsumoId))) {
       setItemError('Este insumo já foi adicionado à fórmula.');
       return;
     }
-    setItems([...items, { insumo_id: Number(selectedInsumoId), insumo_name: selectedInsumo?.name ?? '', quantity: Number(quantity), unit }]);
+    setItems([...items, { insumo_id: Number(selectedInsumoId), insumo_name: selectedInsumo?.name ?? '', quantity: parsedQuantity, unit }]);
     setSelectedInsumoId('');
     setInsumoQuery('');
     setQuantity('');
@@ -232,6 +282,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     : [];
 
   const applySavedFormula = (f: SavedFormula) => {
+    resetIngredientFields();
     setItems(f.items.map(i => ({ insumo_id: i.insumo_id, insumo_name: i.insumo_name ?? '', quantity: i.quantity, unit: i.unit ?? 'mg' })));
     setAppliedSavedFormula(f);
     setSavedFormulaQuery('');
@@ -269,7 +320,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     parsedPartialPaymentAmount <= 0 ||
     parsedPartialPaymentAmount > selectedBudgetValue
   );
-  const canSave = !!selectedCustomerId && items.length > 0 &&
+  const canSave = editingIngredientId === null && !!selectedCustomerId && items.length > 0 &&
     !!budgetNumber && budgetItems.length > 0 &&
     !!attendantName &&
     !partialPaymentIsInvalid;
@@ -599,15 +650,15 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <h3 className="font-semibold text-zinc-900 text-sm">2.1 Insumo</h3>
         </div>
 
-        {selectedInsumo ? (
+        {editingIngredient || selectedInsumo ? (
           <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 bg-zinc-50 mb-4">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
                 <ClipboardList className="w-4 h-4 text-red-700" />
               </div>
-              <p className="font-semibold text-zinc-900 text-sm truncate">{selectedInsumo.name}</p>
+              <p className="font-semibold text-zinc-900 text-sm truncate">{editingIngredient ? editingIngredient.insumo_name : selectedInsumo?.name}</p>
             </div>
-            {!locked && (
+            {canEditComposition && !editingIngredient && (
               <button type="button" onClick={() => { setSelectedInsumoId(''); setInsumoQuery(''); }}
                 className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar insumo">
                 <X className="w-4 h-4" />
@@ -625,7 +676,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             <input
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               value={insumoQuery}
-              disabled={locked}
+              aria-label="Buscar insumo"
+              disabled={!canEditComposition}
               ref={insumoQueryRef}
               onChange={e => { setInsumoQuery(e.target.value.toUpperCase()); setInsumoFocusIdx(-1); }}
               onKeyDown={e => {
@@ -709,32 +761,39 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="sm:w-32">
-            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
+            <label htmlFor="recipe-ingredient-quantity" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
             <input
+              id="recipe-ingredient-quantity"
               ref={quantityRef}
               inputMode="numeric"
               maxLength={8}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
               value={quantity}
-              disabled={locked}
-              onChange={e => setQuantity(formatQuantityInput(e.target.value))}
+              disabled={!canEditComposition}
+              onChange={e => { setQuantity(formatQuantityInput(e.target.value)); setItemError(''); }}
             />
           </div>
           <div className="sm:w-36">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
-            <UnitCycle value={unit} onChange={setUnit} options={INGREDIENT_UNITS} disabled={locked} />
+            <UnitCycle value={unit} onChange={setUnit} options={INGREDIENT_UNITS} disabled={!canEditComposition} />
           </div>
           <div className="flex-1 space-y-1">
             {itemError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{itemError}</p>}
-            {!locked && (
-              <button type="button" disabled={!selectedInsumoId || !quantity} onClick={addIngredient}
-                className="w-full text-white py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: GRADIENTS.secondary }}>
-                + Adicionar à fórmula
-              </button>
+            {quantity !== '' && ingredientQuantity <= 0 && <p className="text-xs font-medium" style={{ color: COLORS.primary }}>Informe uma quantidade maior que zero.</p>}
+            {canEditComposition && (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={(!editingIngredient && !selectedInsumoId) || ingredientQuantity <= 0} onClick={editingIngredient ? updateIngredient : addIngredient}
+                  className="flex-1 text-white px-3 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: GRADIENTS.secondary }}>
+                  {editingIngredient ? 'Atualizar ingrediente' : '+ Adicionar à fórmula'}
+                </button>
+                {editingIngredient && <button type="button" onClick={cancelIngredientEdit} className="px-3 py-2 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 text-sm font-semibold transition-colors">Cancelar</button>}
+              </div>
             )}
           </div>
         </div>
+
+        {editingIngredient && <p role="status" className="mt-2 text-xs" style={{ color: COLORS.secondary }}>Atualize ou cancele a edição do ingrediente antes de salvar ou confirmar a fórmula.</p>}
 
         <div className="mt-4 pt-3 border-t border-zinc-100">
           <div className="flex items-center justify-between mb-3">
@@ -751,16 +810,25 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               {items.map((item, idx) => (
                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={item.insumo_id}
                   className="flex items-center justify-between p-3 rounded-xl border border-zinc-100"
-                  style={{ background: idx % 2 === 0 ? COLORS.rowAlt : '#fff' }}>
+                  style={{ background: editingIngredientId === item.insumo_id ? COLORS.lightBlueBg : idx % 2 === 0 ? COLORS.rowAlt : '#fff', borderColor: editingIngredientId === item.insumo_id ? COLORS.lightBlueBorder : undefined }}>
                   <div className="min-w-0">
                     <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
                     <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
                   </div>
-                  {!locked && (
-                    <button type="button" onClick={() => { setItems(items.filter((_, i) => i !== idx)); setItemError(''); }}
-                      className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover insumo">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  {canEditComposition && (
+                    <div className="flex items-center gap-2 ml-3 shrink-0">
+                      <button type="button" onClick={() => editingIngredientId === item.insumo_id ? cancelIngredientEdit() : startIngredientEdit(item)}
+                        aria-label={`${editingIngredientId === item.insumo_id ? 'Cancelar edição de' : 'Editar'} ${item.insumo_name}`}
+                        aria-pressed={editingIngredientId === item.insumo_id}
+                        className={`text-xs font-semibold px-3 py-1 rounded-lg transition-colors ${editingIngredientId === item.insumo_id ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'hover:bg-[#EFF2FA]'}`}
+                        style={editingIngredientId === item.insumo_id ? undefined : { color: COLORS.secondary }}>
+                        {editingIngredientId === item.insumo_id ? 'Cancelar' : 'Editar'}
+                      </button>
+                      <button type="button" onClick={() => removeIngredient(item.insumo_id)}
+                        className="text-zinc-300 hover:text-[#C5243E] transition-colors p-1" title="Remover insumo" aria-label={`Remover ${item.insumo_name}`}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </motion.div>
               ))}
