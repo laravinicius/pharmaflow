@@ -1,5 +1,5 @@
 // Camada de serviço — comunicação exclusiva com o processo principal do Electron.
-import type { FormulaPaymentUpdate } from '../types';
+import type { Formula, FormulaPaymentUpdate, SavedFormula } from '../types';
 
 interface AdminCreds { username: string; password: string; }
 type UpdateStatus = 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error';
@@ -14,8 +14,8 @@ declare global {
       listUsers: () => Promise<any[]>; addUser: (u: any, t?: string) => Promise<any>; updateUser: (id: number, u: any, t?: string) => Promise<any>; deleteUser: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
       listCustomers: () => Promise<any[]>; addCustomer: (c: any, t?: string) => Promise<any>; updateCustomer: (id: number, c: any, t?: string) => Promise<any>; deleteCustomer: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
       listInsumos: () => Promise<any[]>; addInsumo: (n: string, t?: string) => Promise<any>; updateInsumo: (id: number, n: string, t?: string) => Promise<any>; deleteInsumo: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
-      listFormulas: () => Promise<any[]>; addFormula: (f: any, t?: string) => Promise<any>; updateFormula: (id: number, f: any, t?: string) => Promise<any>; updateFormulaStatus: (id: number, s: string, t?: string) => Promise<any>; updateFormulaDeliveryStatus: (id: number, s: string, t?: string) => Promise<any>; verifyFormula: (id: number, t?: string) => Promise<any>; updateFormulasDeliveryStatus: (ids: number[], s: string, t?: string) => Promise<any>; deleteFormula: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
-      listSavedFormulas: () => Promise<any[]>; addSavedFormula: (f: any, t?: string) => Promise<any>; updateSavedFormula: (id: number, f: any, t?: string) => Promise<any>; deleteSavedFormula: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
+      listFormulas: () => Promise<Formula[]>; addFormula: (f: any, t?: string) => Promise<any>; updateFormula: (id: number, f: any, t?: string) => Promise<any>; updateFormulaStatus: (id: number, s: string, t?: string) => Promise<any>; updateFormulaDeliveryStatus: (id: number, s: string, t?: string) => Promise<any>; verifyFormula: (id: number, t?: string) => Promise<any>; updateFormulasDeliveryStatus: (ids: number[], s: string, t?: string) => Promise<any>; deleteFormula: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
+      listSavedFormulas: () => Promise<SavedFormula[]>; addSavedFormula: (f: any, t?: string) => Promise<any>; updateSavedFormula: (id: number, f: any, t?: string) => Promise<any>; deleteSavedFormula: (id: number, c?: AdminCreds, t?: string) => Promise<any>;
       listLogs: (filters?: any) => Promise<{ rows: any[]; total: number }>; showMessageBox: (options: { type?: 'none' | 'info' | 'error' | 'question' | 'warning'; title?: string; message: string }) => Promise<any>; openWhatsApp: (url: string) => Promise<any>;
       onDataChanged: (cb: () => void) => () => void; getConfig: () => Promise<any>; saveConfig: (cfg: any) => Promise<any>; testConnection: () => Promise<any>;
       onConfirmExit: (cb: (context: { source: 'window-close' | 'logout' }) => void) => () => void; confirmAppExit: (token?: string) => Promise<void>;

@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext';
 export function SavedFormulaManager() {
   const { data: formulas, loading, error, reload } = useData(() => db.savedFormulas.list());
   const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
-  const { user, sessionToken } = useAuth();
+  const { sessionToken } = useAuth();
   const [name, setName] = useState('');
   const [budgetNumber, setBudgetNumber] = useState('');
   const [items, setItems] = useState<SavedFormulaItem[]>([]);
@@ -446,7 +446,8 @@ export function SavedFormulaManager() {
     return allFormulas
       .filter(f => {
         if (!q) return true;
-        return stripDiacritics((f.name ?? '').toLowerCase()).includes(q);
+        return stripDiacritics((f.name ?? '').toLowerCase()).includes(q)
+          || stripDiacritics((f.created_by_name ?? '').toLowerCase()).includes(q);
       })
       .sort((a, b) => {
         if (q) {
@@ -532,7 +533,7 @@ export function SavedFormulaManager() {
                             {f.items.map(i => `${i.insumo_name} ${formatQuantity(i.quantity)} ${i.unit ?? 'mg'}`).join(', ')}
                           </td>
                           <td className="px-4 py-3 text-zinc-500 text-sm">—</td>
-                          <td className="px-4 py-3 text-zinc-700 text-sm">{user.name}</td>
+                          <td className="px-4 py-3 text-zinc-700 text-sm">{f.created_by_name || 'Não identificado'}</td>
                           <td className="px-4 py-3 text-zinc-500 text-sm">{f.created_at ? new Date(f.created_at).toLocaleString('pt-BR') : '—'}</td>
                           <td className="px-4 py-3 text-right space-x-3">
                             <button onClick={() => startEdit(f)} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>

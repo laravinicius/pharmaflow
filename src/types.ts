@@ -19,6 +19,7 @@ export interface FormulaPaymentUpdate {
   partial_payment_amount: number | null;
 }
 export interface Formula {
+  created_by_name: string | null;
   id: number; customer_id: number; customer_name: string; customer_phone: string; responsible_name?: string | null;
   attendant_name: string; status: 'pending' | 'confirmed' | 'cancelled' | 'delivered';
   created_at: string; items: FormulaItem[]; budget_number?: string; budget_items?: BudgetItem[];
@@ -28,4 +29,4 @@ export interface Formula {
   delivery_status?: string; manager_verified?: boolean | number; cancel_reason?: string | null;
 }
 export interface SavedFormulaItem { insumo_id: number; insumo_name?: string; quantity: number; unit?: string }
-export interface SavedFormula { id: number; name: string; budget_number?: string; created_at?: string; items: SavedFormulaItem[]; budget_items?: BudgetItem[] }
+export interface SavedFormula { id: number; name: string; created_by_name: string | null; budget_number?: string; created_at?: string; items: SavedFormulaItem[]; budget_items?: BudgetItem[] }

@@ -558,6 +558,7 @@ export class Db {
              r.name AS responsible_name,
              COALESCE(f.customer_phone,'') AS customer_phone,
              COALESCE(f.attendant_name,'') AS attendant_name,
+             f.created_by_name,
              COALESCE(f.budget_number,'') AS budget_number,
              f.delivery_date, f.delivered_at, COALESCE(f.payment_status,'') AS payment_status,
              f.partial_payment_amount,
@@ -621,6 +622,10 @@ export class Db {
     status?: string;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
+    if (!sessionToken) throw new Error('Sessão obrigatória para criar a fórmula.');
+    const session = await this.getSessionUser(sessionToken);
+    if (!session.user) throw new Error(session.error ?? 'Sessão inválida ou expirada.');
+    const actor = { id: session.user.id, name: session.user.name };
     const deliveryStatus = formula.status === 'confirmed' ? 'em_producao' : (formula.delivery_status ?? '');
     const conn = await this.pool.getConnection();
     try {
@@ -628,10 +633,10 @@ export class Db {
       const customer = await this.q<any[]>(`SELECT COALESCE(c.phone, r.phone, '') AS phone
         FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
       const customerPhone = customer[0]?.phone ?? '';
-const [r]: any = await conn.query(
-        `INSERT INTO formulas (customer_id, customer_phone, attendant_name, budget_number, delivery_date, delivered_at, payment_status, partial_payment_amount, payment_method, delivery_status, cancel_reason, status)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
+      const [r]: any = await conn.query(
+        `INSERT INTO formulas (customer_id, customer_phone, attendant_name, created_by_name, budget_number, delivery_date, delivered_at, payment_status, partial_payment_amount, payment_method, delivery_status, cancel_reason, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [formula.customer_id, customerPhone, formula.attendant_name, actor.name, formula.budget_number ?? '',
          formula.delivery_date ?? null, deliveryStatus === 'entregue' ? getDeliveryTimestamp() : null, formula.payment_status ?? '',
          formula.payment_status === 'parcial' ? formula.partial_payment_amount ?? null : null,
          formula.payment_method ?? null, deliveryStatus,
@@ -648,7 +653,6 @@ const [r]: any = await conn.query(
           [r.insertId, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
       }
       await conn.commit();
-      const actor = await this.resolveActor(sessionToken);
       await this.logAction(actor, 'add', 'formulas', r.insertId, `Fórmula criada (id ${r.insertId}).`);
       return { success: true, id: r.insertId };
     } catch (e) {
@@ -842,7 +846,7 @@ const [r]: any = await conn.query(
 
   async listSavedFormulas() {
     const formulas = await this.q<any[]>(
-      'SELECT id, name, budget_number, created_at FROM saved_formulas ORDER BY name'
+      'SELECT id, name, created_by_name, budget_number, created_at FROM saved_formulas ORDER BY name'
     );
 
     if (formulas.length === 0) return formulas;
@@ -893,10 +897,14 @@ const [r]: any = await conn.query(
     budget_items: Array<{ quantity: number; unit: string; value: number }>;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
+    if (!sessionToken) return { success: false, error: 'Sessão obrigatória para criar a fórmula salva.' };
+    const session = await this.getSessionUser(sessionToken);
+    if (!session.user) return { success: false, error: session.error ?? 'Sessão inválida ou expirada.' };
+    const actor = { id: session.user.id, name: session.user.name };
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
-      const [r]: any = await conn.query('INSERT INTO saved_formulas (name, budget_number) VALUES (?,?)', [formula.name, formula.budget_number ?? null]);
+      const [r]: any = await conn.query('INSERT INTO saved_formulas (name, budget_number, created_by_name) VALUES (?,?,?)', [formula.name, formula.budget_number ?? null, actor.name]);
       await this.reserveBudgetNumber(conn, formula.budget_number, 'saved_formula', r.insertId);
       for (const item of formula.items) {
         await conn.query('INSERT INTO saved_formula_items (saved_formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
@@ -907,7 +915,6 @@ const [r]: any = await conn.query(
           [r.insertId, b.quantity, b.unit, b.value]);
       }
       await conn.commit();
-      const actor = await this.resolveActor(sessionToken);
       await this.logAction(actor, 'add', 'saved_formulas', r.insertId, `Fórmula salva adicionada: ${formula.name}.`);
       return { success: true, id: r.insertId };
     } catch (e) {

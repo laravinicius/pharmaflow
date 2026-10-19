@@ -410,7 +410,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <h2 className="text-2xl font-bold text-zinc-900">
             {formula ? `Fórmula #${formula.id}` : template ? 'Repetir Fórmula' : 'Nova Fórmula'}
           </h2>
-          <p className="text-zinc-500 text-sm">Funcionário: <strong>{user.name}</strong></p>
+          <p className="text-zinc-500 text-sm">Funcionário: <strong>{formula ? (formula.created_by_name || 'Não identificado') : user.name}</strong></p>
         </div>
         <div className="flex items-center gap-3">
           {formula && !readOnly && (formula.status === 'pending' || (formula.status === 'confirmed' && (formula.delivery_status ?? 'em_producao') === 'em_producao')) && (

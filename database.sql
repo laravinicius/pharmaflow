@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS formulas (
   customer_id     INT NOT NULL,
   customer_phone  VARCHAR(20)  NOT NULL DEFAULT '',
   attendant_name  VARCHAR(255) NOT NULL DEFAULT '',
+  created_by_name VARCHAR(255) NULL COMMENT 'Nome do funcionário no momento da criação',
   budget_number   VARCHAR(6)   NOT NULL DEFAULT '',
   delivery_date   DATE         NULL,
   delivered_at    DATETIME     NULL COMMENT 'Entrega efetiva no fuso America/Sao_Paulo, registrada pelo backend',
@@ -90,6 +91,7 @@ CREATE TABLE IF NOT EXISTS saved_formulas (
   id            INT AUTO_INCREMENT PRIMARY KEY,
   name          VARCHAR(255) NOT NULL UNIQUE,
   budget_number VARCHAR(6)   NULL,
+  created_by_name VARCHAR(255) NULL COMMENT 'Nome do funcionário no momento da criação',
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

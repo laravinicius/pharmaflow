@@ -46,7 +46,7 @@ export function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, showVerification = false, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; showVerification?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
+export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, showVerification = false, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; showVerification?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const { sessionToken, user } = useAuth();
   const canVerify = showVerification && user?.role === 'manager';
@@ -169,7 +169,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       (formula.customer_phone ?? '').replace(/\D/g, ''),
       formula.budget_number,
       formula.attendant_name,
-      employeeName,
+      formula.created_by_name,
       new Date(formula.created_at).toLocaleDateString('pt-BR'),
       formula.delivered_at ? formatDateToBR(formula.delivered_at.slice(0, 10)) : '',
       formula.delivered_at?.slice(0, 10) ?? '',
@@ -219,9 +219,10 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         : (
         f.customer_name.toLowerCase().includes(searchLower) ||
         (f.attendant_name || '').toLowerCase().includes(searchLower) ||
+        (f.created_by_name || '').toLocaleLowerCase('pt-BR').includes(searchLower) ||
         String(f.id).includes(searchLower)
       ));
-  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter, screenKey, employeeName]);
+  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter, screenKey]);
 
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
@@ -367,7 +368,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                         : '—'}
                     </p>
                     <p className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
-                    <p className="text-zinc-700 truncate text-left">{employeeName || '—'}</p>
+                    <p className="text-zinc-700 truncate text-left">{f.created_by_name || 'Não identificado'}</p>
                     <p className="text-zinc-500 text-left">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
                     <p className="text-zinc-500 text-left tabular-nums">{screenKey === 'history'
                       ? f.delivered_at ? formatDateToBR(f.delivered_at.slice(0, 10)) : 'Não registrada'
@@ -478,7 +479,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                   </div>
                   <p className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
-                  <p className="text-zinc-700 truncate text-left">{employeeName || '—'}</p>
+                  <p className="text-zinc-700 truncate text-left">{f.created_by_name || 'Não identificado'}</p>
                   <div className="min-w-0 text-zinc-600 text-left">
                     {f.items.slice(0, 3).map((item, idx) => <p key={idx} className="truncate">{item.insumo_name}</p>)}
                     {f.items.length > 3 && (
