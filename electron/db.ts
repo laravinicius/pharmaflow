@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import mysql from 'mysql2/promise';
 import { formatDbError, isUnsupportedAuthPluginError } from './dbError';
 import { getDeliveryTimestamp } from './deliveryTime';
+import type { FormulaPaymentUpdate } from '../src/types';
 
 interface AdminVerifyResult {
   success: boolean;
@@ -621,9 +622,6 @@ export class Db {
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
     const deliveryStatus = formula.status === 'confirmed' ? 'em_producao' : (formula.delivery_status ?? '');
-    if (deliveryStatus === 'entregue' && formula.payment_status !== 'pago') {
-      throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
-    }
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -686,9 +684,6 @@ const [r]: any = await conn.query(
     const partialPaymentAmount = paymentStatus === 'parcial'
       ? formula.partial_payment_amount ?? current[0]?.partial_payment_amount ?? null
       : null;
-    if (deliveryStatus === 'entregue' && paymentStatus !== 'pago') {
-      throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
-    }
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -739,14 +734,6 @@ const [r]: any = await conn.query(
   }
 
   async updateFormulaDeliveryStatus(id: number, deliveryStatus: string, sessionToken?: string) {
-    if (deliveryStatus === 'entregue') {
-      const rows = await this.q<Array<{ payment_status: string }>>(
-        'SELECT payment_status FROM formulas WHERE id=?', [id]
-      );
-      if (rows[0]?.payment_status !== 'pago') {
-        throw new Error('A fórmula só pode ser entregue quando o pagamento estiver como "Pago".');
-      }
-    }
     await this.q(
       `UPDATE formulas SET ${deliveredAtUpdate}, delivery_status=?, status=CASE WHEN ?='entregue' THEN 'delivered' WHEN status='delivered' THEN 'confirmed' ELSE status END WHERE id=?`,
       [deliveryStatus, getDeliveryTimestamp(), deliveryStatus, deliveryStatus, id]
@@ -754,6 +741,60 @@ const [r]: any = await conn.query(
     const actor = await this.resolveActor(sessionToken);
     await this.logAction(actor, 'update_delivery_status', 'formulas', id, `Andamento da fórmula ${id} alterado para ${deliveryStatus}.`);
     return { success: true };
+  }
+
+  async updateFormulaPayment(id: number, payment: FormulaPaymentUpdate, sessionToken: string) {
+    if (!this.pool) throw new Error('Sem conexão com o servidor');
+    if (!sessionToken) throw new Error('Sessão obrigatória para editar o pagamento.');
+    const session = await this.getSessionUser(sessionToken);
+    if (!session.user) throw new Error(session.error ?? 'Sessão inválida ou expirada.');
+    if (!payment || !['pago', 'parcial', 'pagar_na_retirada'].includes(payment.payment_status)) {
+      throw new Error('Status de pagamento inválido.');
+    }
+    const conn = await this.pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query<mysql.RowDataPacket[]>(
+        'SELECT status, delivery_status, payment_status, partial_payment_amount FROM formulas WHERE id=? FOR UPDATE', [id]
+      );
+      const formula = rows[0];
+      if (!formula) throw new Error('Fórmula não encontrada.');
+      if (formula.status !== 'delivered' || formula.delivery_status !== 'entregue') {
+        throw new Error('Somente fórmulas entregues podem ter o pagamento editado no histórico.');
+      }
+      if (formula.payment_status === 'pago') {
+        throw new Error('O pagamento desta fórmula já está como Pago e não pode ser alterado.');
+      }
+      let partialAmount: number | null = null;
+      if (payment.payment_status === 'parcial') {
+        const [budgets] = await conn.query<mysql.RowDataPacket[]>(
+          'SELECT value FROM formula_budget_items WHERE formula_id=? AND is_selected=1 FOR UPDATE', [id]
+        );
+        if (budgets.length !== 1) throw new Error('Selecione uma única opção de orçamento para validar o limite.');
+        const amount = payment.partial_payment_amount;
+        if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+          throw new Error('Informe uma quantia maior que zero.');
+        }
+        partialAmount = Math.round(amount * 100) / 100;
+        if (Math.abs(amount - partialAmount) > 1e-8 || partialAmount <= 0) {
+          throw new Error('Informe uma quantia válida com até duas casas decimais.');
+        }
+        if (partialAmount > Number(budgets[0].value)) {
+          throw new Error('A quantia paga não pode ser maior que o valor do orçamento selecionado.');
+        }
+      }
+      await conn.query('UPDATE formulas SET payment_status=?, partial_payment_amount=? WHERE id=?',
+        [payment.payment_status, partialAmount, id]);
+      await conn.commit();
+      await this.logAction({ id: session.user.id, name: session.user.name }, 'update', 'formulas', id,
+        `Pagamento da fórmula ${id} alterado de ${formula.payment_status} para ${payment.payment_status}. Quantia parcial: ${formula.partial_payment_amount ?? 'não informada'} → ${partialAmount ?? 'não se aplica'}.`);
+      return { success: true };
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
   }
 
   async verifyFormula(id: number, sessionToken?: string) {
@@ -771,13 +812,6 @@ const [r]: any = await conn.query(
 
   async updateFormulasDeliveryStatus(ids: number[], deliveryStatus: string, sessionToken?: string) {
     if (!ids.length) return { success: true };
-    if (deliveryStatus === 'entregue') {
-      const rows = await this.q<Array<{ id: number; payment_status: string }>>(
-        `SELECT id, payment_status FROM formulas WHERE id IN (${ids.map(() => '?').join(',')})`, ids
-      );
-      const unpaid = rows.filter(row => row.payment_status !== 'pago').map(row => row.id);
-      if (unpaid.length) throw new Error(`A fórmula ${unpaid.join(', ')} só pode ser entregue quando o pagamento estiver como "Pago".`);
-    }
     const actor = await this.resolveActor(sessionToken);
     const deliveredAt = getDeliveryTimestamp();
     for (const id of ids) {

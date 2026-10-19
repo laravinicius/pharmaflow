@@ -49,7 +49,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [locked, setLocked] = useState(formula ? initialLocked : false);
   const [deliveryDateEditing, setDeliveryDateEditing] = useState(false);
   const [deliveryStatus, setDeliveryStatus] = useState('');
-  const [showDeliveryErrorModal, setShowDeliveryErrorModal] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -339,10 +338,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   const handleSaveConfirmed = async () => {
     if (!formula) return;
-    if (deliveryStatus === 'entregue' && paymentStatus !== 'pago') {
-      setShowDeliveryErrorModal(true);
-      return;
-    }
     setSaving(true);
     try {
       await db.formulas.update(formula.id, buildPayload(
@@ -1201,32 +1196,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: GRADIENTS.primary }}>
                 {saving ? 'Cancelando...' : 'Confirmar cancelamento'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showDeliveryErrorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setShowDeliveryErrorModal(false)}
-          onKeyDown={e => { if (e.key === 'Escape') setShowDeliveryErrorModal(false); }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} onKeyDown={handleDialogArrowNavigation} role="dialog" aria-modal="true">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-zinc-900 text-lg">Entrega não permitida</h3>
-                <p className="text-xs text-zinc-500">Pagamento necessário antes da entrega.</p>
-              </div>
-            </div>
-            <p className="text-sm text-zinc-700">A fórmula só pode ser entregue quando o pagamento estiver como <strong>Pago</strong>.</p>
-            <div className="mt-5 flex justify-end">
-              <button type="button" onClick={() => setShowDeliveryErrorModal(false)} autoFocus
-                className="px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-all"
-                style={{ background: GRADIENTS.primary }}>
-                Entendi
               </button>
             </div>
           </div>

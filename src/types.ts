@@ -13,6 +13,11 @@ export interface Customer { id: number; name: string; phone: string | null; resp
 export interface Insumo { id: number; name: string; created_at?: string }
 export interface FormulaItem { insumo_id: number; insumo_name: string; quantity: number; unit?: string }
 export interface BudgetItem { quantity: number; unit: string; value: number; is_selected?: boolean }
+export type PaymentStatus = 'pago' | 'parcial' | 'pagar_na_retirada';
+export interface FormulaPaymentUpdate {
+  payment_status: PaymentStatus;
+  partial_payment_amount: number | null;
+}
 export interface Formula {
   id: number; customer_id: number; customer_name: string; customer_phone: string; responsible_name?: string | null;
   attendant_name: string; status: 'pending' | 'confirmed' | 'cancelled' | 'delivered';

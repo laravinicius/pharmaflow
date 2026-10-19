@@ -1,4 +1,5 @@
 // Camada de serviço — comunicação exclusiva com o processo principal do Electron.
+import type { FormulaPaymentUpdate } from '../types';
 
 interface AdminCreds { username: string; password: string; }
 type UpdateStatus = 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error';
@@ -6,6 +7,7 @@ type UpdateStatus = 'checking' | 'available' | 'downloading' | 'downloaded' | 'n
 declare global {
   interface Window {
     electronAPI: {
+      updateFormulaPayment: (id: number, payment: FormulaPaymentUpdate, sessionToken: string) => Promise<{ success: boolean }>;
       isWindowFullscreen: () => Promise<boolean>; minimizeWindow: () => Promise<void>; leaveWindowFullscreen: () => Promise<void>; closeWindow: () => Promise<void>;
       onWindowFullscreenChanged: (cb: (fullscreen: boolean) => void) => () => void;
       login: (u: string, p: string, force?: boolean) => Promise<any>; logout: (token: string) => Promise<any>; sessionHeartbeat: (token: string) => Promise<any>;
@@ -37,7 +39,7 @@ export const db = {
   users: { list: () => electron().listUsers(), add: (u: any, t?: string) => electron().addUser(u, t), update: (id: number, u: any, t?: string) => electron().updateUser(id, u, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteUser(id, c, t) },
   customers: { list: () => electron().listCustomers(), add: (c: any, t?: string) => electron().addCustomer(c, t), update: (id: number, c: any, t?: string) => electron().updateCustomer(id, c, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteCustomer(id, c, t) },
   insumos: { list: () => electron().listInsumos(), add: (n: string, t?: string) => electron().addInsumo(n, t), update: (id: number, n: string, t?: string) => electron().updateInsumo(id, n, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteInsumo(id, c, t) },
-  formulas: { list: () => electron().listFormulas(), add: (f: any, t?: string) => electron().addFormula(f, t), update: (id: number, f: any, t?: string) => electron().updateFormula(id, f, t), updateStatus: (id: number, s: string, t?: string) => electron().updateFormulaStatus(id, s, t), updateDeliveryStatus: (id: number, s: string, t?: string) => electron().updateFormulaDeliveryStatus(id, s, t), verify: (id: number, t?: string) => electron().verifyFormula(id, t), updateDeliveriesStatus: (ids: number[], s: string, t?: string) => electron().updateFormulasDeliveryStatus(ids, s, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteFormula(id, c, t) },
+  formulas: { updatePayment: (id: number, payment: FormulaPaymentUpdate, sessionToken: string) => electron().updateFormulaPayment(id, payment, sessionToken), list: () => electron().listFormulas(), add: (f: any, t?: string) => electron().addFormula(f, t), update: (id: number, f: any, t?: string) => electron().updateFormula(id, f, t), updateStatus: (id: number, s: string, t?: string) => electron().updateFormulaStatus(id, s, t), updateDeliveryStatus: (id: number, s: string, t?: string) => electron().updateFormulaDeliveryStatus(id, s, t), verify: (id: number, t?: string) => electron().verifyFormula(id, t), updateDeliveriesStatus: (ids: number[], s: string, t?: string) => electron().updateFormulasDeliveryStatus(ids, s, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteFormula(id, c, t) },
   savedFormulas: { list: () => electron().listSavedFormulas(), add: (f: any, t?: string) => electron().addSavedFormula(f, t), update: (id: number, f: any, t?: string) => electron().updateSavedFormula(id, f, t), remove: (id: number, c?: AdminCreds, t?: string) => electron().deleteSavedFormula(id, c, t) },
   logs: { list: (filters?: any) => electron().listLogs(filters) },
   data: { onChanged: (cb: () => void) => electron().onDataChanged(cb) },

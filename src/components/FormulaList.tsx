@@ -8,6 +8,7 @@ import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { ConfirmModal } from './ConfirmModal';
+import { HistoryPaymentModal } from './HistoryPaymentModal';
 import { GRADIENTS } from '../../config/branding';
 
 const WHATSAPP_MESSAGE = `Olá!
@@ -45,7 +46,7 @@ export function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, showVerification = false, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onDeliveryBlocked, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; showVerification?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onDeliveryBlocked?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
+export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', employeeName, statusFilterOptions, showAndamento = true, showVerification = false, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; employeeName?: string; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; showVerification?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const { sessionToken, user } = useAuth();
   const canVerify = showVerification && user?.role === 'manager';
@@ -57,6 +58,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const [pendingDeliveryConfirmation, setPendingDeliveryConfirmation] = useState<{ formula: Formula; deliveryStatus: 'aguardando_retirada' | 'entregue' } | null>(null);
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState<number | null>(null);
   const [verifyingId, setVerifyingId] = useState<number | null>(null);
+  const [editingPayment, setEditingPayment] = useState<Formula | null>(null);
   const now = new Date();
   const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
   const [summaryYear, setSummaryYear] = useState(now.getFullYear());
@@ -110,10 +112,6 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       return;
     }
     if (deliveryStatusFilter !== 'aguardando_retirada') return;
-    if (formula.payment_status !== 'pago') {
-      onDeliveryBlocked?.(formula, ['Status de pagamento: Pago']);
-      return;
-    }
     setPendingDeliveryConfirmation({ formula, deliveryStatus: 'entregue' });
   };
 
@@ -334,6 +332,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   tabIndex={0}
                   role="button"
                   onKeyDown={e => {
+                    if (e.target !== e.currentTarget) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       onSelect?.(f);
@@ -373,12 +372,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                     <p className="text-zinc-500 text-left tabular-nums">{screenKey === 'history'
                       ? f.delivered_at ? formatDateToBR(f.delivered_at.slice(0, 10)) : 'Não registrada'
                       : f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
-                    <div className="flex justify-start" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-start" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                       <button
                         type="button"
-                        disabled
+                        disabled={screenKey !== 'history' || f.payment_status === 'pago'}
                         aria-label={`Status de pagamento: ${paymentLabels[f.payment_status ?? ''] ?? 'Não informado'}`}
-                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap cursor-default ${paymentTint[f.payment_status ?? ''] ?? 'bg-zinc-50 border-zinc-200'} ${paymentText[f.payment_status ?? ''] ?? 'text-zinc-500'}`}
+                        title={screenKey === 'history' && f.payment_status !== 'pago' ? 'Editar pagamento' : undefined}
+                        onClick={() => setEditingPayment(f)}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap cursor-pointer disabled:cursor-default enabled:hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#243465] ${paymentTint[f.payment_status ?? ''] ?? 'bg-zinc-50 border-zinc-200'} ${paymentText[f.payment_status ?? ''] ?? 'text-zinc-500'}`}
                       >
                         {paymentLabels[f.payment_status ?? ''] ?? 'Não informado'}
                       </button>
@@ -512,6 +513,11 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         </div>
       )}
     </motion.div>
+    {editingPayment && (
+      <HistoryPaymentModal formula={editingPayment} sessionToken={sessionToken}
+        onClose={() => setEditingPayment(null)}
+        onSaved={() => { setEditingPayment(null); void reload(true).catch(() => {}); }} />
+    )}
     <ConfirmModal
       isOpen={!!pendingDeliveryConfirmation}
       title={pendingDeliveryConfirmation?.deliveryStatus === 'entregue' ? 'Confirmar entrega' : 'Aguardando retirada'}
