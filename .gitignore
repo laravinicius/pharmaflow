@@ -45,6 +45,9 @@ att.txt
 db.txt
 info.txt
 
+# Scripts SQL pontuais para execução manual
+/scripts/sql/
+
 .plans
 migrations/
 
