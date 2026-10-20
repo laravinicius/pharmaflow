@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { RefreshCw, Search, X, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
@@ -50,6 +50,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const { sessionToken, user } = useAuth();
   const canVerify = showVerification && user?.role === 'manager';
+  const isHistory = screenKey === 'history';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [focusedIdx, setFocusedIdx] = useState(-1);
@@ -250,10 +251,11 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     : deliveryStatusFilter === 'aguardando_retirada'
       ? 'Entregue'
       : null;
+  const confirmedGridCols = canVerify
+    ? 'minmax(0,2fr) repeat(4,minmax(0,1fr)) repeat(2,minmax(0,1.2fr)) minmax(6rem,1.2fr) minmax(6rem,1fr) minmax(0,1.2fr) minmax(0,1.25fr) minmax(0,1.6fr) minmax(0,2.5fr)'
+    : 'minmax(0,2fr) repeat(4,minmax(0,1fr)) repeat(2,minmax(0,1.2fr)) minmax(6rem,1.2fr) minmax(6rem,1fr) minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,2.5fr)';
   const gridCols = variant === 'confirmed'
-      ? canVerify
-        ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(6rem,1.2fr)_minmax(6rem,1fr)_minmax(0,1.2fr)_minmax(0,1.25fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
-        : 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(6rem,1.2fr)_minmax(6rem,1fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,2.5fr)]'
+      ? isHistory ? '' : 'md:[grid-template-columns:var(--formula-columns)]'
     : showAndamento
       ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.6fr)]'
       : showRepeat
@@ -264,13 +266,15 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
 
   return (
     <>
-    <motion.div key={screenKey} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <motion.div key={screenKey} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+      style={{ '--formula-columns': confirmedGridCols } as CSSProperties}
+      className={`space-y-6 ${isHistory ? 'formula-history' : ''}`}>
+      <div className="formula-list-toolbar flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">{title}</h2>
           <p className="text-zinc-500 text-sm">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="formula-list-tools flex items-center gap-3">
           <button onClick={reload} className="p-2 text-zinc-400 hover:text-zinc-700 transition-colors" title="Atualizar"><RefreshCw className="w-5 h-5" /></button>
           {statusFilterOptions && (
             <select className="px-3 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm"
@@ -279,7 +283,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
               {statusFilterOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           )}
-          <div className="relative">
+          <div className="formula-list-search relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
             <input className="pl-9 pr-9 py-2 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-sm min-w-[260px]"
               value={search} onChange={e => setSearch(e.target.value)} />
@@ -294,7 +298,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       </div>
 
       {monthlySummary && (
-        <div className="flex flex-col md:flex-row md:items-center gap-3 px-4 py-3 text-zinc-700">
+        <div className="flex flex-col md:flex-row flex-wrap md:items-center gap-3 px-4 py-3 text-zinc-700">
           <span className="font-semibold">Valor total de fórmulas no mês</span>
           <select value={summaryMonth} onChange={e => setSummaryMonth(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none">
             {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((month, index) => <option key={month} value={index}>{month}</option>)}
@@ -312,7 +316,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       {!loading && !error && (
         <div className="space-y-3">
           {filtered.length > 0 && variant === 'confirmed' && (
-            <div className={`hidden md:grid ${gridCols} ${columnGap} mx-px px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
+            <div className={`${isHistory ? 'formula-history-header' : 'hidden md:grid'} ${gridCols} ${columnGap} mx-px px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 [&>span]:min-w-0`}>
               <span className="text-left">Cliente</span><span className="text-right">Orçamento</span><span className="text-right">Quantidade</span><span className="text-right">Valor</span><span className="text-right">Restante</span><span className="text-left">Atendente</span><span className="text-left">Funcionário</span>
               <span className="text-left">Data criação</span><span className="text-left">{screenKey === 'history' ? 'Data de entrega' : 'Previsão de entrega'}</span><span className="text-left">Pagamento</span>{canVerify && <span className="text-left">Verificação</span>}<span className="text-right">Whatsapp</span><span />
             </div>
@@ -347,33 +351,33 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   }}
                   onFocus={() => setFocusedIdx(idx)}
                   onBlur={() => setFocusedIdx(-1)}
-                  className={`w-full text-left rounded-2xl border shadow-sm px-4 py-4 hover:shadow-md transition-all group cursor-pointer ${cardTint} focus:outline-none`}>
-                  <div className={`grid grid-cols-1 ${gridCols} ${columnGap} items-center text-sm [&>*]:min-w-0`}>
-                    <div className="min-w-0 text-left">
+                  className={`w-full min-w-0 text-left rounded-2xl border shadow-sm px-4 py-4 hover:shadow-md transition-all group cursor-pointer ${cardTint} focus:outline-none`}>
+                  <div className={`grid grid-cols-1 ${gridCols} ${columnGap} items-center text-sm [&>*]:min-w-0 ${isHistory ? 'formula-history-row' : ''}`}>
+                    <div data-label="Cliente" className="min-w-0 text-left">
                       <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
                       {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.responsible_name ? `${f.responsible_name} - ${f.customer_phone}` : f.customer_phone}</p>}
                     </div>
-                    <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
-                    <div className="text-zinc-700 space-y-1 font-medium text-right">
+                    <p data-label="Orçamento" className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
+                    <div data-label="Quantidade" className="text-zinc-700 space-y-1 font-medium text-right">
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx} className="whitespace-nowrap">{formatQuantity(bi.quantity)} {formatUnit(bi.unit)}</p>)}
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                     </div>
-                    <div className="text-zinc-700 space-y-1 tabular-nums text-right">
+                    <div data-label="Valor" className="text-zinc-700 space-y-1 tabular-nums text-right">
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).map((bi, idx) => <p key={idx}>R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>)}
                       {(f.budget_items ?? []).filter(bi => bi.is_selected).length === 0 && <p className="text-zinc-400">—</p>}
                     </div>
-                    <p className="text-zinc-700 tabular-nums text-right whitespace-nowrap">
+                    <p data-label="Restante" className="text-zinc-700 tabular-nums text-right whitespace-nowrap">
                       {f.payment_status === 'parcial' && f.partial_payment_amount != null && (f.budget_items ?? []).some(bi => bi.is_selected)
                         ? `R$ ${Math.max(0, Number((f.budget_items ?? []).find(bi => bi.is_selected)!.value) - Number(f.partial_payment_amount)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         : '—'}
                     </p>
-                    <p className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
-                    <p className="text-zinc-700 truncate text-left">{f.created_by_name || 'Não identificado'}</p>
-                    <p className="text-zinc-500 text-left">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
-                    <p className="text-zinc-500 text-left tabular-nums">{screenKey === 'history'
+                    <p data-label="Atendente" className="text-zinc-700 truncate text-left">{f.attendant_name || '—'}</p>
+                    <p data-label="Funcionário" className="text-zinc-700 truncate text-left">{f.created_by_name || 'Não identificado'}</p>
+                    <p data-label="Data criação" className="text-zinc-500 text-left">{new Date(f.created_at).toLocaleDateString('pt-BR')}</p>
+                    <p data-label={isHistory ? 'Data de entrega' : 'Previsão de entrega'} className="text-zinc-500 text-left tabular-nums">{screenKey === 'history'
                       ? f.delivered_at ? formatDateToBR(f.delivered_at.slice(0, 10)) : 'Não registrada'
                       : f.delivery_date ? formatDateToBR(f.delivery_date) : '—'}</p>
-                    <div className="flex justify-start" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+                    <div data-label="Pagamento" className="flex justify-start" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                       <button
                         type="button"
                         disabled={screenKey !== 'history' || f.payment_status === 'pago'}
@@ -386,7 +390,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       </button>
                     </div>
                     {canVerify && (
-                      <div className="flex justify-start" onClick={e => e.stopPropagation()}>
+                      <div data-label="Verificação" className="flex justify-start" onClick={e => e.stopPropagation()}>
                         <button
                           type="button"
                           disabled={!!f.manager_verified || verifyingId === f.id}
@@ -398,7 +402,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                         </button>
                       </div>
                     )}
-                    <div className="flex justify-end">
+                    <div data-label="WhatsApp" className="flex justify-end">
                       {(() => {
                         const whatsappUrl = getWhatsAppUrl(f.customer_phone);
                         return (
@@ -420,7 +424,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                         );
                       })()}
                     </div>
-                    <div className="flex justify-end items-center gap-2">
+                    <div data-label="Ações" className="flex justify-end items-center gap-2">
                       {deliveryActionLabel && (
                         <button
                           type="button"

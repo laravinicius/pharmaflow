@@ -34,6 +34,95 @@ body {
   overflow: hidden;
 }
 
+/* O Histórico acompanha a largura útil e a escala de fonte da aplicação. */
+.formula-history {
+  container: formula-history / inline-size;
+}
+
+.formula-history-header {
+  display: none;
+}
+
+.formula-history-row > *,
+.formula-history-row > * > p,
+.formula-history-header > span {
+  overflow-wrap: anywhere;
+}
+
+.formula-history-row > [data-label="Quantidade"] > p,
+.formula-history-row > [data-label="Restante"] {
+  white-space: normal;
+}
+
+.formula-history-row button {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.formula-history-row button > svg,
+.formula-history-row > [data-label="Ações"] > div {
+  flex-shrink: 0;
+}
+
+.formula-history-row > [data-label="Ações"] {
+  flex-wrap: wrap;
+}
+
+@container formula-history (width < 64rem) {
+  .formula-list-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .formula-list-tools,
+  .formula-list-search {
+    min-width: 0;
+  }
+
+  .formula-list-search {
+    flex: 1;
+  }
+
+  .formula-list-search input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .formula-history-row > [data-label] {
+    display: block;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .formula-history-row > [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    color: #71717a;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .formula-history-row > [data-label="Ações"] {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .formula-history-row > [data-label="Ações"]::before {
+    flex-basis: 100%;
+  }
+}
+
+@container formula-history (width >= 64rem) {
+  .formula-history-header,
+  .formula-history-row {
+    display: grid;
+    grid-template-columns: var(--formula-columns);
+  }
+}
+
 /* Titlebar drag region */
 .titlebar {
   position: fixed;
