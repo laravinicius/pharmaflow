@@ -63,6 +63,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const now = new Date();
   const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
   const [summaryYear, setSummaryYear] = useState(now.getFullYear());
+  const [summaryPaymentStatus, setSummaryPaymentStatus] = useState('pago');
 
   const handleConfirm = async (f: Formula) => {
     const reasons = getMissingReasons(f);
@@ -201,14 +202,19 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   }, [all]);
 
   const monthlyTotal = useMemo(() => all
-    .filter(formula => formula.payment_status === 'pago' && formula.delivery_status === 'entregue')
+    .filter(formula => formula.delivery_status === 'entregue')
+    .filter(formula => summaryPaymentStatus === 'nao_pago'
+      ? !formula.payment_status || formula.payment_status === 'nao_pago'
+      : formula.payment_status === summaryPaymentStatus)
     .filter(formula => {
       const date = formula.delivered_at ?? '';
       return Number(date.slice(0, 4)) === summaryYear && Number(date.slice(5, 7)) === summaryMonth + 1;
     })
-    .reduce((total, formula) => total + (formula.budget_items ?? [])
+    .reduce((total, formula) => total + (summaryPaymentStatus === 'parcial'
+      ? Number(formula.partial_payment_amount || 0)
+      : (formula.budget_items ?? [])
       .filter(item => item.is_selected)
-      .reduce((formulaTotal, item) => formulaTotal + Number(item.value || 0), 0), 0), [all, summaryMonth, summaryYear]);
+      .reduce((formulaTotal, item) => formulaTotal + Number(item.value || 0), 0)), 0), [all, summaryMonth, summaryYear, summaryPaymentStatus]);
 
   const filtered = useMemo(() => {
     return all
@@ -298,13 +304,19 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       </div>
 
       {monthlySummary && (
-        <div className="flex flex-col md:flex-row flex-wrap md:items-center gap-3 px-4 py-3 text-zinc-700">
-          <span className="font-semibold">Valor total de fórmulas no mês</span>
-          <select value={summaryMonth} onChange={e => setSummaryMonth(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 text-zinc-700">
+          <label htmlFor="summary-payment-status" className="font-semibold">Valor total de fórmulas</label>
+          <select id="summary-payment-status" value={summaryPaymentStatus} onChange={e => setSummaryPaymentStatus(e.target.value)} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
+            <option value="pago">pagas</option>
+            <option value="nao_pago">não pagas</option>
+            <option value="pagar_na_retirada">na retirada</option>
+            <option value="parcial">parciais</option>
+          </select>
+          <label htmlFor="summary-month" className="font-semibold">no Mês</label>
+          <select id="summary-month" aria-label="Mês do resumo" value={summaryMonth} onChange={e => setSummaryMonth(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
             {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((month, index) => <option key={month} value={index}>{month}</option>)}
           </select>
-          <span className="font-semibold">/</span>
-          <select value={summaryYear} onChange={e => setSummaryYear(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none">
+          <select aria-label="Ano do resumo" value={summaryYear} onChange={e => setSummaryYear(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
             {summaryYears.map(year => <option key={year} value={year}>{year}</option>)}
           </select>
           <span className="font-bold md:ml-1">{monthlyTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
