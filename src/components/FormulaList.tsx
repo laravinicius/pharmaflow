@@ -59,6 +59,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const [pendingDeliveryConfirmation, setPendingDeliveryConfirmation] = useState<{ formula: Formula; deliveryStatus: 'aguardando_retirada' | 'entregue' } | null>(null);
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState<number | null>(null);
   const [verifyingId, setVerifyingId] = useState<number | null>(null);
+  const [pendingUnverification, setPendingUnverification] = useState<Formula | null>(null);
   const [editingPayment, setEditingPayment] = useState<Formula | null>(null);
   const now = new Date();
   const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
@@ -95,14 +96,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     }
   };
 
-  const verifyFormula = async (formula: Formula) => {
-    if (!sessionToken || formula.manager_verified || verifyingId === formula.id) return;
+  const verifyFormula = async (formula: Formula, verified = true) => {
+    if (!sessionToken || verifyingId !== null) return;
     setVerifyingId(formula.id);
     try {
-      await db.formulas.verify(formula.id, sessionToken);
+      await db.formulas.verify(formula.id, sessionToken, verified);
       await reload();
     } catch (err: any) {
-      alert('Erro ao verificar fórmula: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
+      alert(`Erro ao ${verified ? 'verificar' : 'desverificar'} fórmula: ` + (err?.message ?? 'verifique a conexão com o servidor.'));
     } finally {
       setVerifyingId(null);
     }
@@ -402,13 +403,13 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                       </button>
                     </div>
                     {canVerify && (
-                      <div data-label="Verificação" className="flex justify-start" onClick={e => e.stopPropagation()}>
+                      <div data-label="Verificação" className="flex justify-start" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                         <button
                           type="button"
-                          disabled={!!f.manager_verified || verifyingId === f.id}
-                          aria-label={f.manager_verified ? 'Fórmula verificada' : `Verificar fórmula de ${f.customer_name}`}
-                          onClick={() => void verifyFormula(f)}
-                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors disabled:cursor-default ${f.manager_verified ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60'}`}
+                          disabled={verifyingId !== null || pendingUnverification !== null}
+                          aria-label={`${f.manager_verified ? 'Desverificar' : 'Verificar'} fórmula de ${f.customer_name}`}
+                          onClick={() => { if (f.manager_verified) setPendingUnverification(f); else void verifyFormula(f); }}
+                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors cursor-pointer disabled:cursor-default disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#243465] ${f.manager_verified ? 'border-emerald-200 bg-emerald-50 text-emerald-700 enabled:hover:bg-emerald-100' : 'border-red-200 bg-red-50 text-red-700 enabled:hover:bg-red-100'}`}
                         >
                           {verifyingId === f.id ? 'Salvando...' : f.manager_verified ? 'Verificado' : 'Verificar'}
                         </button>
@@ -535,6 +536,19 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         onClose={() => setEditingPayment(null)}
         onSaved={() => { setEditingPayment(null); void reload(true).catch(() => {}); }} />
     )}
+    <ConfirmModal
+      isOpen={!!pendingUnverification}
+      title="Desverificar fórmula"
+      message={`Deseja remover a verificação da fórmula de ${pendingUnverification?.customer_name}?`}
+      confirmLabel="Sim"
+      cancelLabel="Não"
+      onConfirm={() => {
+        const formula = pendingUnverification;
+        setPendingUnverification(null);
+        if (formula) void verifyFormula(formula, false);
+      }}
+      onClose={() => setPendingUnverification(null)}
+    />
     <ConfirmModal
       isOpen={!!pendingDeliveryConfirmation}
       title={pendingDeliveryConfirmation?.deliveryStatus === 'entregue' ? 'Confirmar entrega' : 'Aguardando retirada'}

@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateFormula:        (id: number, f: any, sessionToken?: string)      => ipcRenderer.invoke('formulas:update', id, f, sessionToken),
   updateFormulaStatus:  (id: number, s: string, sessionToken?: string)   => ipcRenderer.invoke('formulas:update-status', id, s, sessionToken),
   updateFormulaDeliveryStatus: (id: number, s: string, sessionToken?: string) => ipcRenderer.invoke('formulas:update-delivery-status', id, s, sessionToken),
-  verifyFormula: (id: number, sessionToken?: string) => ipcRenderer.invoke('formulas:verify', id, sessionToken),
+  verifyFormula: (id: number, sessionToken?: string, verified: boolean = true) => ipcRenderer.invoke('formulas:verify', id, sessionToken, verified),
   updateFormulaPayment: (id: number, payment: import('../src/types').FormulaPaymentUpdate, sessionToken: string) => ipcRenderer.invoke('formulas:update-payment', id, payment, sessionToken),
   updateFormulasDeliveryStatus: (ids: number[], s: string, sessionToken?: string) => ipcRenderer.invoke('formulas:update-delivery-status-batch', ids, s, sessionToken),
   deleteFormula:        (id: number, adminCreds?: { username: string; password: string }, sessionToken?: string) => ipcRenderer.invoke('formulas:delete', id, adminCreds, sessionToken),

@@ -801,16 +801,18 @@ export class Db {
     }
   }
 
-  async verifyFormula(id: number, sessionToken?: string) {
+  async verifyFormula(id: number, sessionToken?: string, verified: boolean = true) {
     if (!sessionToken) throw new Error('Sessão de Gerente obrigatória.');
     const session = await this.getSessionUser(sessionToken);
     if (session.user?.role !== 'manager') throw new Error('Apenas o perfil Gerente pode verificar fórmulas.');
-    const result: any = await this.q('UPDATE formulas SET manager_verified=1 WHERE id=?', [id]);
+    if (typeof verified !== 'boolean') throw new Error('Estado de verificação inválido.');
+    const result: any = await this.q('UPDATE formulas SET manager_verified=? WHERE id=?', [verified ? 1 : 0, id]);
     if (!result?.affectedRows) {
       const existing = await this.q<any[]>('SELECT id FROM formulas WHERE id=?', [id]);
       if (!existing.length) throw new Error('Fórmula não encontrada.');
     }
-    await this.logAction({ id: session.user.id, name: session.user.name }, 'verify', 'formulas', id, `Fórmula ${id} marcada como verificada no Histórico.`);
+    await this.logAction({ id: session.user.id, name: session.user.name }, verified ? 'verify' : 'unverify', 'formulas', id,
+      verified ? `Fórmula ${id} marcada como verificada no Histórico.` : `Verificação da fórmula ${id} removida no Histórico.`);
     return { success: true };
   }
 
