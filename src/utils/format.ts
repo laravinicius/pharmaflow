@@ -111,17 +111,22 @@ export function formatQuantity(value: number | string): string {
     : n.toLocaleString('pt-BR');
 }
 
-// Máscara de quantidade ao digitar: aceita até 6 dígitos, insere separador de milhar (.)
-// ex.: "123456" → "123.456", "1234" → "1.234", "12" → "12"
-export function formatQuantityInput(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 6);
-  if (!digits) return '';
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+// Máscara de quantidade: milhar com ponto e até 3 casas decimais com vírgula.
+// Preserva a vírgula e os zeros decimais durante a digitação (ex.: "2," e "0,050").
+export function formatQuantityInput(value: string, integerDigits = 6): string {
+  const commaIndex = value.indexOf(',');
+  const integerPart = commaIndex >= 0 ? value.slice(0, commaIndex) : value;
+  const digits = integerPart.replace(/\D/g, '').slice(0, integerDigits);
+  if (!digits && commaIndex < 0) return '';
+  const integer = (digits || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  if (commaIndex < 0) return integer;
+  const decimals = value.slice(commaIndex + 1).replace(/\D/g, '').slice(0, 3);
+  return `${integer},${decimals}`;
 }
 
-// Converte quantidade com máscara de volta para número
-// ex.: "123.456" → 123456, "1.234" → 1234
+// Converte quantidade brasileira para número (ex.: "1.234,5" → 1234.5).
 export function parseQuantity(value: string): number {
-  const digits = value.replace(/\D/g, '');
-  return digits ? Number(digits) : 0;
+  const normalized = value.replace(/\./g, '').replace(',', '.');
+  const quantity = Number(normalized);
+  return Number.isFinite(quantity) ? quantity : 0;
 }

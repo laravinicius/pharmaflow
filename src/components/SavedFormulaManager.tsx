@@ -171,7 +171,9 @@ export function SavedFormulaManager() {
 
   const addBudgetItem = () => {
     if (!bQty || !bValue) return;
-    const next = [...budgetItems, { quantity: parseQuantity(bQty), unit: bUnit, value: parseCurrency(bValue) }];
+    const parsedQuantity = parseQuantity(bQty);
+    if (parsedQuantity <= 0) { setFormError('Informe uma quantidade maior que zero.'); return; }
+    const next = [...budgetItems, { quantity: parsedQuantity, unit: bUnit, value: parseCurrency(bValue) }];
     setBudgetItems(next);
     setBQty('');
     setBValue('');
@@ -286,7 +288,7 @@ export function SavedFormulaManager() {
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="sm:w-28">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
-            <input ref={bQtyRef} inputMode="numeric" maxLength={8}
+            <input ref={bQtyRef} inputMode="decimal" maxLength={11}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
               value={bQty}
               onChange={e => { setFormError(''); setBQty(formatQuantityInput(e.target.value)); }} />
@@ -447,7 +449,7 @@ export function SavedFormulaManager() {
           <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-end">
             <div className="sm:w-32">
               <label htmlFor="saved-ingredient-quantity" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
-              <input id="saved-ingredient-quantity" ref={quantityRef} inputMode="numeric" maxLength={8} required disabled={saving}
+              <input id="saved-ingredient-quantity" ref={quantityRef} inputMode="decimal" maxLength={11} required disabled={saving}
                 className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right"
                 value={quantity}
                 onChange={e => { setQuantity(formatQuantityInput(e.target.value)); setFormError(''); }} />

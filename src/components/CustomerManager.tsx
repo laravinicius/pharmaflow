@@ -22,6 +22,8 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [rowDraft, setRowDraft] = useState({ name: '', phone: '' });
+  const [rowError, setRowError] = useState('');
+  const rowSavingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
@@ -129,19 +131,29 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
   };
 
   const handleRowSave = async () => {
-    if (editingRow === null) return;
+    if (editingRow === null || rowSavingRef.current) return;
+    setSuccess(null);
     const rowCustomer = available.find(c => c.id === editingRow);
-    if (!rowCustomer?.responsible_id && !isValidPhone(rowDraft.phone)) { setFormError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
-    const formatted = formatPhone(rowDraft.phone);
-    setSaving(true); setFormError('');
+    if (!rowCustomer) { setRowError('Cliente não encontrado. Atualize a lista e tente novamente.'); return; }
+    if (!rowDraft.name.trim()) { setRowError('Informe o nome do cliente.'); return; }
+    if (!rowCustomer.responsible_id && !isValidPhone(rowDraft.phone)) { setRowError('Informe o celular completo, com DDD e 9 dígitos.'); return; }
+    const formatted = rowCustomer.responsible_id ? '' : formatPhone(rowDraft.phone);
+    rowSavingRef.current = true;
+    setSaving(true); setRowError('');
     try {
-      const res: any = await db.customers.update(editingRow, { name: rowDraft.name, phone: rowCustomer?.responsible_id ? '' : formatted }, sessionToken ?? undefined);
-      if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
+      const res: any = await db.customers.update(editingRow, { name: rowDraft.name.trim(), phone: formatted }, sessionToken ?? undefined);
+      if (res?.success !== true) { setRowError(res?.error ?? 'Não foi possível confirmar o salvamento. Tente novamente.'); return; }
+      try {
+        await reload(true);
+      } catch {
+        setRowError('Dados salvos, mas não foi possível atualizar a lista. Tente novamente.');
+        return;
+      }
       setEditingRow(null); setRowDraft({ name: '', phone: '' });
-      reload();
+      setSuccess('Cliente atualizado com sucesso!');
     } catch (err: any) {
-      setFormError(err.message ?? 'Erro ao salvar.');
-    } finally { setSaving(false); }
+      setRowError(err.message ?? 'Erro ao salvar.');
+    } finally { rowSavingRef.current = false; setSaving(false); }
   };
 
   const available = (customers as Customer[]) ?? [];
@@ -257,9 +269,10 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
           <div className="p-6 space-y-6">{formBlock}</div>
         ) : (
           <div className="p-6 space-y-6">
+            {success && <p role="status" className="flex items-center gap-1.5 text-sm font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2"><CheckCircle className="w-4 h-4 shrink-0" />{success}</p>}
             {loading && <LoadingState />}
             {error && <ErrorState message={error} onRetry={reload} />}
-            {!loading && !error && (
+            {!loading && (!error || available.length > 0) && (
               <div className="space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center gap-3">
                   <div className="relative flex-1">
@@ -297,8 +310,8 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
                           <td className="px-4 py-3 font-medium text-zinc-900">
                             {editingRow === c.id ? (
                               <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                                value={rowDraft.name} onChange={e => setRowDraft(d => ({ ...d, name: e.target.value.toUpperCase() }))}
-                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />
+                                disabled={saving} aria-label="Nome do cliente" value={rowDraft.name} onChange={e => setRowDraft(d => ({ ...d, name: e.target.value.toUpperCase() }))}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape' && !saving) { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setRowError(''); } }} />
                             ) : (
                               <HighlightMatch text={c.name} query={search} />
                             )}
@@ -308,9 +321,8 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
                               <div>
                                 {c.responsible_id ? <span className="text-sm text-zinc-500">{c.responsible_phone ?? ''}</span> : <input inputMode="numeric" maxLength={15}
                                   className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                                  value={rowDraft.phone} onChange={e => setRowDraft(d => ({ ...d, phone: formatPhone(e.target.value) }))}
-                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape') { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); } }} />}
-                                {formError && <p className="text-xs text-red-600 font-medium mt-1">{formError}</p>}
+                                  disabled={saving} aria-label="Celular do cliente" value={rowDraft.phone} onChange={e => setRowDraft(d => ({ ...d, phone: formatPhone(e.target.value) }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape' && !saving) { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setRowError(''); } }} />}
                               </div>
                             ) : (
                               <HighlightMatch text={c.phone ?? ''} query={search} />
@@ -321,14 +333,15 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
                           <td className="px-4 py-3 text-right space-x-3">
                             {editingRow === c.id ? (
                               <>
-                                <button onClick={handleRowSave} disabled={saving} className="text-zinc-400 hover:text-green-700 text-sm font-medium transition-colors disabled:opacity-50">
-                                  {saving ? '...' : 'Salvar'}
+                                <button type="button" onClick={handleRowSave} disabled={saving} className="text-zinc-400 hover:text-green-700 text-sm font-medium transition-colors disabled:opacity-50">
+                                  {saving ? 'Salvando...' : 'Salvar'}
                                 </button>
-                                <button onClick={() => { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setFormError(''); }} className="text-zinc-400 hover:text-red-600 text-sm transition-colors">Cancelar</button>
+                                <button type="button" disabled={saving} onClick={() => { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setRowError(''); }} className="text-zinc-400 hover:text-red-600 text-sm transition-colors">Cancelar</button>
+                                {rowError && <p role="alert" className="mt-2 text-xs font-medium text-[#C5243E] whitespace-normal">{rowError}</p>}
                               </>
                             ) : (
                               <>
-                                <button onClick={() => { setRowDraft({ name: c.name, phone: c.phone }); setEditingRow(c.id); setFormError(''); }} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
+                                <button type="button" disabled={saving} onClick={() => { setRowDraft({ name: c.name, phone: c.phone ?? '' }); setEditingRow(c.id); setRowError(''); setSuccess(null); }} className="text-zinc-400 hover:text-blue-700 text-sm transition-colors">Editar</button>
                                 <button onClick={() => handleDelete(c.id)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                               </>
                             )}

@@ -19,6 +19,12 @@ interface SessionUserResult {
 
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 
+const validateSelectedBudget = (budgetItems?: Array<{ is_selected?: number }>) => {
+  if (!Array.isArray(budgetItems) || budgetItems.filter(item => item?.is_selected).length !== 1) {
+    throw new Error('Selecione uma única opção de orçamento para salvar a fórmula.');
+  }
+};
+
 // Avaliar antes de atribuir delivery_status preserva a data apenas da mesma entrega.
 const deliveredAtUpdate = `delivered_at=CASE WHEN ?='entregue'
   THEN CASE WHEN delivery_status='entregue' THEN delivered_at ELSE ? END
@@ -443,6 +449,10 @@ export class Db {
     try {
       await conn.beginTransaction();
       const [current]: any = await conn.query('SELECT responsible_id FROM customers WHERE id=? FOR UPDATE', [id]);
+      if (!current.length) {
+        await conn.rollback();
+        return { success: false, error: 'Cliente não encontrado. Atualize a lista e tente novamente.' };
+      }
       if (current[0]?.responsible_id) {
         await conn.query('UPDATE customers SET name=?, phone=NULL WHERE id=?', [c.name, id]);
       } else {
@@ -454,9 +464,10 @@ export class Db {
       const actor = await this.resolveActor(sessionToken);
       await this.logAction(actor, 'update', 'customers', id, `Cliente atualizado: ${c.name} (tel: ${c.phone}).`);
       return { success: true };
-    } catch (e) {
+    } catch (e: any) {
       await conn.rollback();
-      return { success: false, error: 'Celular já cadastrado no servidor.' };
+      const duplicatePhone = e?.code === 'ER_DUP_ENTRY' && /(?:uq_customers_phone|phone)['`]/i.test(String(e?.message ?? ''));
+      return { success: false, error: duplicatePhone ? 'Celular já cadastrado no servidor.' : friendlyError(e) };
     } finally {
       conn.release();
     }
@@ -626,6 +637,7 @@ export class Db {
     const session = await this.getSessionUser(sessionToken);
     if (!session.user) throw new Error(session.error ?? 'Sessão inválida ou expirada.');
     const actor = { id: session.user.id, name: session.user.name };
+    validateSelectedBudget(formula.budget_items);
     const deliveryStatus = formula.status === 'confirmed' ? 'em_producao' : (formula.delivery_status ?? '');
     const conn = await this.pool.getConnection();
     try {
@@ -678,6 +690,7 @@ export class Db {
     status?: string;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
+    validateSelectedBudget(formula.budget_items);
     const current = await this.q<Array<{ delivery_status: string; payment_status: string; partial_payment_amount: number | string | null }>>(
       'SELECT delivery_status, payment_status, partial_payment_amount FROM formulas WHERE id=?', [id]
     );

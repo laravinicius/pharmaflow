@@ -295,7 +295,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   const addBudgetItem = () => {
     if (!bQty || !bValue) return;
-    const next = [...budgetItems, { quantity: Number(bQty), unit: bUnit, value: parseCurrency(bValue) }];
+    const parsedQuantity = parseQuantity(bQty);
+    if (parsedQuantity <= 0) { setBudgetError('Informe uma quantidade maior que zero.'); return; }
+    const next = [...budgetItems, { quantity: parsedQuantity, unit: bUnit, value: parseCurrency(bValue) }];
     setBudgetItems(next);
     setBQty('');
     setBValue('');
@@ -314,6 +316,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const selectedBudgetValue = selectedBudgetIndex !== null
     ? budgetItems[selectedBudgetIndex]?.value ?? null
     : null;
+  const hasSelectedBudget = selectedBudgetValue !== null;
   const parsedPartialPaymentAmount = parseCurrency(partialPaymentAmount);
   const partialPaymentIsInvalid = paymentStatus === 'parcial' && (
     selectedBudgetValue === null ||
@@ -321,7 +324,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     parsedPartialPaymentAmount > selectedBudgetValue
   );
   const canSave = editingIngredientId === null && !!selectedCustomerId && items.length > 0 &&
-    !!budgetNumber && budgetItems.length > 0 &&
+    !!budgetNumber && budgetItems.length > 0 && hasSelectedBudget &&
     !!attendantName &&
     !partialPaymentIsInvalid;
   const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
@@ -388,7 +391,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const handleSaveConfirmed = async () => {
-    if (!formula) return;
+    if (!formula || !hasSelectedBudget) return;
     setSaving(true);
     try {
       await db.formulas.update(formula.id, buildPayload(
@@ -765,8 +768,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             <input
               id="recipe-ingredient-quantity"
               ref={quantityRef}
-              inputMode="numeric"
-              maxLength={8}
+              inputMode="decimal"
+              maxLength={11}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
               value={quantity}
               disabled={!canEditComposition}
@@ -958,12 +961,12 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
                 <input
                   ref={bQtyRef}
-                  inputMode="numeric"
-                  maxLength={3}
+                  inputMode="decimal"
+                  maxLength={7}
                   className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
                   value={bQty}
                   disabled={locked}
-                  onChange={e => { setBudgetError(''); setBQty(e.target.value.replace(/\D/g, '').slice(0, 3)); }}
+                  onChange={e => { setBudgetError(''); setBQty(formatQuantityInput(e.target.value, 3)); }}
                 />
               </div>
               <div className="sm:w-36">
@@ -1204,7 +1207,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               {saving ? 'Salvando...' : '💾 Salvar'}
             </button>
             <p className="text-center text-xs text-zinc-400 mt-2">
-              {canSave ? 'Pronto para salvar' : 'Preencha os blocos 1 a 4 (cliente, insumos, orçamento e informações)'}
+              {canSave ? 'Pronto para salvar' : !hasSelectedBudget
+                ? 'Selecione um orçamento para salvar a fórmula'
+                : 'Preencha os blocos 1 a 4 (cliente, insumos, orçamento e informações)'}
             </p>
           </div>
           <div>
@@ -1227,11 +1232,16 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       {formula && confirmed && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="md:col-span-2">
-            <button type="button" disabled={saving} onClick={handleSaveConfirmed}
+            <button type="button" disabled={!hasSelectedBudget || saving} onClick={handleSaveConfirmed}
               className="w-full text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: GRADIENTS.secondary }}>
               {saving ? 'Salvando...' : '💾 Salvar alterações'}
             </button>
+            {!hasSelectedBudget && (
+              <p className="text-center text-xs text-zinc-400 mt-2">
+                Selecione um orçamento para salvar a fórmula
+              </p>
+            )}
           </div>
         </div>
       )}
