@@ -5,6 +5,7 @@ import { db } from '../services/lanDatabase';
 import { SavedFormula, SavedFormulaItem, Insumo, BudgetItem } from '../types';
 import { stripDiacritics, formatQuantity, formatCurrency, parseCurrency, currencyCaretPosition, formatQuantityInput, parseQuantity, formatUnit } from '../utils/format';
 import { useData } from '../hooks/useData';
+import { useKeepListOptionVisible } from '../hooks/useKeepListOptionVisible';
 import { useFormDraft } from '../context/FormDraftContext';
 import { LoadingState, ErrorState } from './Feedback';
 import { HighlightMatch } from './HighlightMatch';
@@ -38,6 +39,7 @@ export function SavedFormulaManager() {
   const quantityRef = useRef<HTMLInputElement>(null);
   const bQtyRef = useRef<HTMLInputElement>(null);
   const insumoListRef = useRef<HTMLDivElement>(null);
+  useKeepListOptionVisible(insumoListRef, insumoFocusIdx);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);

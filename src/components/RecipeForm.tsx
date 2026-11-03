@@ -9,6 +9,7 @@ import { User, Customer, Insumo, Formula, FormulaItem, BudgetItem, SavedFormula 
 import { formatCurrency, parseCurrency, currencyCaretPosition, formatDateBR, parseDateBR, formatDateToBR, stripDiacritics, formatQuantity, formatQuantityInput, parseQuantity, formatUnit } from '../utils/format';
 import { handleDialogArrowNavigation } from '../utils/enterNavigation';
 import { useData } from '../hooks/useData';
+import { useKeepListOptionVisible } from '../hooks/useKeepListOptionVisible';
 import { useAuth } from '../context/AuthContext';
 import { useFormDraft } from '../context/FormDraftContext';
 import { CustomerManager } from './CustomerManager';
@@ -67,6 +68,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const customerListRef = useRef<HTMLDivElement>(null);
   const insumoListRef = useRef<HTMLDivElement>(null);
   const savedFormulaListRef = useRef<HTMLDivElement>(null);
+  useKeepListOptionVisible(customerListRef, customerFocusIdx);
+  useKeepListOptionVisible(insumoListRef, insumoFocusIdx);
+  useKeepListOptionVisible(savedFormulaListRef, savedFormulaFocusIdx);
   const pendingCustomerName = useRef('');
   const pendingInsumoName = useRef('');
   const { getDraft, saveDraft, removeDraft } = useFormDraft();
@@ -672,46 +676,65 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div className="relative mb-4">
             {showAddInsumo && (
               <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
+                <div className="flex justify-end bg-zinc-50 px-2">
+                  <button
+                    type="button"
+                    aria-label="Cancelar cadastro de insumo"
+                    title="Cancelar cadastro de insumo"
+                    className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => {
+                      pendingInsumoName.current = '';
+                      setShowAddInsumo(false);
+                      requestAnimationFrame(() => insumoQueryRef.current?.focus());
+                    }}
+                  >
+                    <X aria-hidden="true" className="w-5 h-5" />
+                  </button>
+                </div>
                 <InsumoManager compact initialName={pendingInsumoName.current} onCreated={async (m: Insumo) => { await reloadInsumos(); setSelectedInsumoId(m.id); setShowAddInsumo(false); setInsumoQuery(''); requestAnimationFrame(() => quantityRef.current?.focus()); }} />
               </div>
             )}
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
-            <input
-              className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              value={insumoQuery}
-              aria-label="Buscar insumo"
-              disabled={!canEditComposition}
-              ref={insumoQueryRef}
-              onChange={e => { setInsumoQuery(e.target.value.toUpperCase()); setInsumoFocusIdx(-1); }}
-              onKeyDown={e => {
-                if (e.key === 'ArrowDown' && filteredInsumos.length) {
-                  e.preventDefault();
-                  setInsumoFocusIdx(prev => (prev < filteredInsumos.length - 1 ? prev + 1 : 0));
-                } else if (e.key === 'ArrowUp' && filteredInsumos.length) {
-                  e.preventDefault();
-                  setInsumoFocusIdx(prev => (prev > 0 ? prev - 1 : filteredInsumos.length - 1));
-                } else if (e.key === 'Enter') {
-                  if (filteredInsumos.length) {
+            <div className="relative">
+              {!showAddInsumo && (
+                <Search aria-hidden="true" className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+              )}
+              <input
+                className={`w-full pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed ${showAddInsumo ? 'pl-3' : 'pl-9'}`}
+                value={insumoQuery}
+                aria-label="Buscar insumo"
+                disabled={!canEditComposition}
+                ref={insumoQueryRef}
+                onChange={e => { setInsumoQuery(e.target.value.toUpperCase()); setInsumoFocusIdx(-1); }}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown' && filteredInsumos.length) {
                     e.preventDefault();
-                    const targetIdx = insumoFocusIdx >= 0 && insumoFocusIdx < filteredInsumos.length ? insumoFocusIdx : 0;
-                    setInsumoFocusIdx(targetIdx);
-                    focusListOption(insumoListRef, targetIdx);
-                  } else if (insumoQuery.trim()) {
+                    setInsumoFocusIdx(prev => (prev < filteredInsumos.length - 1 ? prev + 1 : 0));
+                  } else if (e.key === 'ArrowUp' && filteredInsumos.length) {
                     e.preventDefault();
-                    pendingInsumoName.current = insumoQuery.trim();
-                    setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1);
+                    setInsumoFocusIdx(prev => (prev > 0 ? prev - 1 : filteredInsumos.length - 1));
+                  } else if (e.key === 'Enter') {
+                    if (filteredInsumos.length) {
+                      e.preventDefault();
+                      const targetIdx = insumoFocusIdx >= 0 && insumoFocusIdx < filteredInsumos.length ? insumoFocusIdx : 0;
+                      setInsumoFocusIdx(targetIdx);
+                      focusListOption(insumoListRef, targetIdx);
+                    } else if (insumoQuery.trim()) {
+                      e.preventDefault();
+                      pendingInsumoName.current = insumoQuery.trim();
+                      setShowAddInsumo(true); setInsumoQuery(''); setInsumoFocusIdx(-1);
+                    }
+                  } else if (e.key === 'Escape') {
+                    setInsumoQuery(''); setInsumoFocusIdx(-1);
                   }
-                } else if (e.key === 'Escape') {
-                  setInsumoQuery(''); setInsumoFocusIdx(-1);
-                }
-              }}
-            />
-            {insumoQuery && (
-              <button onClick={() => { setInsumoQuery(''); setInsumoFocusIdx(-1); }} title="Limpar busca"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                }}
+              />
+              {insumoQuery && (
+                <button onClick={() => { setInsumoQuery(''); setInsumoFocusIdx(-1); }} title="Limpar busca"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
             {filteredInsumos.length > 0 && (
               <div ref={insumoListRef} className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
                 {filteredInsumos.map((m, idx) => (
