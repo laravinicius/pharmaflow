@@ -676,6 +676,7 @@ export class Db {
   }
 
   async updateFormula(id: number, formula: {
+    expected_status?: string;
     customer_id: number;
     attendant_name: string;
     items: Array<{ insumo_id: number; quantity: number; unit?: string }>;
@@ -690,42 +691,67 @@ export class Db {
     status?: string;
   }, sessionToken?: string) {
     if (!this.pool) throw new Error('Sem conexão com o servidor');
-    validateSelectedBudget(formula.budget_items);
-    const current = await this.q<Array<{ delivery_status: string; payment_status: string; partial_payment_amount: number | string | null }>>(
-      'SELECT delivery_status, payment_status, partial_payment_amount FROM formulas WHERE id=?', [id]
-    );
-    const deliveryStatus = formula.status === 'confirmed'
-      ? (formula.delivery_status || 'em_producao')
-      : (formula.delivery_status || current[0]?.delivery_status || '');
-    const paymentStatus = formula.payment_status ?? current[0]?.payment_status ?? '';
-    const partialPaymentAmount = paymentStatus === 'parcial'
-      ? formula.partial_payment_amount ?? current[0]?.partial_payment_amount ?? null
-      : null;
     const conn = await this.pool.getConnection();
     try {
       await conn.beginTransaction();
-      const customer = await this.q<any[]>(`SELECT COALESCE(c.phone, r.phone, '') AS phone
-        FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
-      const customerPhone = customer[0]?.phone ?? '';
-      await conn.query(
-        `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, partial_payment_amount=?, payment_method=?, ${deliveredAtUpdate}, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
-        [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
-         formula.delivery_date ?? null, paymentStatus,
-         partialPaymentAmount,
-         formula.payment_method ?? null, deliveryStatus, getDeliveryTimestamp(), deliveryStatus, formula.cancel_reason ?? null,
-         formula.status ?? 'pending', id]
+      const [rows] = await conn.query<mysql.RowDataPacket[]>(
+        'SELECT status, customer_id, customer_phone, delivery_status, payment_status, partial_payment_amount FROM formulas WHERE id=? FOR UPDATE',
+        [id]
       );
-      await conn.query('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['formula', id]);
-      await this.reserveBudgetNumber(conn, formula.budget_number, 'formula', id);
-      await conn.query('DELETE FROM formula_items WHERE formula_id=?', [id]);
-      for (const item of formula.items) {
-        await conn.query('INSERT INTO formula_items (formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
-          [id, item.insumo_id, item.quantity, item.unit ?? 'mg']);
+      const current = rows[0];
+      if (!current) throw new Error('Fórmula não encontrada.');
+      const isConfirmed = current.status === 'confirmed';
+      const status = formula.status ?? 'pending';
+      if ((formula.expected_status && formula.expected_status !== current.status) ||
+          (current.status !== 'pending' && (!isConfirmed || (status !== 'confirmed' && status !== 'cancelled')))) {
+        throw new Error('A fórmula mudou de status. Volte à lista e abra a fórmula novamente.');
       }
-      await conn.query('DELETE FROM formula_budget_items WHERE formula_id=?', [id]);
-      for (const bi of formula.budget_items ?? []) {
-        await conn.query('INSERT INTO formula_budget_items (formula_id, quantity, unit, value, is_selected) VALUES (?,?,?,?,?)',
-          [id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
+      if (isConfirmed && formula.customer_id !== current.customer_id) {
+        throw new Error('O cliente de uma fórmula confirmada é fixo.');
+      }
+
+      if (isConfirmed && status === 'cancelled') {
+        if (current.delivery_status && current.delivery_status !== 'em_producao') {
+          throw new Error('A fórmula já saiu da produção. Volte à lista de confirmadas.');
+        }
+        // O cancelamento registra a justificativa sem aplicar alterações pendentes no formulário.
+        await conn.query('UPDATE formulas SET status=?, cancel_reason=? WHERE id=?',
+          [status, formula.cancel_reason ?? null, id]);
+      } else {
+        validateSelectedBudget(formula.budget_items);
+        let customerPhone = current.customer_phone;
+        if (!isConfirmed) {
+          const [customers] = await conn.query<mysql.RowDataPacket[]>(`SELECT COALESCE(c.phone, r.phone, '') AS phone
+            FROM customers c LEFT JOIN customers r ON r.id=c.responsible_id WHERE c.id=?`, [formula.customer_id]);
+          customerPhone = customers[0]?.phone ?? '';
+        }
+        const deliveryStatus = isConfirmed
+          ? (current.delivery_status || 'em_producao')
+          : (formula.delivery_status || (status === 'confirmed' ? 'em_producao' : current.delivery_status) || '');
+        const paymentStatus = formula.payment_status ?? current.payment_status ?? '';
+        const partialPaymentAmount = paymentStatus === 'parcial'
+          ? formula.partial_payment_amount ?? current.partial_payment_amount ?? null
+          : null;
+        await conn.query(
+          `UPDATE formulas SET customer_id=?, customer_phone=?, attendant_name=?, budget_number=?, delivery_date=?, payment_status=?, partial_payment_amount=?, payment_method=?, ${deliveredAtUpdate}, delivery_status=?, cancel_reason=?, status=? WHERE id=?`,
+          [formula.customer_id, customerPhone, formula.attendant_name, formula.budget_number ?? '',
+           formula.delivery_date ?? null, paymentStatus,
+           partialPaymentAmount,
+           formula.payment_method ?? null, deliveryStatus, getDeliveryTimestamp(), deliveryStatus, formula.cancel_reason ?? null,
+           status, id]
+        );
+        await conn.query('DELETE FROM budget_number_registry WHERE source_type=? AND source_id=?', ['formula', id]);
+        await this.reserveBudgetNumber(conn, formula.budget_number, 'formula', id);
+        await conn.query('DELETE FROM formula_items WHERE formula_id=?', [id]);
+        for (const item of formula.items) {
+          await conn.query('INSERT INTO formula_items (formula_id, insumo_id, quantity, unit) VALUES (?,?,?,?)',
+            [id, item.insumo_id, item.quantity, item.unit ?? 'mg']);
+        }
+        await conn.query('DELETE FROM formula_budget_items WHERE formula_id=?', [id]);
+        for (const bi of formula.budget_items ?? []) {
+          await conn.query('INSERT INTO formula_budget_items (formula_id, quantity, unit, value, is_selected) VALUES (?,?,?,?,?)',
+            [id, bi.quantity, bi.unit ?? 'caps', bi.value ?? 0, bi.is_selected ? 1 : 0]);
+        }
       }
       await conn.commit();
       const actor = await this.resolveActor(sessionToken);

@@ -65,6 +65,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
   const [summaryYear, setSummaryYear] = useState(now.getFullYear());
   const [summaryPaymentStatus, setSummaryPaymentStatus] = useState('pago');
+  const [filterBySummary, setFilterBySummary] = useState(false);
 
   const handleConfirm = async (f: Formula) => {
     const reasons = getMissingReasons(f);
@@ -202,25 +203,34 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
     return [...years].sort((a, b) => b - a);
   }, [all]);
 
-  const monthlyTotal = useMemo(() => all
-    .filter(formula => formula.delivery_status === 'entregue')
-    .filter(formula => summaryPaymentStatus === 'nao_pago'
-      ? !formula.payment_status || formula.payment_status === 'nao_pago'
-      : formula.payment_status === summaryPaymentStatus)
-    .filter(formula => {
+  const summaryFormulas = useMemo(() => {
+    if (!monthlySummary) return [];
+
+    return all.filter(formula => {
+      if (formula.delivery_status !== 'entregue') return false;
+
       const date = formula.delivered_at ?? '';
-      return Number(date.slice(0, 4)) === summaryYear && Number(date.slice(5, 7)) === summaryMonth + 1;
-    })
-    .reduce((total, formula) => total + (summaryPaymentStatus === 'parcial'
-      ? Number(formula.partial_payment_amount || 0)
-      : (formula.budget_items ?? [])
+      const matchesPeriod = Number(date.slice(0, 4)) === summaryYear && Number(date.slice(5, 7)) === summaryMonth + 1;
+      const matchesPayment = summaryPaymentStatus === 'nao_pago'
+        ? formula.payment_status !== 'pago'
+        : formula.payment_status === summaryPaymentStatus;
+      return matchesPeriod && matchesPayment;
+    });
+  }, [all, monthlySummary, summaryMonth, summaryYear, summaryPaymentStatus]);
+
+  const monthlyTotal = useMemo(() => summaryFormulas.reduce((total, formula) => total + (summaryPaymentStatus === 'parcial'
+    ? Number(formula.partial_payment_amount || 0)
+    : (formula.budget_items ?? [])
       .filter(item => item.is_selected)
-      .reduce((formulaTotal, item) => formulaTotal + Number(item.value || 0), 0)), 0), [all, summaryMonth, summaryYear, summaryPaymentStatus]);
+      .reduce((formulaTotal, item) => formulaTotal + Number(item.value || 0), 0)), 0), [summaryFormulas, summaryPaymentStatus]);
+
+  const applySummaryFilters = monthlySummary && filterBySummary;
+  const listFormulas = applySummaryFilters ? summaryFormulas : all;
 
   const filtered = useMemo(() => {
     const confirmedSearch = stripDiacritics(searchLower);
 
-    return all
+    return listFormulas
       .filter(f => statuses.includes(f.status))
       .filter(f => !deliveryStatusFilter || f.delivery_status === deliveryStatusFilter)
       .filter(f => !statusFilter || f.status === statusFilter)
@@ -244,7 +254,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
           (f.created_by_name || '').toLocaleLowerCase('pt-BR').includes(searchLower) ||
           String(f.id).includes(searchLower);
       });
-  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter, isHistory, variant]);
+  }, [listFormulas, statuses, statusFilter, searchLower, deliveryStatusFilter, isHistory, variant]);
 
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
@@ -321,20 +331,40 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       {monthlySummary && (
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 text-zinc-700">
           <label htmlFor="summary-payment-status" className="font-semibold">Valor total de fórmulas</label>
-          <select id="summary-payment-status" value={summaryPaymentStatus} onChange={e => setSummaryPaymentStatus(e.target.value)} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
+          <select id="summary-payment-status" value={summaryPaymentStatus}
+            onChange={e => {
+              setSummaryPaymentStatus(e.target.value);
+              setFilterBySummary(true);
+            }}
+            className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
             <option value="pago">pagas</option>
             <option value="nao_pago">não pagas</option>
             <option value="pagar_na_retirada">na retirada</option>
             <option value="parcial">parciais</option>
           </select>
           <label htmlFor="summary-month" className="font-semibold">no Mês</label>
-          <select id="summary-month" aria-label="Mês do resumo" value={summaryMonth} onChange={e => setSummaryMonth(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
+          <select id="summary-month" aria-label="Mês do resumo" value={summaryMonth}
+            onChange={e => {
+              setSummaryMonth(Number(e.target.value));
+              setFilterBySummary(true);
+            }}
+            className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
             {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((month, index) => <option key={month} value={index}>{month}</option>)}
           </select>
-          <select aria-label="Ano do resumo" value={summaryYear} onChange={e => setSummaryYear(Number(e.target.value))} className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
+          <select aria-label="Ano do resumo" value={summaryYear}
+            onChange={e => {
+              setSummaryYear(Number(e.target.value));
+              setFilterBySummary(true);
+            }}
+            className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#243465]">
             {summaryYears.map(year => <option key={year} value={year}>{year}</option>)}
           </select>
           <span className="font-bold md:ml-1">{monthlyTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          <label className="inline-flex cursor-pointer items-center gap-2 py-1.5 text-sm">
+            <input type="checkbox" checked={filterBySummary} onChange={e => setFilterBySummary(e.target.checked)}
+              className="h-4 w-4 accent-[var(--pf-secondary)]" />
+            Filtrar lista
+          </label>
         </div>
       )}
 
@@ -539,7 +569,9 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
 
           {filtered.length === 0 && (
             <div className="py-16 text-center text-zinc-400">
-              <p className="font-medium">Nenhuma fórmula nesta lista ainda.</p>
+              <p className="font-medium">{isHistory && (applySummaryFilters || searchLower)
+                ? 'Nenhuma fórmula corresponde aos filtros aplicados.'
+                : 'Nenhuma fórmula nesta lista ainda.'}</p>
             </div>
           )}
         </div>

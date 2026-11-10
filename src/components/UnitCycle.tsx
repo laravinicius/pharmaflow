@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { formatUnit } from '../utils/format';
 
 interface UnitCycleProps {
+  id?: string;
   value: string;
   onChange: (unit: string) => void;
   options: string[];
@@ -12,7 +13,7 @@ interface UnitCycleProps {
 export const INGREDIENT_UNITS = ['g', 'mcg', 'mg', 'ml', 'ui', '%'];
 export const BUDGET_UNITS = ['caps', 'caps s.l.', 'doses', 'g', 'ml', 'sachê', '%'];
 
-export function UnitCycle({ value, onChange, options, disabled }: UnitCycleProps) {
+export function UnitCycle({ id, value, onChange, options, disabled }: UnitCycleProps) {
   const cycle = useCallback((dir: number) => {
     const idx = options.indexOf(value);
     const base = idx === -1 ? 0 : idx;
@@ -28,6 +29,7 @@ export function UnitCycle({ value, onChange, options, disabled }: UnitCycleProps
         cycle(e.deltaY > 0 ? 1 : -1);
       }}>
       <select
+        id={id}
         className="w-full px-3 py-2 pr-8 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
         value={value}
         disabled={disabled}

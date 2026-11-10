@@ -41,6 +41,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [bValue, setBValue] = useState('');
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [selectedBudgetIndex, setSelectedBudgetIndex] = useState<number | null>(null);
+  const [editingBudgetIndex, setEditingBudgetIndex] = useState<number | null>(null);
   const [budgetError, setBudgetError] = useState('');
   const [attendantName, setAttendantName] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -49,7 +50,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [paymentMethod, setPaymentMethod] = useState('');
   const [saving, setSaving] = useState(false);
   const [locked, setLocked] = useState(formula ? initialLocked : false);
-  const [deliveryDateEditing, setDeliveryDateEditing] = useState(false);
   const [deliveryStatus, setDeliveryStatus] = useState('');
   const [saveError, setSaveError] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -57,7 +57,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [customerFocusIdx, setCustomerFocusIdx] = useState(-1);
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [savedFormulaFocusIdx, setSavedFormulaFocusIdx] = useState(-1);
-  const deliveryDateTextInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const insumoQueryRef = useRef<HTMLInputElement>(null);
   const quantityRef = useRef<HTMLInputElement>(null);
@@ -123,7 +122,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   useEffect(() => {
     if (formula) {
       resetIngredientFields();
-      setDeliveryDateEditing(false);
+      if (confirmed) resetBudgetFields();
       setSelectedCustomerId(formula.customer_id);
       setItems(formula.items.map(i => ({ ...i })));
       setBudgetNumber(formula.budget_number ?? '');
@@ -133,9 +132,6 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       const budgetIndex = selIdx >= 0 ? selIdx : confirmed && budgetItems.length === 1 ? 0 : null;
       setBudgetItems(budgetItems.map(bi => ({ ...bi })));
       setSelectedBudgetIndex(budgetIndex);
-      if (confirmed) {
-        setBValue(budgetIndex === null ? '' : formatCurrency(String(budgetItems[budgetIndex].value).replace('.', ',')));
-      }
       setAttendantName((formula.attendant_name ?? '').toUpperCase());
       setDeliveryDate(formula.delivery_date ? formatDateToBR(formula.delivery_date) : '');
       setPaymentStatus(formula.payment_status ?? '');
@@ -178,12 +174,10 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setSavedFormulaQuery('');
     setAppliedSavedFormula(null);
     setBudgetNumber('');
-    setBQty('');
+    resetBudgetFields();
     setBUnit('doses');
-    setBValue('');
     setBudgetItems([]);
     setSelectedBudgetIndex(null);
-    setBudgetError('');
     setAttendantName('');
     setDeliveryDate('');
     setPaymentStatus('');
@@ -198,7 +192,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   // Preserva quantidades decimais existentes ao alterar apenas a unidade.
   const ingredientQuantity = editingIngredient && quantity === formatQuantity(editingIngredient.quantity)
     ? Number(editingIngredient.quantity) : parseQuantity(quantity);
-  const canEditComposition = !locked && !confirmed && !readOnly && !saving;
+  const canEditFields = !locked && !readOnly && !saving;
+  const canEditCustomer = canEditFields && !confirmed;
   const mq = stripDiacritics(insumoQuery.trim().toLowerCase());
   const filteredInsumos = mq
     ? allInsumos
@@ -224,7 +219,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const startIngredientEdit = (item: FormulaItem) => {
-    if (!canEditComposition) return;
+    if (!canEditFields) return;
     resetIngredientFields();
     setEditingIngredientId(item.insumo_id);
     setQuantity(formatQuantity(item.quantity));
@@ -241,7 +236,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const updateIngredient = () => {
-    if (!canEditComposition || !editingIngredient) return;
+    if (!canEditFields || !editingIngredient) return;
     const parsedQuantity = ingredientQuantity;
     if (parsedQuantity <= 0) { setItemError('Informe uma quantidade maior que zero.'); return; }
     setItems(current => current.map(item => item.insumo_id === editingIngredientId
@@ -250,14 +245,14 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const removeIngredient = (id: number) => {
-    if (!canEditComposition) return;
+    if (!canEditFields) return;
     setItems(current => current.filter(item => item.insumo_id !== id));
     if (editingIngredientId === id) cancelIngredientEdit();
     setItemError('');
   };
 
   const addIngredient = () => {
-    if (!canEditComposition || editingIngredientId !== null || !selectedInsumoId) return;
+    if (!canEditFields || editingIngredientId !== null || !selectedInsumoId) return;
     const parsedQuantity = parseQuantity(quantity);
     if (parsedQuantity <= 0) { setItemError('Informe uma quantidade maior que zero.'); return; }
     if (items.find(i => i.insumo_id === Number(selectedInsumoId))) {
@@ -302,15 +297,39 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     }
   };
 
-  const addBudgetItem = () => {
-    if (!bQty || !bValue) return;
-    const parsedQuantity = parseQuantity(bQty);
-    if (parsedQuantity <= 0) { setBudgetError('Informe uma quantidade maior que zero.'); return; }
-    const next = [...budgetItems, { quantity: parsedQuantity, unit: bUnit, value: parseCurrency(bValue) }];
-    setBudgetItems(next);
+  const resetBudgetFields = () => {
+    setEditingBudgetIndex(null);
     setBQty('');
     setBValue('');
     setBudgetError('');
+  };
+
+  const startBudgetEdit = (idx: number, item: BudgetItem) => {
+    setEditingBudgetIndex(idx);
+    setBQty(formatQuantity(item.quantity));
+    setBUnit(item.unit);
+    setBValue(formatCurrency(String(item.value).replace('.', ',')));
+    setBudgetError('');
+    requestAnimationFrame(() => {
+      bQtyRef.current?.focus();
+      bQtyRef.current?.select();
+    });
+  };
+
+  const saveBudgetItem = () => {
+    if (!canEditFields || !bQty || !bValue) return;
+    const quantity = parseQuantity(bQty);
+    if (quantity <= 0) { setBudgetError('Informe uma quantidade maior que zero.'); return; }
+    const value = parseCurrency(bValue);
+    if (confirmed && value > 99_999_999.99) { setBudgetError('Informe um valor de até R$ 99.999.999,99.'); return; }
+    const item = { quantity, unit: bUnit, value };
+    if (editingBudgetIndex === null) {
+      setBudgetItems([...budgetItems, item]);
+      if (confirmed && budgetItems.length === 0) setSelectedBudgetIndex(0);
+    } else {
+      setBudgetItems(budgetItems.map((current, idx) => idx === editingBudgetIndex ? item : current));
+    }
+    resetBudgetFields();
     requestAnimationFrame(() => bQtyRef.current?.focus());
   };
 
@@ -319,18 +338,18 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     setBudgetItems(next);
     if (selectedBudgetIndex === idx) setSelectedBudgetIndex(null);
     else if (selectedBudgetIndex !== null && selectedBudgetIndex > idx) setSelectedBudgetIndex(selectedBudgetIndex - 1);
+    if (editingBudgetIndex === idx) resetBudgetFields();
+    else if (editingBudgetIndex !== null && editingBudgetIndex > idx) setEditingBudgetIndex(editingBudgetIndex - 1);
   };
 
   const parsedDeliveryDate = parseDateBR(deliveryDate);
   const selectedBudget = selectedBudgetIndex !== null ? budgetItems[selectedBudgetIndex] : undefined;
   const hasSelectedBudget = !!selectedBudget;
-  const confirmedBudgetValue = confirmed && hasSelectedBudget && bValue ? parseCurrency(bValue) : null;
-  const selectedBudgetValue = confirmedBudgetValue ?? selectedBudget?.value ?? null;
+  const selectedBudgetValue = selectedBudget ? Number(selectedBudget.value) : null;
   const missingBudgetNumber = confirmed && !!formula?.budget_number && !budgetNumber;
-  const confirmedBudgetValueError = confirmed && hasSelectedBudget
-    ? confirmedBudgetValue === null ? 'Informe o valor da fórmula.'
-      : confirmedBudgetValue > 99_999_999.99 ? 'Informe um valor de até R$ 99.999.999,99.' : ''
-    : '';
+  const missingIngredients = confirmed && !!formula?.items.length && items.length === 0;
+  const missingAttendant = confirmed && !!formula?.attendant_name?.trim() && !attendantName.trim();
+  const invalidDeliveryDate = confirmed && !!deliveryDate && !parsedDeliveryDate;
   const parsedPartialPaymentAmount = parseCurrency(partialPaymentAmount);
   const partialPaymentIsInvalid = paymentStatus === 'parcial' && (
     selectedBudgetValue === null ||
@@ -342,7 +361,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     !!attendantName &&
     !partialPaymentIsInvalid;
   const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
-  const canSaveConfirmed = confirmedBudgetValue !== null && !missingBudgetNumber && !confirmedBudgetValueError && !partialPaymentIsInvalid;
+  const canSaveConfirmed = editingIngredientId === null && editingBudgetIndex === null && hasSelectedBudget &&
+    !missingBudgetNumber && !missingIngredients && !missingAttendant && !invalidDeliveryDate && !partialPaymentIsInvalid;
 
   const getSaveErrorMessage = (err: any) => {
     const message = String(err?.message ?? '');
@@ -357,16 +377,17 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       ? budgetItems.filter((_, i) => i === selectedBudgetIndex).map(bi => ({ ...bi, is_selected: true }))
       : budgetItems.map((bi, i) => ({ ...bi, is_selected: selectedBudgetIndex === i }));
     return {
-      customer_id: selectedCustomerId as number,
+      expected_status: formula?.status,
+      customer_id: confirmed && formula ? formula.customer_id : selectedCustomerId as number,
       attendant_name: attendantName,
       items: items.map(i => ({ insumo_id: i.insumo_id, quantity: i.quantity, unit: i.unit ?? 'mg' })),
       budget_number: budgetNumber || undefined,
       budget_items: payloadBudgetItems.length > 0 ? payloadBudgetItems : undefined,
-      delivery_date: parseDateBR(deliveryDate),
-      payment_status: paymentStatus || undefined,
+      delivery_date: parsedDeliveryDate,
+      payment_status: confirmed ? paymentStatus : (paymentStatus || undefined),
       partial_payment_amount: paymentStatus === 'parcial' ? parsedPartialPaymentAmount : null,
       payment_method: paymentMethod || null,
-      delivery_status: status === 'confirmed' ? (deliveryStatus || 'em_producao') : deliveryStatus,
+      delivery_status: confirmed ? undefined : (status === 'confirmed' ? (deliveryStatus || 'em_producao') : deliveryStatus),
       status,
     };
   };
@@ -406,14 +427,10 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   };
 
   const handleSaveConfirmed = async () => {
-    if (!formula || readOnly || saving || !canSaveConfirmed) return;
+    if (!formula || !canEditFields || !canSaveConfirmed) return;
     setSaving(true);
     try {
-      const payload = buildPayload(deliveryStatus === 'entregue' ? 'delivered' : 'confirmed');
-      await db.formulas.update(formula.id, {
-        ...payload,
-        budget_items: payload.budget_items?.map(item => item.is_selected ? { ...item, value: confirmedBudgetValue } : item),
-      }, sessionToken ?? undefined);
+      await db.formulas.update(formula.id, buildPayload('confirmed'), sessionToken ?? undefined);
       onComplete('confirmed');
     } catch (err: any) {
       setSaveError(getSaveErrorMessage(err));
@@ -424,18 +441,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     if (!formula || !cancelReason.trim()) return;
     setSaving(true);
     try {
-      const payload = buildPayload('cancelled');
-      if (confirmed) {
-        payload.budget_number = formula.budget_number;
-        // A quantia digitada pode depender de um aumento no valor que ainda não foi salvo.
-        if (paymentStatus === 'parcial' && selectedBudget && parsedPartialPaymentAmount > Number(selectedBudget.value)) {
-          payload.payment_status = formula.payment_status;
-          payload.partial_payment_amount = formula.partial_payment_amount == null ? null : Number(formula.partial_payment_amount);
-          payload.payment_method = formula.payment_method ?? null;
-        }
-      }
       await db.formulas.update(formula.id, {
-        ...payload,
+        ...buildPayload('cancelled'),
         cancel_reason: cancelReason.trim(),
       }, sessionToken ?? undefined);
       onComplete(formula.status === 'pending' ? 'pending' : 'confirmed');
@@ -446,6 +453,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   const allCustomers = (customers as Customer[]) ?? [];
   const selectedCustomer = allCustomers.find(c => c.id === selectedCustomerId) ?? null;
+  const customerName = selectedCustomer?.name ?? (confirmed ? formula?.customer_name : undefined);
+  const customerPhone = selectedCustomer?.phone ?? selectedCustomer?.responsible_phone ?? (confirmed ? formula?.customer_phone : undefined);
   const q = stripDiacritics(customerQuery.trim().toLowerCase());
   const qDigits = customerQuery.replace(/\D/g, '');
   const filteredCustomers = (q || qDigits)
@@ -498,24 +507,14 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               <X className="w-3.5 h-3.5" /> Cancelar fórmula
             </button>
           )}
-          {formula && locked && !confirmed && !readOnly && (
-            <button type="button" onClick={() => setLocked(false)}
-              className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md"
-              style={{ background: GRADIENTS.secondary }}>
-              <RefreshCw className="w-3.5 h-3.5" /> Editar
-            </button>
-          )}
-          {formula && confirmed && locked && !readOnly && (
+          {formula && locked && !readOnly && (
             <button type="button" disabled={saving} onClick={() => {
-              setDeliveryDateEditing(true);
-              requestAnimationFrame(() => {
-                deliveryDateTextInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                deliveryDateTextInputRef.current?.focus();
-              });
+              setLocked(false);
+              if (confirmed) requestAnimationFrame(() => insumoQueryRef.current?.focus());
             }}
               className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: GRADIENTS.secondary }}>
-              <RefreshCw className="w-3.5 h-3.5" /> Editar previsão
+              <RefreshCw aria-hidden="true" className="w-3.5 h-3.5" /> Editar
             </button>
           )}
           {!formula && (
@@ -544,7 +543,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
           style={{ background: COLORS.lightRedBg, border: `1px solid ${COLORS.lightRedBorder}`, color: COLORS.primary }}>
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {readOnly ? (formula?.status === 'cancelled' ? 'Fórmula cancelada — visualização somente leitura.' : 'Fórmula no histórico — visualização somente leitura.') : confirmed ? 'Fórmula confirmada. Você pode alterar o número do orçamento, o valor, a previsão de entrega, o pagamento e o andamento.' : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
+          {readOnly ? (formula?.status === 'cancelled' ? 'Fórmula cancelada — visualização somente leitura.' : 'Fórmula no histórico — visualização somente leitura.') : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
         </div>
       )}
       {formula?.status === 'cancelled' && (
@@ -557,26 +556,27 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-zinc-900 text-sm">1. Cliente</h3>
+          {confirmed && <span className="text-xs text-zinc-500">Cliente fixo</span>}
         </div>
 
-        {showAddCustomer && (
+        {canEditCustomer && showAddCustomer && (
           <div className="border border-dashed border-zinc-200 rounded-xl overflow-hidden mb-4">
             <CustomerManager compact initialName={pendingCustomerName.current} onCreated={async (c: Customer) => { await reloadCustomers(); setSelectedCustomerId(c.id); setShowAddCustomer(false); setCustomerQuery(''); requestAnimationFrame(() => insumoQueryRef.current?.focus()); }} />
           </div>
         )}
 
-        {selectedCustomer ? (
+        {selectedCustomer || (confirmed && formula) ? (
           <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 bg-zinc-50">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
                 <Users className="w-4 h-4 text-red-700" />
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-zinc-900 text-sm truncate">{selectedCustomer.name}</p>
-                <p className="text-xs text-zinc-500">📱 {selectedCustomer.phone ?? selectedCustomer.responsible_phone ?? 'Sem celular cadastrado'}</p>
+                <p className="font-semibold text-zinc-900 text-sm truncate">{customerName}</p>
+                <p className="text-xs text-zinc-500">📱 {customerPhone || 'Sem celular cadastrado'}</p>
               </div>
             </div>
-            {!locked && (
+            {canEditCustomer && (
               <button type="button" onClick={() => { setSelectedCustomerId(''); setCustomerQuery(''); }}
                 className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar cliente">
                 <X className="w-4 h-4" />
@@ -589,7 +589,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             <input
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm uppercase disabled:opacity-60 disabled:cursor-not-allowed"
               value={customerQuery}
-              disabled={locked}
+              disabled={!canEditCustomer}
               ref={customerQueryRef}
               onChange={e => { setCustomerQuery(e.target.value.toUpperCase()); setCustomerFocusIdx(-1); }}
               onKeyDown={e => {
@@ -673,7 +673,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       </div>
       {/* Linha 2 — Insumo */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-      <div className={`bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm ${locked ? 'lg:col-span-2' : ''}`}>
+      <div className={`bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm ${locked || confirmed ? 'lg:col-span-2' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-zinc-900 text-sm">2.1 Insumo</h3>
         </div>
@@ -686,7 +686,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               </div>
               <p className="font-semibold text-zinc-900 text-sm truncate">{editingIngredient ? editingIngredient.insumo_name : selectedInsumo?.name}</p>
             </div>
-            {canEditComposition && !editingIngredient && (
+            {canEditFields && !editingIngredient && (
               <button type="button" onClick={() => { setSelectedInsumoId(''); setInsumoQuery(''); }}
                 className="p-2 text-zinc-300 hover:text-red-500 transition-colors ml-3" title="Trocar insumo">
                 <X className="w-4 h-4" />
@@ -723,7 +723,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 className={`w-full pr-9 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed ${showAddInsumo ? 'pl-3' : 'pl-9'}`}
                 value={insumoQuery}
                 aria-label="Buscar insumo"
-                disabled={!canEditComposition}
+                disabled={!canEditFields}
                 ref={insumoQueryRef}
                 onChange={e => { setInsumoQuery(e.target.value.toUpperCase()); setInsumoFocusIdx(-1); }}
                 onKeyDown={e => {
@@ -816,18 +816,18 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               maxLength={11}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
               value={quantity}
-              disabled={!canEditComposition}
+              disabled={!canEditFields}
               onChange={e => { setQuantity(formatQuantityInput(e.target.value)); setItemError(''); }}
             />
           </div>
           <div className="sm:w-36">
             <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
-            <UnitCycle value={unit} onChange={setUnit} options={INGREDIENT_UNITS} disabled={!canEditComposition} />
+            <UnitCycle value={unit} onChange={setUnit} options={INGREDIENT_UNITS} disabled={!canEditFields} />
           </div>
           <div className="flex-1 space-y-1">
             {itemError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{itemError}</p>}
             {quantity !== '' && ingredientQuantity <= 0 && <p className="text-xs font-medium" style={{ color: COLORS.primary }}>Informe uma quantidade maior que zero.</p>}
-            {canEditComposition && (
+            {canEditFields && (
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={(!editingIngredient && !selectedInsumoId) || ingredientQuantity <= 0} onClick={editingIngredient ? updateIngredient : addIngredient}
                   className="flex-1 text-white px-3 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -851,7 +851,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           </div>
 
           {items.length === 0 ? (
-            <p className="text-sm text-zinc-400">Nenhum insumo adicionado ainda.</p>
+            <p className="text-sm text-zinc-400" style={{ color: missingIngredients ? COLORS.primary : undefined }}>
+              {missingIngredients ? 'Adicione pelo menos um insumo.' : 'Nenhum insumo adicionado ainda.'}
+            </p>
           ) : (
             <div className="space-y-2">
               {items.map((item, idx) => (
@@ -862,7 +864,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                     <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
                     <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
                   </div>
-                  {canEditComposition && (
+                  {canEditFields && (
                     <div className="flex items-center gap-2 ml-3 shrink-0">
                       <button type="button" onClick={() => editingIngredientId === item.insumo_id ? cancelIngredientEdit() : startIngredientEdit(item)}
                         aria-label={`${editingIngredientId === item.insumo_id ? 'Cancelar edição de' : 'Editar'} ${item.insumo_name}`}
@@ -885,7 +887,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       </div>
 
       {/* Linha 2.2 — Fórmula Salva */}
-      {!locked && (
+      {!locked && !confirmed && (
         <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
           <h3 className="font-semibold text-zinc-900 text-sm mb-1">2.2 Fórmula Salva</h3>
           <p className="text-xs text-zinc-500 mb-4">Selecione uma fórmula salva para preencher automaticamente os insumos (substitui a lista atual).</p>
@@ -985,7 +987,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       {/* Linha 3 — Orçamento */}
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <h3 className="font-semibold text-zinc-900 text-sm mb-4">3. Orçamento</h3>
-        <div className={confirmed ? 'flex flex-wrap items-start gap-x-6 gap-y-3' : 'grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-end'}>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_minmax(0,1fr)] md:items-start">
           <div className="w-36 max-w-full">
             <label htmlFor="budget-number" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Número de orçamento</label>
             <input
@@ -995,7 +997,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               maxLength={6}
               className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-[var(--pf-primary)] outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
               value={budgetNumber}
-              disabled={readOnly || saving || (locked && !confirmed)}
+              disabled={!canEditFields}
               aria-invalid={missingBudgetNumber}
               aria-describedby={missingBudgetNumber ? 'budget-number-error' : undefined}
               onChange={e => setBudgetNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -1003,108 +1005,112 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             {missingBudgetNumber && <p id="budget-number-error" className="mt-1 text-xs text-[var(--pf-primary)]">Informe o número do orçamento.</p>}
           </div>
 
-          <div className={confirmed ? 'min-w-0 grow basis-52' : undefined}>
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-              {!confirmed && (
-                <>
+          <div>
+            {(!confirmed || !locked) && (
+              <>
+                <div className="flex flex-wrap items-end gap-3">
                   <div className="sm:w-28">
-                    <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
+                    <label htmlFor="budget-quantity" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Quantidade</label>
                     <input
                       ref={bQtyRef}
+                      id="budget-quantity"
                       inputMode="decimal"
-                      maxLength={7}
+                      maxLength={confirmed ? 13 : 7}
                       className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
                       value={bQty}
-                      disabled={locked}
-                      onChange={e => { setBudgetError(''); setBQty(formatQuantityInput(e.target.value, 3)); }}
+                      disabled={!canEditFields}
+                      onChange={e => { setBudgetError(''); setBQty(formatQuantityInput(e.target.value, confirmed ? 7 : 3)); }}
                     />
                   </div>
                   <div className="sm:w-36">
-                    <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
-                    <UnitCycle value={bUnit} onChange={setBUnit} options={BUDGET_UNITS} disabled={locked} />
+                    <label htmlFor="budget-unit" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Unidade</label>
+                    <UnitCycle id="budget-unit" value={bUnit} onChange={setBUnit} options={BUDGET_UNITS} disabled={!canEditFields} />
                   </div>
-                </>
-              )}
-              <div className={confirmed ? 'w-full max-w-52' : 'flex-1'}>
-                <label htmlFor="budget-value" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">{confirmed ? 'Valor da fórmula (R$)' : 'Valor (R$)'}</label>
-                <input
-                  id="budget-value"
-                  inputMode={confirmed ? 'decimal' : 'numeric'}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-[var(--pf-primary)] outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
-                  value={bValue}
-                  disabled={readOnly || (confirmed ? saving || !hasSelectedBudget : locked)}
-                  aria-invalid={!!confirmedBudgetValueError}
-                  aria-describedby={confirmedBudgetValueError ? 'budget-value-error' : undefined}
-                  onChange={e => {
-                    setBudgetError('');
-                    const input = e.currentTarget;
-                    const formatted = formatCurrency(input.value);
-                    const caret = currencyCaretPosition(input.value, input.selectionStart ?? input.value.length);
-                    setBValue(formatted);
-                    requestAnimationFrame(() => input.setSelectionRange(caret, caret));
-                  }}
-                  onKeyDown={e => {
-                    if (!confirmed && e.key === 'Enter' && bQty && bValue) {
-                      e.preventDefault();
-                      addBudgetItem();
-                    }
-                  }}
-                />
-                {confirmedBudgetValueError && <p id="budget-value-error" className="mt-1 text-xs text-[var(--pf-primary)]">{confirmedBudgetValueError}</p>}
-              </div>
-              {!confirmed && (
-                <div className="space-y-1">
+                  <div className="min-w-28 flex-1">
+                    <label htmlFor="budget-value" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Valor (R$)</label>
+                    <input
+                      id="budget-value"
+                      inputMode="decimal"
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-[var(--pf-primary)] outline-none text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
+                      value={bValue}
+                      disabled={!canEditFields}
+                      onChange={e => {
+                        setBudgetError('');
+                        const input = e.currentTarget;
+                        const formatted = formatCurrency(input.value);
+                        const caret = currencyCaretPosition(input.value, input.selectionStart ?? input.value.length);
+                        setBValue(formatted);
+                        requestAnimationFrame(() => input.setSelectionRange(caret, caret));
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && bQty && bValue) {
+                          e.preventDefault();
+                          saveBudgetItem();
+                        }
+                      }}
+                    />
+                  </div>
                   {!locked && (
-                    <button type="button" disabled={!bQty || !bValue} onClick={addBudgetItem}
-                      className="w-full sm:w-auto text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                      style={{ background: GRADIENTS.secondary }}>
-                      + Adicionar
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" disabled={!canEditFields || !bQty || !bValue} onClick={saveBudgetItem}
+                        className="text-white px-4 py-2 rounded-lg font-medium text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        style={{ background: GRADIENTS.secondary }}>
+                        {editingBudgetIndex === null ? '+ Adicionar' : 'Atualizar orçamento'}
+                      </button>
+                      {editingBudgetIndex !== null && (
+                        <button type="button" onClick={resetBudgetFields}
+                          className="px-3 py-2 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 text-sm font-semibold transition-colors">
+                          Cancelar edição
+                        </button>
+                      )}
+                    </div>
                   )}
-                  {budgetError && <p className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{budgetError}</p>}
                 </div>
-              )}
-            </div>
+                {budgetError && <p role="alert" className="mt-2 text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded">{budgetError}</p>}
+                {editingBudgetIndex !== null && <p role="status" className="mt-2 text-xs" style={{ color: COLORS.secondary }}>Atualize ou cancele a edição do orçamento antes de salvar a fórmula.</p>}
+              </>
+            )}
 
             {budgetItems.length > 0 && (
-              <div className="mt-3 space-y-2">
+              <div role="group" aria-label="Opções de orçamento" className="mt-3 space-y-2">
                 {budgetItems.map((bi, idx) => {
                   const isSelected = selectedBudgetIndex === idx;
                   return (
                     <div key={idx}
-                      tabIndex={locked ? -1 : 0}
-                      role="radio"
-                      aria-checked={isSelected}
-                      className={`flex items-center gap-3 p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500 ${!locked ? 'cursor-pointer' : ''} ${isSelected ? 'border-red-300' : 'border-zinc-100'}`}
-                      style={{ background: isSelected ? COLORS.pinkSoft : (idx % 2 === 0 ? COLORS.rowAlt : '#fff') }}
-                      onClick={() => { if (!locked) setSelectedBudgetIndex(idx); }}
-                      onKeyDown={e => {
-                        if (locked) return;
-                        if (e.key === ' ' || e.key === 'Enter') {
-                          e.preventDefault();
-                          setSelectedBudgetIndex(idx);
-                        } else if (e.key === 'ArrowDown' && idx < budgetItems.length - 1) {
-                          e.preventDefault();
-                          setSelectedBudgetIndex(idx + 1);
-                        } else if (e.key === 'ArrowUp' && idx > 0) {
-                          e.preventDefault();
-                          setSelectedBudgetIndex(idx - 1);
-                        }
-                      }}>
-                      <input type="radio" name="budgetSelection" className="w-4 h-4 accent-[var(--pf-primary)] shrink-0"
-                        checked={isSelected}
-                        disabled={locked}
-                        onChange={() => { if (!locked) setSelectedBudgetIndex(idx); }}
-                        onClick={e => e.stopPropagation()} />
-                      <p className="text-sm text-zinc-700 flex-1 min-w-0">
-                        <strong>{formatQuantity(bi.quantity)}</strong> {formatUnit(bi.unit)}
-                        {(!confirmed || !isSelected) && <> · <span className="font-semibold text-zinc-900">R$ {bi.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></>}
-                      </p>
-                      {!locked && (
-                        <button type="button" onClick={e => { e.stopPropagation(); removeBudgetItem(idx); }}
-                          className="text-zinc-300 hover:text-red-500 transition-colors ml-4 p-1" title="Remover item do orçamento">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border ${isSelected ? 'border-red-300' : 'border-zinc-100'}`}
+                      style={{ background: isSelected ? COLORS.pinkSoft : (idx % 2 === 0 ? COLORS.rowAlt : '#fff') }}>
+                      <label className={`flex flex-1 items-center gap-3 text-sm text-zinc-700 ${canEditFields ? 'cursor-pointer' : ''}`}>
+                        <input type="radio" name="budgetSelection" className="w-4 h-4 accent-[var(--pf-primary)] shrink-0"
+                          checked={isSelected}
+                          disabled={!canEditFields}
+                          onChange={() => setSelectedBudgetIndex(idx)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              setSelectedBudgetIndex(idx);
+                            }
+                          }} />
+                        <span>
+                          <strong>{formatQuantity(bi.quantity)}</strong> {formatUnit(bi.unit)} · <span className="font-semibold text-zinc-900">R$ {Number(bi.value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </span>
+                      </label>
+                      {canEditFields && (
+                        <div className="flex items-center gap-2">
+                          {confirmed && (
+                            <button type="button" onClick={() => startBudgetEdit(idx, bi)}
+                              disabled={editingBudgetIndex !== null}
+                              aria-label={`Editar opção de orçamento ${idx + 1}`}
+                              className="text-xs font-semibold px-3 py-1 rounded-lg hover:bg-[#EFF2FA] disabled:opacity-50"
+                              style={{ color: COLORS.secondary }}>
+                              Editar
+                            </button>
+                          )}
+                          <button type="button" onClick={() => removeBudgetItem(idx)}
+                            className="text-zinc-300 hover:text-red-500 transition-colors p-1" title="Remover item do orçamento"
+                            aria-label={`Remover opção de orçamento ${idx + 1}`}>
+                            <Trash2 aria-hidden="true" className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -1119,15 +1125,19 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
         <h3 className="font-semibold text-zinc-900 text-sm mb-4">4. Informações</h3>
         <div>
-          <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Atendente</label>
+          <label htmlFor="attendant-name" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome do Atendente</label>
           <input
+            id="attendant-name"
             type="text"
             maxLength={100}
             className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             value={attendantName}
-            disabled={locked}
+            disabled={!canEditFields}
+            aria-invalid={missingAttendant}
+            aria-describedby={missingAttendant ? 'attendant-name-error' : undefined}
             onChange={e => setAttendantName(e.target.value.toUpperCase())}
           />
+          {missingAttendant && <p id="attendant-name-error" className="mt-1 text-xs text-[var(--pf-primary)]">Informe o nome do atendente.</p>}
         </div>
       </div>
 
@@ -1136,31 +1146,27 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <h3 className="font-semibold text-zinc-900 text-sm mb-4">5. Finalizar</h3>
         <div className={(confirmed || readOnly) ? 'grid grid-cols-1 gap-6 md:grid-cols-3' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}>
           <div>
-            {/** Data liberada separadamente para fórmulas confirmadas. */}
             <label htmlFor="delivery-date" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Previsão de entrega</label>
             <div className="relative">
               <input
-                ref={deliveryDateTextInputRef}
                 id="delivery-date"
                 type="text"
                 inputMode="numeric"
                 maxLength={10}
                 className="w-full pr-10 px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 value={deliveryDate}
-                disabled={readOnly || (confirmed ? !deliveryDateEditing : locked)}
-                onChange={e => {
-                  const masked = formatDateBR(e.target.value);
-                  setDeliveryDate(masked);
-                  if (dateInputRef.current) dateInputRef.current.value = parseDateBR(masked) ?? '';
-                }}
+                disabled={!canEditFields}
+                aria-invalid={invalidDeliveryDate}
+                aria-describedby={invalidDeliveryDate ? 'delivery-date-error' : undefined}
+                onChange={e => setDeliveryDate(formatDateBR(e.target.value))}
               />
-              {(!readOnly && (confirmed ? deliveryDateEditing : !locked)) && deliveryDate && (
-                <button type="button" onClick={() => { setDeliveryDate(''); if (dateInputRef.current) dateInputRef.current.value = ''; }}
+              {canEditFields && deliveryDate && (
+                <button type="button" onClick={() => setDeliveryDate('')}
                   className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors" title="Limpar data">
                   <X className="w-4 h-4" />
                 </button>
               )}
-              <button type="button" onClick={() => dateInputRef.current?.showPicker()} disabled={readOnly || (confirmed ? !deliveryDateEditing : locked)}
+              <button type="button" onClick={() => dateInputRef.current?.showPicker()} disabled={!canEditFields}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-red-700 transition-colors rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed" title="Abrir calendário">
                 <Calendar className="w-4 h-4" />
               </button>
@@ -1170,12 +1176,15 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 className="absolute inset-0 w-full opacity-0 pointer-events-none"
                 tabIndex={-1}
                 aria-hidden="true"
+                value={parsedDeliveryDate ?? ''}
+                disabled={!canEditFields}
                 onChange={e => {
                   const value = e.target.value ? formatDateToBR(e.target.value) : '';
                   setDeliveryDate(value);
                 }}
               />
             </div>
+            {invalidDeliveryDate && <p id="delivery-date-error" className="mt-1 text-xs text-[var(--pf-primary)]">Informe uma previsão de entrega válida.</p>}
             {formula && formula.status !== 'pending' && (
               <dl className="mt-3">
                 <dt className="text-xs font-semibold text-zinc-500 uppercase mb-1">Data de entrega</dt>
@@ -1190,9 +1199,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
-            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              value={paymentStatus} disabled={locked && !confirmed} onChange={e => {
+            <label htmlFor="payment-status" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
+            <select id="payment-status" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              value={paymentStatus} disabled={!canEditFields} onChange={e => {
                 const status = e.target.value;
                 setPaymentStatus(status);
                 if (status !== 'parcial') {
@@ -1200,7 +1209,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   onPartialPaymentAmountChange?.(null);
                 }
               }}>
-              <option value="">Selecione...</option>
+              <option value="">{confirmed ? 'Não informado' : 'Selecione...'}</option>
               <option value="pago">Pago</option>
               <option value="parcial">Parcial</option>
               <option value="pagar_na_retirada">Pagar na retirada</option>
@@ -1215,7 +1224,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   type="text"
                   inputMode="numeric"
                   value={partialPaymentAmount}
-                  disabled={locked && !confirmed}
+                  disabled={!canEditFields}
                   onChange={e => {
                     const input = e.currentTarget;
                     const formattedValue = formatCurrency(input.value);
@@ -1244,9 +1253,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             </div>
           )}
           <div>
-            <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Forma de pagamento</label>
-            <select className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              value={paymentMethod} disabled={locked && !confirmed} onChange={e => setPaymentMethod(e.target.value)}>
+            <label htmlFor="payment-method" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Forma de pagamento</label>
+            <select id="payment-method" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              value={paymentMethod} disabled={!canEditFields} onChange={e => setPaymentMethod(e.target.value)}>
               <option value="">Selecione (opcional)...</option>
               <option value="cartao">Cartão</option>
               <option value="dinheiro">Dinheiro</option>
@@ -1257,7 +1266,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
       </div>
 
       {/* Bloco 6 — Ações */}
-      {!locked && (
+      {!locked && !readOnly && !confirmed && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <button type="button" disabled={!canSave || saving} onClick={handleSave}
@@ -1288,10 +1297,10 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         </div>
       )}
 
-      {formula && confirmed && (
+      {formula && confirmed && !locked && !readOnly && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="md:col-span-2">
-            <button type="button" disabled={readOnly || !canSaveConfirmed || saving} onClick={handleSaveConfirmed}
+            <button type="button" disabled={!canSaveConfirmed || saving} onClick={handleSaveConfirmed}
               className="w-full text-white py-3.5 rounded-xl font-bold text-base hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: GRADIENTS.secondary }}>
               {saving ? 'Salvando...' : '💾 Salvar alterações'}
