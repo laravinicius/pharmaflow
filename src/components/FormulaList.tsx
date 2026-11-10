@@ -3,7 +3,7 @@ import { RefreshCw, Search, X, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
 import { Formula } from '../types';
-import { formatDateToBR, formatQuantity, formatUnit } from '../utils/format';
+import { formatDateToBR, formatQuantity, formatUnit, stripDiacritics } from '../utils/format';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { LoadingState, ErrorState } from './Feedback';
@@ -218,19 +218,33 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       .reduce((formulaTotal, item) => formulaTotal + Number(item.value || 0), 0)), 0), [all, summaryMonth, summaryYear, summaryPaymentStatus]);
 
   const filtered = useMemo(() => {
+    const confirmedSearch = stripDiacritics(searchLower);
+
     return all
       .filter(f => statuses.includes(f.status))
       .filter(f => !deliveryStatusFilter || f.delivery_status === deliveryStatusFilter)
       .filter(f => !statusFilter || f.status === statusFilter)
-      .filter(f => screenKey === 'history'
-        ? matchesHistorySearch(f)
-        : (
-        f.customer_name.toLowerCase().includes(searchLower) ||
-        (f.attendant_name || '').toLowerCase().includes(searchLower) ||
-        (f.created_by_name || '').toLocaleLowerCase('pt-BR').includes(searchLower) ||
-        String(f.id).includes(searchLower)
-      ));
-  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter, screenKey]);
+      .filter(f => {
+        if (!searchLower) return true;
+        if (isHistory) return matchesHistorySearch(f);
+
+        if (variant === 'confirmed') {
+          return [
+            f.customer_name,
+            f.budget_number,
+            f.attendant_name,
+            f.created_by_name,
+            f.delivery_date,
+            f.delivery_date && formatDateToBR(f.delivery_date),
+          ].some(value => stripDiacritics((value ?? '').toLocaleLowerCase('pt-BR')).includes(confirmedSearch));
+        }
+
+        return f.customer_name.toLowerCase().includes(searchLower) ||
+          (f.attendant_name || '').toLowerCase().includes(searchLower) ||
+          (f.created_by_name || '').toLocaleLowerCase('pt-BR').includes(searchLower) ||
+          String(f.id).includes(searchLower);
+      });
+  }, [all, statuses, statusFilter, searchLower, deliveryStatusFilter, isHistory, variant]);
 
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
