@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { RefreshCw, Search, X, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../services/lanDatabase';
@@ -46,14 +46,33 @@ export function getMissingReasons(f: Formula): string[] {
   return reasons;
 }
 
-export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, showVerification = false, monthlySummary = false, deliveryStatusFilter, onSelect, onConfirm, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; showVerification?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; onSelect?: (f: Formula) => void; onConfirm?: (f: Formula, missing: string[]) => void; onRepeat?: (f: Formula) => void }) {
+export interface FormulaListView {
+  screenKey: string;
+  search: string;
+  statusFilter: string;
+  summaryMonth: number;
+  summaryYear: number;
+  summaryPaymentStatus: string;
+  filterBySummary: boolean;
+}
+
+export interface FormulaListReturn {
+  formulaId: number;
+  view: FormulaListView;
+}
+
+export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'pending', statusFilterOptions, showAndamento = true, showVerification = false, monthlySummary = false, deliveryStatusFilter, returnTo, onReturnRestored, onSelect, onConfirm, onRepeat }: { screenKey: string; title: string; subtitle: string; statuses: string[]; variant?: 'pending' | 'confirmed'; statusFilterOptions?: { value: string; label: string }[]; showAndamento?: boolean; showVerification?: boolean; monthlySummary?: boolean; deliveryStatusFilter?: string; returnTo?: FormulaListReturn | null; onReturnRestored?: () => void; onSelect?: (f: Formula, view: FormulaListView) => void; onConfirm?: (f: Formula, missing: string[], view: FormulaListView) => void; onRepeat?: (f: Formula) => void }) {
   const { data: formulas, loading, error, reload } = useData(() => db.formulas.list());
   const { sessionToken, user } = useAuth();
   const canVerify = showVerification && user?.role === 'manager';
   const isHistory = screenKey === 'history';
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState(returnTo?.view.search ?? '');
+  const [statusFilter, setStatusFilter] = useState(returnTo?.view.statusFilter ?? '');
   const [focusedIdx, setFocusedIdx] = useState(-1);
+  const [highlightedId] = useState(returnTo?.formulaId ?? null);
+  const [returnNotFound, setReturnNotFound] = useState(false);
+  const returnPendingRef = useRef(!!returnTo);
+  const returnedRowRef = useRef<HTMLDivElement>(null);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [pendingWhatsAppStatus, setPendingWhatsAppStatus] = useState<Formula | null>(null);
   const [pendingDeliveryConfirmation, setPendingDeliveryConfirmation] = useState<{ formula: Formula; deliveryStatus: 'aguardando_retirada' | 'entregue' } | null>(null);
@@ -62,10 +81,11 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
   const [pendingUnverification, setPendingUnverification] = useState<Formula | null>(null);
   const [editingPayment, setEditingPayment] = useState<Formula | null>(null);
   const now = new Date();
-  const [summaryMonth, setSummaryMonth] = useState(now.getMonth());
-  const [summaryYear, setSummaryYear] = useState(now.getFullYear());
-  const [summaryPaymentStatus, setSummaryPaymentStatus] = useState('pago');
-  const [filterBySummary, setFilterBySummary] = useState(false);
+  const [summaryMonth, setSummaryMonth] = useState(returnTo?.view.summaryMonth ?? now.getMonth());
+  const [summaryYear, setSummaryYear] = useState(returnTo?.view.summaryYear ?? now.getFullYear());
+  const [summaryPaymentStatus, setSummaryPaymentStatus] = useState(returnTo?.view.summaryPaymentStatus ?? 'pago');
+  const [filterBySummary, setFilterBySummary] = useState(returnTo?.view.filterBySummary ?? false);
+  const currentView: FormulaListView = { screenKey, search, statusFilter, summaryMonth, summaryYear, summaryPaymentStatus, filterBySummary };
 
   const handleConfirm = async (f: Formula) => {
     const reasons = getMissingReasons(f);
@@ -74,7 +94,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       try {
         await db.formulas.updateStatus(f.id, 'confirmed', sessionToken ?? undefined);
         await reload();
-        onConfirm?.(f, []);
+        onConfirm?.(f, [], currentView);
       } catch (err: any) {
         alert('Erro ao confirmar: ' + (err?.message ?? 'verifique a conexão com o servidor.'));
       } finally {
@@ -82,7 +102,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       }
       return;
     }
-    onConfirm?.(f, reasons);
+    onConfirm?.(f, reasons, currentView);
   };
 
   const applyDeliveryStatus = async (formula: Formula, deliveryStatus: string) => {
@@ -256,6 +276,21 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       });
   }, [listFormulas, statuses, statusFilter, searchLower, deliveryStatusFilter, isHistory, variant]);
 
+  useLayoutEffect(() => {
+    if (!returnPendingRef.current || loading || error) return;
+    returnPendingRef.current = false;
+    if (returnedRowRef.current) {
+      const row = returnedRowRef.current;
+      const scrollContainer = row.closest('.overflow-auto');
+      const block = scrollContainer && row.offsetHeight > scrollContainer.clientHeight ? 'start' : 'center';
+      row.focus({ preventScroll: true });
+      row.scrollIntoView({ block, behavior: 'instant' });
+    } else {
+      setReturnNotFound(true);
+    }
+    onReturnRestored?.();
+  }, [filtered, loading, error, onReturnRestored]);
+
   const paymentTint: Record<string, string> = {
     pago: 'bg-emerald-50 border-emerald-200',
     parcial: 'bg-amber-50 border-amber-200',
@@ -328,6 +363,12 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
         </div>
       </div>
 
+      {returnNotFound && (
+        <p role="status" className="rounded-xl border border-[#D0DCE8] bg-[#EFF2FA] px-4 py-3 text-sm text-[#243465]">
+          A fórmula visualizada não está mais disponível nesta lista com os filtros atuais.
+        </p>
+      )}
+
       {monthlySummary && (
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 text-zinc-700">
           <label htmlFor="summary-payment-status" className="font-semibold">Valor total de fórmulas</label>
@@ -387,17 +428,19 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
               const tint = paymentTint[f.payment_status ?? ''] ?? 'bg-white border-zinc-200';
               const tintFocused = paymentTintFocused[f.payment_status ?? ''] ?? 'bg-zinc-50 border-zinc-200';
               const isFocused = focusedIdx === idx;
+              const isHighlighted = highlightedId === f.id;
               const cardTint = isFocused ? tintFocused : tint;
               return variant === 'confirmed' ? (
                 <div key={f.id} className="flex items-stretch gap-3">
-                <div onClick={() => onSelect?.(f)}
+                <div ref={isHighlighted ? returnedRowRef : undefined} onClick={() => onSelect?.(f, currentView)}
                   tabIndex={0}
                   role="button"
+                  aria-current={isHighlighted ? 'true' : undefined}
                   onKeyDown={e => {
                     if (e.target !== e.currentTarget) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      onSelect?.(f);
+                      onSelect?.(f, currentView);
                     } else if (e.key === 'ArrowDown' && idx < filtered.length - 1) {
                       e.preventDefault();
                       setFocusedIdx(idx + 1);
@@ -408,10 +451,11 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                   }}
                   onFocus={() => setFocusedIdx(idx)}
                   onBlur={() => setFocusedIdx(-1)}
-                  className={`w-full min-w-0 text-left rounded-2xl border shadow-sm px-4 py-4 hover:shadow-md transition-all group cursor-pointer ${cardTint} focus:outline-none`}>
+                  className={`w-full min-w-0 scroll-mt-2 text-left rounded-2xl border shadow-sm px-4 py-4 hover:shadow-md transition-all group cursor-pointer ${cardTint} ${isHighlighted ? 'ring-2 ring-[#243465]' : ''} focus:outline-none`}>
                   <div className={`grid grid-cols-1 ${gridCols} ${columnGap} items-center text-sm [&>*]:min-w-0 ${isHistory ? 'formula-history-row' : ''}`}>
                     <div data-label="Cliente" className="min-w-0 text-left">
                       <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
+                      {isHighlighted && <p className="text-xs font-semibold text-[#243465]">Última visualizada</p>}
                       {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.responsible_name ? `${f.responsible_name} - ${f.customer_phone}` : f.customer_phone}</p>}
                     </div>
                     <p data-label="Orçamento" className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>
@@ -507,13 +551,14 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 </div>
                 </div>
             ) : (
-              <div key={f.id} onClick={() => onSelect?.(f)}
+              <div key={f.id} ref={isHighlighted ? returnedRowRef : undefined} onClick={() => onSelect?.(f, currentView)}
                 tabIndex={0}
                 role="button"
+                aria-current={isHighlighted ? 'true' : undefined}
                 onKeyDown={e => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onSelect?.(f);
+                    onSelect?.(f, currentView);
                   } else if (e.key === 'ArrowDown' && idx < filtered.length - 1) {
                     e.preventDefault();
                     setFocusedIdx(idx + 1);
@@ -524,10 +569,11 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
                 }}
                 onFocus={() => setFocusedIdx(idx)}
                 onBlur={() => setFocusedIdx(-1)}
-                className={`w-full text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-4 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer ${isFocused ? 'ring-2 ring-red-500 bg-red-50' : ''} focus:outline-none`}>
+                className={`w-full scroll-mt-2 text-left bg-white rounded-2xl border border-zinc-200 shadow-sm px-4 py-4 hover:border-red-300 hover:shadow-md transition-all group cursor-pointer ${isFocused ? 'bg-[#FEF0F2]' : ''} ${isHighlighted ? 'ring-2 ring-[#243465]' : isFocused ? 'ring-2 ring-[#C5243E]' : ''} focus:outline-none`}>
                 <div className={`grid grid-cols-1 ${pendingGridCols} ${columnGap} items-center text-sm [&>*]:min-w-0`}>
                   <div className="min-w-0 text-left">
                     <p className="font-bold text-zinc-900 truncate">{f.customer_name}</p>
+                    {isHighlighted && <p className="text-xs font-semibold text-[#243465]">Última visualizada</p>}
                     {f.customer_phone && <p className="text-xs text-zinc-400 truncate">{f.responsible_name ? `${f.responsible_name} - ${f.customer_phone}` : f.customer_phone}</p>}
                   </div>
                   <p className="text-zinc-700 truncate text-right">{f.budget_number || '—'}</p>

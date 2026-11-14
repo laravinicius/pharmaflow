@@ -18,6 +18,17 @@ export interface FormulaPaymentUpdate {
   payment_status: PaymentStatus;
   partial_payment_amount: number | null;
 }
+export interface FormulaFinalizationValues {
+  delivery_date: string | null;
+  payment_status: string;
+  partial_payment_amount: number | null;
+  payment_method: string | null;
+}
+export interface FormulaFinalizationUpdate {
+  expected_status: Formula['status'];
+  expected: FormulaFinalizationValues;
+  values: FormulaFinalizationValues;
+}
 export interface Formula {
   created_by_name: string | null;
   id: number; customer_id: number; customer_name: string; customer_phone: string; responsible_name?: string | null;

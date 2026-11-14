@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import mysql from 'mysql2/promise';
 import { formatDbError, isUnsupportedAuthPluginError } from './dbError';
 import { getDeliveryTimestamp } from './deliveryTime';
-import type { FormulaPaymentUpdate } from '../src/types';
+import type { FormulaFinalizationUpdate, FormulaPaymentUpdate } from '../src/types';
 
 interface AdminVerifyResult {
   success: boolean;
@@ -831,6 +831,79 @@ export class Db {
       await conn.commit();
       await this.logAction({ id: session.user.id, name: session.user.name }, 'update', 'formulas', id,
         `Pagamento da fórmula ${id} alterado de ${formula.payment_status} para ${payment.payment_status}. Quantia parcial: ${formula.partial_payment_amount ?? 'não informada'} → ${partialAmount ?? 'não se aplica'}.`);
+      return { success: true };
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  }
+
+  async updateFormulaFinalization(id: number, update: FormulaFinalizationUpdate, sessionToken: string) {
+    if (!this.pool) throw new Error('Sem conexão com o servidor');
+    if (!sessionToken) throw new Error('Sessão obrigatória para editar a finalização.');
+    const session = await this.getSessionUser(sessionToken);
+    if (!session.user) throw new Error(session.error ?? 'Sessão inválida ou expirada.');
+    if (!update?.expected || !update.values || !['pending', 'confirmed', 'delivered'].includes(update.expected_status)) {
+      throw new Error('Dados de finalização inválidos.');
+    }
+
+    const { expected, values } = update;
+    if (values.delivery_date !== null) {
+      const date = typeof values.delivery_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(values.delivery_date)
+        ? new Date(`${values.delivery_date}T00:00:00.000Z`) : new Date(NaN);
+      if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== values.delivery_date || date.getUTCFullYear() < 1000) {
+        throw new Error('Informe uma previsão de entrega válida.');
+      }
+    }
+    if (!['', 'pago', 'parcial', 'pagar_na_retirada'].includes(values.payment_status) ||
+        ![null, 'cartao', 'dinheiro', 'pix'].includes(values.payment_method)) {
+      throw new Error('Dados de pagamento inválidos.');
+    }
+
+    const conn = await this.pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query<mysql.RowDataPacket[]>(
+        'SELECT status, delivery_date, payment_status, partial_payment_amount, payment_method FROM formulas WHERE id=? FOR UPDATE', [id]
+      );
+      const current = rows[0];
+      if (!current) throw new Error('Fórmula não encontrada.');
+      const currentAmount = current.partial_payment_amount == null ? null : Number(current.partial_payment_amount);
+      if (current.status !== update.expected_status ||
+          (current.delivery_date ?? null) !== expected.delivery_date ||
+          (current.payment_status ?? '') !== expected.payment_status ||
+          currentAmount !== expected.partial_payment_amount ||
+          (current.payment_method ?? null) !== expected.payment_method) {
+        throw new Error('A fórmula foi alterada. Volte à lista e abra a fórmula novamente.');
+      }
+
+      const paymentChanged = values.payment_status !== (current.payment_status ?? '') ||
+        values.partial_payment_amount !== currentAmount;
+      if (paymentChanged && values.payment_status === 'parcial') {
+        const amount = values.partial_payment_amount;
+        if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0 || Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-6) {
+          throw new Error('Informe uma quantia válida maior que zero, com até duas casas decimais.');
+        }
+        const [budgets] = await conn.query<mysql.RowDataPacket[]>(
+          'SELECT value FROM formula_budget_items WHERE formula_id=? AND is_selected=1 FOR UPDATE', [id]
+        );
+        if (budgets.length !== 1) throw new Error('Selecione uma única opção de orçamento para validar o limite.');
+        if (amount > Number(budgets[0].value)) {
+          throw new Error('A quantia paga não pode ser maior que o valor do orçamento selecionado.');
+        }
+      } else if (paymentChanged && values.payment_status !== 'parcial' && values.partial_payment_amount !== null) {
+        throw new Error('A quantia parcial só pode ser informada para pagamento parcial.');
+      }
+
+      await conn.query(
+        'UPDATE formulas SET delivery_date=?, payment_status=?, partial_payment_amount=?, payment_method=? WHERE id=?',
+        [values.delivery_date, values.payment_status, values.partial_payment_amount, values.payment_method, id]
+      );
+      await conn.commit();
+      await this.logAction({ id: session.user.id, name: session.user.name }, 'update', 'formulas', id,
+        `Finalização da fórmula ${id} atualizada. Previsão: ${expected.delivery_date ?? 'não informada'} → ${values.delivery_date ?? 'não informada'}; pagamento: ${expected.payment_status || 'não informado'} → ${values.payment_status || 'não informado'}; quantia parcial: ${expected.partial_payment_amount ?? 'não informada'} → ${values.partial_payment_amount ?? 'não informada'}; forma: ${expected.payment_method ?? 'não informada'} → ${values.payment_method ?? 'não informada'}.`);
       return { success: true };
     } catch (e) {
       await conn.rollback();

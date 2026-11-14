@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
-  Users, Search, X, PlusCircle, RefreshCw, Trash2, AlertCircle, Calendar, ClipboardList, Bookmark,
+  Users, Search, X, PlusCircle, RefreshCw, Trash2, AlertCircle, Calendar, ClipboardList, Bookmark, ArrowLeft,
 } from 'lucide-react';
 import { COLORS, GRADIENTS } from '../../config/branding';
 import { motion } from 'motion/react';
@@ -15,8 +15,9 @@ import { useFormDraft } from '../context/FormDraftContext';
 import { CustomerManager } from './CustomerManager';
 import { InsumoManager } from './InsumoManager';
 import { UnitCycle, INGREDIENT_UNITS, BUDGET_UNITS } from './UnitCycle';
+import { ConfirmModal } from './ConfirmModal';
 
-export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, partialPaymentAmount: savedPartialPaymentAmount = '', onPartialPaymentAmountChange, onClearTemplate, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; partialPaymentAmount?: string; onPartialPaymentAmountChange?: (value: string | null) => void; onClearTemplate?: () => void; onComplete: (dest: 'pending' | 'confirmed') => void }) {
+export function RecipeForm({ user, template, formula, confirmed = false, readOnly = false, initialLocked = true, partialPaymentAmount: savedPartialPaymentAmount = '', onPartialPaymentAmountChange, onClearTemplate, onBack, onComplete }: { user: User; template?: Formula | null; formula?: Formula | null; confirmed?: boolean; readOnly?: boolean; initialLocked?: boolean; partialPaymentAmount?: string; onPartialPaymentAmountChange?: (value: string | null) => void; onClearTemplate?: () => void; onBack?: () => void; onComplete: (dest: 'pending' | 'confirmed') => void }) {
   const { data: customers, reload: reloadCustomers } = useData(() => db.customers.list());
   const { data: insumos, reload: reloadInsumos } = useData(() => db.insumos.list());
   const { data: savedFormulas } = useData(() => db.savedFormulas.list());
@@ -53,11 +54,13 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const [deliveryStatus, setDeliveryStatus] = useState('');
   const [saveError, setSaveError] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [customerFocusIdx, setCustomerFocusIdx] = useState(-1);
   const [insumoFocusIdx, setInsumoFocusIdx] = useState(-1);
   const [savedFormulaFocusIdx, setSavedFormulaFocusIdx] = useState(-1);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
   const insumoQueryRef = useRef<HTMLInputElement>(null);
   const quantityRef = useRef<HTMLInputElement>(null);
   const bQtyRef = useRef<HTMLInputElement>(null);
@@ -75,6 +78,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const { getDraft, saveDraft, removeDraft } = useFormDraft();
   const DRAFT_KEY = 'recipe-new';
   const isDraftMode = !formula && !readOnly;
+
+  useLayoutEffect(() => {
+    const scrollContainer = backButtonRef.current?.closest('.overflow-auto');
+    if (scrollContainer) scrollContainer.scrollTop = 0;
+  }, [formula?.id]);
 
   const draftRef = useRef({ selectedCustomerId, items, budgetNumber, budgetItems, selectedBudgetIndex, attendantName, deliveryDate, paymentStatus, paymentMethod });
   const skipFirstCleanupRef = useRef(true);
@@ -193,6 +201,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const ingredientQuantity = editingIngredient && quantity === formatQuantity(editingIngredient.quantity)
     ? Number(editingIngredient.quantity) : parseQuantity(quantity);
   const canEditFields = !locked && !readOnly && !saving;
+  const canEditFinalization = !saving && (canEditFields || (!!formula && formula.status !== 'cancelled'));
   const canEditCustomer = canEditFields && !confirmed;
   const mq = stripDiacritics(insumoQuery.trim().toLowerCase());
   const filteredInsumos = mq
@@ -349,20 +358,66 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const missingBudgetNumber = confirmed && !!formula?.budget_number && !budgetNumber;
   const missingIngredients = confirmed && !!formula?.items.length && items.length === 0;
   const missingAttendant = confirmed && !!formula?.attendant_name?.trim() && !attendantName.trim();
-  const invalidDeliveryDate = confirmed && !!deliveryDate && !parsedDeliveryDate;
+  const invalidDeliveryDate = !!deliveryDate && !parsedDeliveryDate;
   const parsedPartialPaymentAmount = parseCurrency(partialPaymentAmount);
   const partialPaymentIsInvalid = paymentStatus === 'parcial' && (
     selectedBudgetValue === null ||
     parsedPartialPaymentAmount <= 0 ||
     parsedPartialPaymentAmount > selectedBudgetValue
   );
+  const originalFinalization = formula ? {
+    delivery_date: formula.delivery_date ?? null,
+    payment_status: formula.payment_status ?? '',
+    partial_payment_amount: formula.partial_payment_amount == null ? null : Number(formula.partial_payment_amount),
+    payment_method: formula.payment_method ?? null,
+  } : null;
+  const currentPartialPaymentAmount = paymentStatus === 'parcial' && partialPaymentAmount
+    ? parsedPartialPaymentAmount : null;
+  const paymentFieldsChanged = !!originalFinalization && (
+    paymentStatus !== originalFinalization.payment_status ||
+    (paymentStatus === 'parcial' && currentPartialPaymentAmount !== originalFinalization.partial_payment_amount)
+  );
+  const finalizationHasChanges = !!originalFinalization && (
+    deliveryDate !== (originalFinalization.delivery_date ? formatDateToBR(originalFinalization.delivery_date) : '') ||
+    paymentFieldsChanged || (paymentMethod || null) !== originalFinalization.payment_method
+  );
+  const finalizationOnly = !!formula && formula.status !== 'cancelled' && (locked || readOnly);
+  const canSaveFinalization = finalizationHasChanges && !invalidDeliveryDate &&
+    (!paymentFieldsChanged || !partialPaymentIsInvalid);
   const canSave = editingIngredientId === null && !!selectedCustomerId && items.length > 0 &&
     !!budgetNumber && budgetItems.length > 0 && hasSelectedBudget &&
     !!attendantName &&
-    !partialPaymentIsInvalid;
+    !invalidDeliveryDate && !partialPaymentIsInvalid;
   const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
   const canSaveConfirmed = editingIngredientId === null && editingBudgetIndex === null && hasSelectedBudget &&
     !missingBudgetNumber && !missingIngredients && !missingAttendant && !invalidDeliveryDate && !partialPaymentIsInvalid;
+
+  const originalBudgets = formula?.budget_items ?? [];
+  const originalSelectedIndex = originalBudgets.findIndex(item => item.is_selected);
+  const initialSelectedIndex = originalSelectedIndex >= 0 ? originalSelectedIndex : confirmed && originalBudgets.length === 1 ? 0 : null;
+  const comparableItems = (list: FormulaItem[]) => list.map(item => [item.insumo_id, Number(item.quantity), item.unit ?? 'mg']);
+  const comparableBudgets = (list: BudgetItem[]) => list.map(item => [Number(item.quantity), item.unit, Number(item.value)]);
+  const editingBudget = editingBudgetIndex === null ? null : budgetItems[editingBudgetIndex];
+  const hasPendingIngredient = editingIngredient
+    ? quantity !== formatQuantity(editingIngredient.quantity) || unit !== (editingIngredient.unit ?? 'mg')
+    : !!(selectedInsumoId || insumoQuery || quantity);
+  const hasPendingBudget = editingBudget
+    ? bQty !== formatQuantity(editingBudget.quantity) || bUnit !== editingBudget.unit || bValue !== formatCurrency(String(editingBudget.value).replace('.', ','))
+    : !!(bQty || bValue);
+  const hasUnsavedChanges = !!formula && (finalizationHasChanges || (canEditFields && (
+    selectedCustomerId !== formula.customer_id || budgetNumber !== (formula.budget_number ?? '') ||
+    attendantName !== (formula.attendant_name ?? '').toUpperCase() ||
+    deliveryStatus !== (formula.delivery_status ?? (formula.status === 'confirmed' ? 'em_producao' : '')) ||
+    selectedBudgetIndex !== initialSelectedIndex ||
+    JSON.stringify(comparableItems(items)) !== JSON.stringify(comparableItems(formula.items)) ||
+    JSON.stringify(comparableBudgets(budgetItems)) !== JSON.stringify(comparableBudgets(originalBudgets)) ||
+    hasPendingIngredient || hasPendingBudget
+  )));
+
+  const returnToList = () => {
+    onPartialPaymentAmountChange?.(null);
+    onBack?.();
+  };
 
   const getSaveErrorMessage = (err: any) => {
     const message = String(err?.message ?? '');
@@ -437,6 +492,31 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     } finally { setSaving(false); }
   };
 
+  const handleSaveFinalization = async () => {
+    if (!formula || !originalFinalization || !finalizationOnly || !canSaveFinalization || saving) return;
+    if (!sessionToken) {
+      setSaveError('Sessão inválida ou expirada. Entre novamente.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await db.formulas.updateFinalization(formula.id, {
+        expected_status: formula.status,
+        expected: originalFinalization,
+        values: {
+          delivery_date: parsedDeliveryDate,
+          payment_status: paymentStatus,
+          partial_payment_amount: paymentStatus === 'parcial'
+            ? currentPartialPaymentAmount : paymentFieldsChanged ? null : originalFinalization.partial_payment_amount,
+          payment_method: paymentMethod || null,
+        },
+      }, sessionToken);
+      onComplete(formula.status === 'pending' ? 'pending' : 'confirmed');
+    } catch (err: any) {
+      setSaveError(getSaveErrorMessage(err));
+    } finally { setSaving(false); }
+  };
+
   const handleCancelFormula = async () => {
     if (!formula || !cancelReason.trim()) return;
     setSaving(true);
@@ -493,6 +573,13 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="w-full space-y-6">
+      {onBack && (
+        <button ref={backButtonRef} type="button" disabled={saving}
+          onClick={() => hasUnsavedChanges ? setShowDiscardModal(true) : returnToList()}
+          className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-[#243465] transition-colors hover:bg-[#EFF2FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#243465] disabled:cursor-not-allowed disabled:opacity-50">
+          <ArrowLeft aria-hidden="true" className="h-4 w-4" /> Voltar para a lista
+        </button>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900">
@@ -543,7 +630,9 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium"
           style={{ background: COLORS.lightRedBg, border: `1px solid ${COLORS.lightRedBorder}`, color: COLORS.primary }}>
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {readOnly ? (formula?.status === 'cancelled' ? 'Fórmula cancelada — visualização somente leitura.' : 'Fórmula no histórico — visualização somente leitura.') : 'Fórmula em modo visualização. Clique em "Editar" para alterar os campos.'}
+          {formula.status === 'cancelled' ? 'Fórmula cancelada — visualização somente leitura.'
+            : readOnly ? 'No histórico, os campos de Finalizar podem ser alterados.'
+            : 'Os campos de Finalizar podem ser alterados. Para editar os demais campos, clique em "Editar".'}
         </div>
       )}
       {formula?.status === 'cancelled' && (
@@ -1155,18 +1244,18 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 maxLength={10}
                 className="w-full pr-10 px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 value={deliveryDate}
-                disabled={!canEditFields}
+                disabled={!canEditFinalization}
                 aria-invalid={invalidDeliveryDate}
                 aria-describedby={invalidDeliveryDate ? 'delivery-date-error' : undefined}
                 onChange={e => setDeliveryDate(formatDateBR(e.target.value))}
               />
-              {canEditFields && deliveryDate && (
+              {canEditFinalization && deliveryDate && (
                 <button type="button" onClick={() => setDeliveryDate('')}
                   className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-red-600 transition-colors" title="Limpar data">
                   <X className="w-4 h-4" />
                 </button>
               )}
-              <button type="button" onClick={() => dateInputRef.current?.showPicker()} disabled={!canEditFields}
+              <button type="button" onClick={() => dateInputRef.current?.showPicker()} disabled={!canEditFinalization}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-red-700 transition-colors rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed" title="Abrir calendário">
                 <Calendar className="w-4 h-4" />
               </button>
@@ -1177,7 +1266,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 tabIndex={-1}
                 aria-hidden="true"
                 value={parsedDeliveryDate ?? ''}
-                disabled={!canEditFields}
+                disabled={!canEditFinalization}
                 onChange={e => {
                   const value = e.target.value ? formatDateToBR(e.target.value) : '';
                   setDeliveryDate(value);
@@ -1201,7 +1290,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div>
             <label htmlFor="payment-status" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Pagamento</label>
             <select id="payment-status" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              value={paymentStatus} disabled={!canEditFields} onChange={e => {
+              value={paymentStatus} disabled={!canEditFinalization} onChange={e => {
                 const status = e.target.value;
                 setPaymentStatus(status);
                 if (status !== 'parcial') {
@@ -1209,7 +1298,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   onPartialPaymentAmountChange?.(null);
                 }
               }}>
-              <option value="">{confirmed ? 'Não informado' : 'Selecione...'}</option>
+              <option value="">{confirmed || formula?.status === 'delivered' ? 'Não informado' : 'Selecione...'}</option>
               <option value="pago">Pago</option>
               <option value="parcial">Parcial</option>
               <option value="pagar_na_retirada">Pagar na retirada</option>
@@ -1224,7 +1313,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   type="text"
                   inputMode="numeric"
                   value={partialPaymentAmount}
-                  disabled={!canEditFields}
+                  disabled={!canEditFinalization}
                   onChange={e => {
                     const input = e.currentTarget;
                     const formattedValue = formatCurrency(input.value);
@@ -1255,7 +1344,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           <div>
             <label htmlFor="payment-method" className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Forma de pagamento</label>
             <select id="payment-method" className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none bg-white text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              value={paymentMethod} disabled={!canEditFields} onChange={e => setPaymentMethod(e.target.value)}>
+              value={paymentMethod} disabled={!canEditFinalization} onChange={e => setPaymentMethod(e.target.value)}>
               <option value="">Selecione (opcional)...</option>
               <option value="cartao">Cartão</option>
               <option value="dinheiro">Dinheiro</option>
@@ -1263,6 +1352,15 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
             </select>
           </div>
         </div>
+        {finalizationOnly && (
+          <div className="mt-5 flex justify-end">
+            <button type="button" disabled={!canSaveFinalization || saving} onClick={handleSaveFinalization}
+              className="px-5 py-2.5 rounded-xl text-white text-sm font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: GRADIENTS.secondary }}>
+              {saving ? 'Salvando...' : 'Salvar alterações de Finalizar'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Bloco 6 — Ações */}
@@ -1347,6 +1445,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           </div>
         </div>
       )}
+
+      <ConfirmModal isOpen={showDiscardModal} title="Descartar alterações?"
+        message="As alterações ainda não foram salvas. Deseja voltar para a lista mesmo assim?"
+        confirmLabel="Descartar e voltar" cancelLabel="Continuar editando"
+        onConfirm={returnToList} onClose={() => setShowDiscardModal(false)} />
 
       {saveError && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"

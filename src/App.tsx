@@ -18,7 +18,7 @@ import { InsumoManager } from './components/InsumoManager';
 import { SettingsManager } from './components/SettingsManager';
 import { Dashboard } from './components/Dashboard';
 import { RecipeForm } from './components/RecipeForm';
-import { FormulaList } from './components/FormulaList';
+import { FormulaList, type FormulaListReturn, type FormulaListView } from './components/FormulaList';
 import { SavedFormulaManager } from './components/SavedFormulaManager';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FormDraftProvider, useFormDraft } from './context/FormDraftContext';
@@ -269,6 +269,8 @@ function AppInner() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'info' } | null>(null);
   const [templateFormula, setTemplateFormula] = useState<Formula | null>(null);
   const [viewingFormula, setViewingFormula] = useState<Formula | null>(null);
+  const [listOrigin, setListOrigin] = useState<FormulaListReturn | null>(null);
+  const [listReturn, setListReturn] = useState<FormulaListReturn | null>(null);
   const [partialPaymentAmounts, setPartialPaymentAmounts] = useState<Record<number, string>>({});
   const [missingReasons, setMissingReasons] = useState<string[] | null>(null);
   const [missingReasonsTarget, setMissingReasonsTarget] = useState<'pending' | 'confirmed' | null>(null);
@@ -277,6 +279,24 @@ function AppInner() {
   const [exitContext, setExitContext] = useState<'window-close' | 'logout' | null>(null);
   const [fontScale, setFontScale] = useState(() => Number(localStorage.getItem('pharmaflow.fontScale')) || 1);
   const canViewSavedFormulas = user?.role === 'pharmacist' || user?.role === 'admin' || user?.role === 'manager';
+
+  const openFormula = (formula: Formula, view: FormulaListView, detail: 'formulaDetail' | 'confirmedDetail' | 'historyDetail' | 'cancelledDetail') => {
+    setListOrigin({ formulaId: formula.id, view });
+    setListReturn(null);
+    setViewingFormula(formula);
+    setActiveTab(detail);
+  };
+
+  const backToFormulaList = (tab: 'pending' | 'confirmed' | 'history' | 'cancelled') => {
+    if (listOrigin?.formulaId === viewingFormula?.id) setListReturn(listOrigin);
+    setListOrigin(null);
+    setViewingFormula(null);
+    setTemplateFormula(null);
+    setAutoUnlockFormula(false);
+    setActiveTab(tab);
+  };
+
+  const returnForList = (screenKey: string) => listReturn?.view.screenKey === screenKey ? listReturn : null;
 
   useEffect(() => {
     if (!canViewSavedFormulas && activeTab === 'savedFormulas') {
@@ -752,20 +772,20 @@ function AppInner() {
               {activeTab === 'dashboard' && <Dashboard user={user} onNavigate={setActiveTab} />}
               {activeTab === 'admin' && <AdminPanel user={user} />}
               {activeTab === 'recipe' && <RecipeForm user={user} template={templateFormula} onClearTemplate={() => setTemplateFormula(null)} onComplete={(dest) => { setTemplateFormula(null); setActiveTab(dest); }} />}
-              {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} initialLocked={!autoUnlockFormula} partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setAutoUnlockFormula(false); setActiveTab(dest); }} />}
-              {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
-              {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} onSelect={(f) => { setViewingFormula(f); setActiveTab('formulaDetail'); }} onConfirm={(f, reasons) => { if (reasons.length === 0) { setConfirmedStage('em_producao'); setActiveTab('confirmed'); } else { setViewingFormula(f); setMissingReasons(reasons); setMissingReasonsTarget('pending'); setActiveTab('formulaDetail'); } }} />}
+              {activeTab === 'formulaDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} initialLocked={!autoUnlockFormula} partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onBack={() => backToFormulaList('pending')} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setAutoUnlockFormula(false); setActiveTab(dest); }} />}
+              {activeTab === 'confirmedDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} confirmed partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onBack={() => backToFormulaList('confirmed')} onComplete={(dest) => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('confirmed'); }} />}
+              {activeTab === 'pending' && <FormulaList screenKey="pending" variant="pending" title="Fórmulas Pendentes" subtitle="Fórmulas pendentes aguardando confirmação" statuses={['pending']} returnTo={returnForList('pending')} onReturnRestored={() => setListReturn(null)} onSelect={(f, view) => openFormula(f, view, 'formulaDetail')} onConfirm={(f, reasons, view) => { if (reasons.length === 0) { setConfirmedStage('em_producao'); setActiveTab('confirmed'); } else { openFormula(f, view, 'formulaDetail'); setMissingReasons(reasons); setMissingReasonsTarget('pending'); } }} />}
               {activeTab === 'confirmed' && <>
                 <div className="mb-5 flex gap-2 border-b border-zinc-200">
                   <button onClick={() => setConfirmedStage('em_producao')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'em_producao' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Em produção</button>
                   <button onClick={() => setConfirmedStage('aguardando_retirada')} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${confirmedStage === 'aguardando_retirada' ? 'border-[#C5243E] text-[#C5243E]' : 'border-transparent text-zinc-400'}`}>Aguardando retirada</button>
                 </div>
-                <FormulaList screenKey={`confirmed-${confirmedStage}`} variant="confirmed" statuses={['confirmed']} title={confirmedStage === 'em_producao' ? 'Fórmulas em produção' : 'Fórmulas aguardando retirada'} subtitle="Fórmulas confirmadas para manipulação" deliveryStatusFilter={confirmedStage} onSelect={(f) => { setViewingFormula(f); setActiveTab('confirmedDetail'); }} />
+                <FormulaList screenKey={`confirmed-${confirmedStage}`} variant="confirmed" statuses={['confirmed']} title={confirmedStage === 'em_producao' ? 'Fórmulas em produção' : 'Fórmulas aguardando retirada'} subtitle="Fórmulas confirmadas para manipulação" deliveryStatusFilter={confirmedStage} returnTo={returnForList(`confirmed-${confirmedStage}`)} onReturnRestored={() => setListReturn(null)} onSelect={(f, view) => openFormula(f, view, 'confirmedDetail')} />
               </>}
-              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas entregues" statuses={['delivered']} showAndamento={false} showVerification monthlySummary onSelect={(f) => { setViewingFormula(f); setActiveTab('historyDetail'); }} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
-              {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
-              {activeTab === 'cancelled' && <FormulaList screenKey="cancelled" variant="pending" title="Fórmulas Canceladas" subtitle="Fórmulas canceladas com justificativa registrada" statuses={['cancelled']} onSelect={(f) => { setViewingFormula(f); setActiveTab('cancelledDetail'); }} />}
-              {activeTab === 'cancelledDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onComplete={() => { setViewingFormula(null); setActiveTab('cancelled'); }} />}
+              {activeTab === 'history' && <FormulaList screenKey="history" variant="confirmed" title="Histórico" subtitle="Fórmulas entregues" statuses={['delivered']} showAndamento={false} showVerification monthlySummary returnTo={returnForList('history')} onReturnRestored={() => setListReturn(null)} onSelect={(f, view) => openFormula(f, view, 'historyDetail')} onRepeat={(f) => { setTemplateFormula(f); setActiveTab('recipe'); }} />}
+              {activeTab === 'historyDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onBack={() => backToFormulaList('history')} onComplete={() => { setViewingFormula(null); setTemplateFormula(null); setActiveTab('history'); }} />}
+              {activeTab === 'cancelled' && <FormulaList screenKey="cancelled" variant="pending" title="Fórmulas Canceladas" subtitle="Fórmulas canceladas com justificativa registrada" statuses={['cancelled']} returnTo={returnForList('cancelled')} onReturnRestored={() => setListReturn(null)} onSelect={(f, view) => openFormula(f, view, 'cancelledDetail')} />}
+              {activeTab === 'cancelledDetail' && viewingFormula && <RecipeForm user={user} formula={viewingFormula} readOnly partialPaymentAmount={partialPaymentAmounts[viewingFormula.id] ?? ''} onPartialPaymentAmountChange={value => setPartialPaymentAmounts(current => value ? { ...current, [viewingFormula.id]: value } : Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== viewingFormula.id)))} onBack={() => backToFormulaList('cancelled')} onComplete={() => { setViewingFormula(null); setActiveTab('cancelled'); }} />}
               {activeTab === 'customers' && <CustomerManager />}
               {activeTab === 'insumos' && <InsumoManager />}
               {activeTab === 'savedFormulas' && canViewSavedFormulas && <SavedFormulaManager />}
