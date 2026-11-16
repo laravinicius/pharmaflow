@@ -75,7 +75,7 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
     }
     setSaving(true); setFormError(''); setSuccess(null);
     try {
-      const payload = { name: `${form.firstName} ${form.lastName}`.trim(), phone: formatted, ...(isDependent ? { responsible_customer_id: Number(responsibleCustomerId) } : {}) };
+      const payload = { name: `${form.firstName} ${form.lastName}`.trim().toUpperCase(), phone: formatted, ...(isDependent ? { responsible_customer_id: Number(responsibleCustomerId) } : {}) };
       if (editingId) {
         const res: any = await db.customers.update(editingId, payload, sessionToken ?? undefined);
         if (res?.success === false) { setFormError(res.error ?? 'Erro ao salvar.'); return; }
@@ -141,7 +141,8 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
     rowSavingRef.current = true;
     setSaving(true); setRowError('');
     try {
-      const res: any = await db.customers.update(editingRow, { name: rowDraft.name.trim(), phone: formatted }, sessionToken ?? undefined);
+      const name = rowDraft.name === rowCustomer.name ? rowDraft.name.trim() : rowDraft.name.trim().toUpperCase();
+      const res: any = await db.customers.update(editingRow, { name, phone: formatted }, sessionToken ?? undefined);
       if (res?.success !== true) { setRowError(res?.error ?? 'Não foi possível confirmar o salvamento. Tente novamente.'); return; }
       try {
         await reload(true);
@@ -201,11 +202,11 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
       )}
         <div className={compact ? '' : 'md:col-span-1'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Nome</label>
-        <input required autoFocus={compact} className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value.toUpperCase() })} />
+        <input required autoFocus={compact} className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none uppercase" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} />
       </div>
       <div className={compact ? '' : 'md:col-span-1'}>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Sobrenome</label>
-        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value.toUpperCase() })} />
+        <input required className="w-full px-3 py-2 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none uppercase" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} />
       </div>
       <div>
         <label className="block text-xs font-semibold text-zinc-500 uppercase mb-1">Celular</label>
@@ -309,8 +310,8 @@ export function CustomerManager({ compact = false, onCreated, initialName }: { c
                         <tr key={c.id} className="hover:bg-zinc-50 transition-colors">
                           <td className="px-4 py-3 font-medium text-zinc-900">
                             {editingRow === c.id ? (
-                              <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                                disabled={saving} aria-label="Nome do cliente" value={rowDraft.name} onChange={e => setRowDraft(d => ({ ...d, name: e.target.value.toUpperCase() }))}
+                              <input className="w-full px-2 py-1 rounded-lg border border-zinc-300 focus:ring-2 focus:ring-red-500 outline-none text-sm uppercase"
+                                disabled={saving} aria-label="Nome do cliente" value={rowDraft.name} onChange={e => { const name = e.target.value; setRowDraft(d => ({ ...d, name })); }}
                                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRowSave(); } else if (e.key === 'Escape' && !saving) { setEditingRow(null); setRowDraft({ name: '', phone: '' }); setRowError(''); } }} />
                             ) : (
                               <HighlightMatch text={c.name} query={search} />
