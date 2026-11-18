@@ -106,7 +106,7 @@ O modo especial de configuração usa `admin` / `admin123`; essas credenciais n�
 - TTL de sessão: 120 segundos sem heartbeat.
 - Limpeza de sessões órfãs a cada 60 segundos no processo principal.
 - Uma sessão ativa por usuário; login forçado substitui a anterior.
-- Logout após 5 minutos sem mouse, teclado, clique ou toque.
+- Logout após 15 minutos sem mouse, teclado, clique ou toque.
 - Operações administrativas também são verificadas no backend.
 
 ## Primeira execução

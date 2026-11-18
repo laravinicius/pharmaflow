@@ -25,6 +25,8 @@ import { FormDraftProvider, useFormDraft } from './context/FormDraftContext';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { handleDialogArrowNavigation, handleEnterAsTab } from './utils/enterNavigation';
 
+const INACTIVITY_TIMEOUT_MINUTES = 15;
+
 interface HeartbeatMetrics {
   callCount: number;
   successCount: number;
@@ -324,7 +326,6 @@ function AppInner() {
 
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleInactivityLogoutRef = useRef<() => Promise<void>>();
-  const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 
   const handleInactivityLogout = useCallback(async () => {
     if (sessionToken) {
@@ -336,7 +337,7 @@ function AppInner() {
     setSetupMode(false);
     setActiveTab('dashboard');
     setLoginForm({ username: '', password: '' });
-    setLoginError('Sessão encerrada por inatividade (5 min).');
+    setLoginError(`Sessão encerrada por inatividade (${INACTIVITY_TIMEOUT_MINUTES} min).`);
   }, [sessionToken, clearAuth, clearDrafts]);
 
   useEffect(() => {
@@ -345,7 +346,10 @@ function AppInner() {
 
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
-    inactivityTimerRef.current = setTimeout(() => handleInactivityLogoutRef.current?.(), INACTIVITY_TIMEOUT_MS);
+    inactivityTimerRef.current = setTimeout(
+      () => handleInactivityLogoutRef.current?.(),
+      INACTIVITY_TIMEOUT_MINUTES * 60 * 1000,
+    );
   }, []);
 
   useEffect(() => {
