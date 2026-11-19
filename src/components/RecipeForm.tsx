@@ -951,7 +951,7 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                   style={{ background: editingIngredientId === item.insumo_id ? COLORS.lightBlueBg : idx % 2 === 0 ? COLORS.rowAlt : '#fff', borderColor: editingIngredientId === item.insumo_id ? COLORS.lightBlueBorder : undefined }}>
                   <div className="min-w-0">
                     <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
-                    <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
+                    <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {formatUnit(item.unit ?? 'mg')}</p>
                   </div>
                   {canEditFields && (
                     <div className="flex items-center gap-2 ml-3 shrink-0">

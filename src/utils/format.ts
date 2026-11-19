@@ -93,6 +93,7 @@ export function stripDiacritics(s: string): string {
 // Padroniza a exibição da unidade sem alterar o valor persistido.
 export function formatUnit(unit: string): string {
   const normalizedUnit = unit.toLowerCase();
+  if (normalizedUnit === 'biufc') return 'Bilhão UFC';
   if (normalizedUnit === 'caps s.l.') return 'caps S.L.';
   if (normalizedUnit === 'sachê') return 'sachês';
   return unit;

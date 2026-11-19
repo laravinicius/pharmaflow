@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS formula_items (
   formula_id  INT           NOT NULL,
   insumo_id   INT           NOT NULL,
   quantity    DECIMAL(10,3) NOT NULL COMMENT 'quantidade',
-  unit        VARCHAR(5)    NOT NULL DEFAULT 'mg' COMMENT 'g, mcg, ui, mg, %',
+  unit        VARCHAR(5)    NOT NULL DEFAULT 'mg' COMMENT 'g, mcg, mg, ml, ui, biufc (Bilhão UFC), %',
   FOREIGN KEY (formula_id) REFERENCES formulas(id) ON DELETE CASCADE,
   FOREIGN KEY (insumo_id)  REFERENCES insumos(id)  ON DELETE RESTRICT
 ) ENGINE=InnoDB;
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS saved_formula_items (
   saved_formula_id INT           NOT NULL,
   insumo_id        INT           NOT NULL,
   quantity         DECIMAL(10,3) NOT NULL COMMENT 'quantidade',
-  unit             VARCHAR(5)    NOT NULL DEFAULT 'mg' COMMENT 'g, mcg, ui, mg, %',
+  unit             VARCHAR(5)    NOT NULL DEFAULT 'mg' COMMENT 'g, mcg, mg, ml, ui, biufc (Bilhão UFC), %',
   FOREIGN KEY (saved_formula_id) REFERENCES saved_formulas(id) ON DELETE CASCADE,
   FOREIGN KEY (insumo_id)        REFERENCES insumos(id)        ON DELETE RESTRICT
 ) ENGINE=InnoDB;

@@ -200,7 +200,7 @@ export function FormulaList({ screenKey, title, subtitle, statuses, variant = 'p
       paymentLabels[formula.payment_status ?? ''] ?? formula.payment_status,
       statusLabels[formula.status] ?? formula.status,
       formula.manager_verified ? 'Verificado' : 'Verificar Não verificado',
-      ...(formula.items ?? []).flatMap(item => [item.insumo_name, item.quantity, item.unit]),
+      ...(formula.items ?? []).flatMap(item => [item.insumo_name, item.quantity, item.unit && formatUnit(item.unit)]),
       ...selectedBudgets.flatMap(item => [
         formatQuantity(item.quantity),
         item.quantity,

@@ -481,7 +481,7 @@ export function SavedFormulaManager() {
                 style={{ background: editingIngredientId === item.insumo_id ? COLORS.lightBlueBg : idx % 2 === 0 ? COLORS.rowAlt : '#fff', borderColor: editingIngredientId === item.insumo_id ? COLORS.lightBlueBorder : undefined }}>
                 <div className="min-w-0">
                   <p className="font-semibold text-zinc-900 text-sm truncate">{item.insumo_name}</p>
-                  <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {item.unit ?? 'mg'}</p>
+                  <p className="text-xs text-zinc-400">{formatQuantity(item.quantity)} {formatUnit(item.unit ?? 'mg')}</p>
                 </div>
                 <div className="flex items-center gap-2 ml-3 shrink-0">
                   <button type="button" disabled={saving} onClick={() => editingIngredientId === item.insumo_id ? cancelIngredientEdit() : startIngredientEdit(item)}
@@ -604,7 +604,7 @@ export function SavedFormulaManager() {
                           </td>
                           <td className="px-4 py-3 text-zinc-700 text-sm">{f.budget_number || '—'}</td>
                           <td className="px-4 py-3 text-zinc-600 text-sm max-w-xs">
-                            {f.items.map(i => `${i.insumo_name} ${formatQuantity(i.quantity)} ${i.unit ?? 'mg'}`).join(', ')}
+                            {f.items.map(i => `${i.insumo_name} ${formatQuantity(i.quantity)} ${formatUnit(i.unit ?? 'mg')}`).join(', ')}
                           </td>
                           <td className="px-4 py-3 text-zinc-500 text-sm">—</td>
                           <td className="px-4 py-3 text-zinc-700 text-sm">{f.created_by_name || 'Não identificado'}</td>

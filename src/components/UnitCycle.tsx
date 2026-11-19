@@ -10,7 +10,7 @@ interface UnitCycleProps {
   disabled?: boolean;
 }
 
-export const INGREDIENT_UNITS = ['g', 'mcg', 'mg', 'ml', 'ui', '%'];
+export const INGREDIENT_UNITS = ['g', 'mcg', 'mg', 'ml', 'ui', 'biufc', '%'];
 export const BUDGET_UNITS = ['caps', 'caps s.l.', 'doses', 'g', 'ml', 'sachê', '%'];
 
 export function UnitCycle({ id, value, onChange, options, disabled }: UnitCycleProps) {
