@@ -360,11 +360,11 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const missingAttendant = confirmed && !!formula?.attendant_name?.trim() && !attendantName.trim();
   const invalidDeliveryDate = !!deliveryDate && !parsedDeliveryDate;
   const parsedPartialPaymentAmount = parseCurrency(partialPaymentAmount);
-  const partialPaymentIsInvalid = paymentStatus === 'parcial' && (
-    selectedBudgetValue === null ||
+  const partialPaymentAmountIsInvalid = paymentStatus === 'parcial' && (
     parsedPartialPaymentAmount <= 0 ||
-    parsedPartialPaymentAmount > selectedBudgetValue
+    (selectedBudgetValue !== null && parsedPartialPaymentAmount > selectedBudgetValue)
   );
+  const partialPaymentIsInvalid = partialPaymentAmountIsInvalid || (paymentStatus === 'parcial' && selectedBudgetValue === null);
   const originalFinalization = formula ? {
     delivery_date: formula.delivery_date ?? null,
     payment_status: formula.payment_status ?? '',
@@ -389,6 +389,17 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     !!attendantName &&
     !invalidDeliveryDate && !partialPaymentIsInvalid;
   const canConfirm = canSave && !!paymentStatus && selectedBudgetIndex !== null && !!parsedDeliveryDate;
+  const pendingConfirmationActions = [
+    !selectedCustomerId && 'selecione o cliente',
+    items.length === 0 && 'adicione pelo menos um insumo',
+    editingIngredientId !== null && 'conclua ou cancele a edição do insumo',
+    !budgetNumber && 'informe o número do orçamento',
+    budgetItems.length === 0 ? 'adicione uma opção de orçamento' : !hasSelectedBudget && 'selecione uma opção de orçamento',
+    !attendantName && 'informe o nome do atendente',
+    !parsedDeliveryDate && 'informe uma previsão de entrega válida',
+    !paymentStatus && 'selecione o pagamento',
+    partialPaymentAmountIsInvalid && 'informe uma quantia paga válida',
+  ].filter((action): action is string => typeof action === 'string');
   const canSaveConfirmed = editingIngredientId === null && editingBudgetIndex === null && hasSelectedBudget &&
     !missingBudgetNumber && !missingIngredients && !missingAttendant && !invalidDeliveryDate && !partialPaymentIsInvalid;
 
@@ -535,7 +546,8 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
   const selectedCustomer = allCustomers.find(c => c.id === selectedCustomerId) ?? null;
   const customerName = selectedCustomer?.name ?? (confirmed ? formula?.customer_name : undefined);
   const customerPhone = selectedCustomer?.phone ?? selectedCustomer?.responsible_phone ?? (confirmed ? formula?.customer_phone : undefined);
-  const q = stripDiacritics(customerQuery.trim().toLowerCase());
+  const customerSearch = customerQuery.trim();
+  const q = stripDiacritics(customerSearch.toLowerCase());
   const qDigits = customerQuery.replace(/\D/g, '');
   const filteredCustomers = (q || qDigits)
     ? allCustomers
@@ -561,6 +573,15 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
           return (a.name ?? '').localeCompare(b.name ?? '');
         })
     : [];
+  const customerResultCount = filteredCustomers.length;
+  const customerOptionCount = customerResultCount + 1;
+
+  const openCustomerRegistration = () => {
+    pendingCustomerName.current = customerSearch;
+    setShowAddCustomer(true);
+    setCustomerQuery('');
+    setCustomerFocusIdx(-1);
+  };
 
   const focusListOption = (listRef: React.RefObject<HTMLDivElement | null>, idx: number) => {
     listRef.current?.querySelector<HTMLButtonElement>(`[data-idx="${idx}"]`)?.focus();
@@ -569,6 +590,18 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
     const ni = dir === 1 ? (idx < length - 1 ? idx + 1 : 0) : (idx > 0 ? idx - 1 : length - 1);
     setIdx(ni);
     focusListOption(listRef, ni);
+  };
+
+  const handleCustomerOptionKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setCustomerQuery('');
+      setCustomerFocusIdx(-1);
+      customerQueryRef.current?.focus();
+    } else if (customerResultCount > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      moveListFocus(customerListRef, setCustomerFocusIdx, index, e.key === 'ArrowDown' ? 1 : -1, customerOptionCount);
+    }
   };
 
   return (
@@ -682,22 +715,21 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               ref={customerQueryRef}
               onChange={e => { setCustomerQuery(e.target.value.toUpperCase()); setCustomerFocusIdx(-1); }}
               onKeyDown={e => {
-                if (e.key === 'ArrowDown' && filteredCustomers.length) {
+                if (e.key === 'ArrowDown' && customerResultCount > 0) {
                   e.preventDefault();
-                  setCustomerFocusIdx(prev => (prev < filteredCustomers.length - 1 ? prev + 1 : 0));
-                } else if (e.key === 'ArrowUp' && filteredCustomers.length) {
+                  setCustomerFocusIdx(prev => (prev < customerOptionCount - 1 ? prev + 1 : 0));
+                } else if (e.key === 'ArrowUp' && customerResultCount > 0) {
                   e.preventDefault();
-                  setCustomerFocusIdx(prev => (prev > 0 ? prev - 1 : filteredCustomers.length - 1));
+                  setCustomerFocusIdx(prev => (prev > 0 ? prev - 1 : customerOptionCount - 1));
                 } else if (e.key === 'Enter') {
-                  if (filteredCustomers.length) {
+                  if (customerResultCount > 0) {
                     e.preventDefault();
-                    const targetIdx = customerFocusIdx >= 0 && customerFocusIdx < filteredCustomers.length ? customerFocusIdx : 0;
+                    const targetIdx = customerFocusIdx >= 0 && customerFocusIdx < customerOptionCount ? customerFocusIdx : 0;
                     setCustomerFocusIdx(targetIdx);
                     focusListOption(customerListRef, targetIdx);
-                  } else if (customerQuery.trim()) {
+                  } else if (customerSearch) {
                     e.preventDefault();
-                    pendingCustomerName.current = customerQuery.trim();
-                    setShowAddCustomer(true); setCustomerQuery(''); setCustomerFocusIdx(-1);
+                    openCustomerRegistration();
                   }
                 } else if (e.key === 'Escape') {
                   setCustomerQuery(''); setCustomerFocusIdx(-1);
@@ -710,26 +742,20 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                 <X className="w-4 h-4" />
               </button>
             )}
-            {filteredCustomers.length > 0 && (
-              <div ref={customerListRef} className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto">
+            {q || qDigits ? (
+              <div ref={customerListRef} className={customerResultCount > 0
+                ? 'absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-64 overflow-y-auto'
+                : 'px-1 mt-1'}>
                 {filteredCustomers.map((c, idx) => (
                   <button key={c.id} type="button" data-idx={idx}
                     onClick={() => { setSelectedCustomerId(c.id); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
                     onKeyDown={e => {
-                      if (e.key === 'ArrowDown') {
-                        e.preventDefault();
-                        moveListFocus(customerListRef, setCustomerFocusIdx, idx, 1, filteredCustomers.length);
-                      } else if (e.key === 'ArrowUp') {
-                        e.preventDefault();
-                        moveListFocus(customerListRef, setCustomerFocusIdx, idx, -1, filteredCustomers.length);
-                      } else if (e.key === 'Enter') {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
                         setSelectedCustomerId(c.id); setCustomerQuery(''); setCustomerFocusIdx(-1);
                         requestAnimationFrame(() => insumoQueryRef.current?.focus());
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setCustomerQuery(''); setCustomerFocusIdx(-1);
-                        customerQueryRef.current?.focus();
+                      } else {
+                        handleCustomerOptionKeyDown(e, idx);
                       }
                     }}
                     className={`w-full text-left px-3 py-2 transition-colors flex items-center gap-2 ${idx === customerFocusIdx ? 'bg-red-100 text-red-900 font-medium' : 'hover:bg-red-50'}`}>
@@ -738,22 +764,24 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
                     <span className="text-xs text-zinc-400 shrink-0">{c.phone ?? c.responsible_phone ?? ''}</span>
                   </button>
                 ))}
-              </div>
-            )}
-            {q || qDigits ? (
-              filteredCustomers.length === 0 && (
-                <div className="px-1 mt-1">
+                {customerResultCount === 0 && (
                   <p className="text-xs text-zinc-400 mb-2">Nenhum cliente encontrado.</p>
-                  <button
-                    type="button"
-                    onClick={() => { pendingCustomerName.current = customerQuery.trim(); setShowAddCustomer(true); setCustomerQuery(''); setCustomerFocusIdx(-1); }}
-                    className="w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <PlusCircle className="w-4 h-4 shrink-0" />
-                    Criar novo cliente "{customerQuery.trim()}"
-                  </button>
-                </div>
-              )
+                )}
+                <button
+                  type="button"
+                  data-idx={customerResultCount}
+                  onClick={openCustomerRegistration}
+                  onKeyDown={e => {
+                    if (e.key !== 'Enter') return handleCustomerOptionKeyDown(e, customerResultCount);
+                    e.preventDefault();
+                    openCustomerRegistration();
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 ${customerResultCount > 0 ? 'border-t border-zinc-200' : 'rounded-lg'} ${customerFocusIdx === customerResultCount ? 'bg-red-50' : ''}`}
+                >
+                  <PlusCircle aria-hidden="true" className="w-4 h-4 shrink-0" />
+                  Criar novo cliente "{customerSearch}"
+                </button>
+              </div>
             ) : (
               <p className="text-xs text-zinc-400 mt-1 px-1">Digite para buscar por nome ou telefone.</p>
             )}
@@ -1384,12 +1412,10 @@ export function RecipeForm({ user, template, formula, confirmed = false, readOnl
               style={{ background: GRADIENTS.primary }}>
               {saving ? 'Salvando...' : '✓ Confirmar'}
             </button>
-            <p className="text-center text-xs text-zinc-400 mt-2">
+            <p role="status" className="text-center text-xs text-zinc-400 mt-2">
               {canConfirm
                 ? 'Pronto para confirmar'
-                : budgetItems.length > 0 && selectedBudgetIndex === null
-                  ? 'Selecione um orçamento (marcador ao lado) e preencha os demais blocos'
-                  : 'Preencha cliente, insumos, orçamento, informações e o pagamento (blocos 1 a 5)'}
+                : `Para confirmar, ${new Intl.ListFormat('pt-BR').format(pendingConfirmationActions)}.`}
             </p>
           </div>
         </div>
